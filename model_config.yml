@@ -1,0 +1,111 @@
+# Model configuration for all forecasting models
+# Override individual values via environment variables or CLI flags
+
+forecasting:
+  target_col: sales
+  horizon_days: 28
+  min_train_days: 365
+  cv_splits: 3
+  feature_version: 1
+
+  quantiles: [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95]
+
+  performance_thresholds:
+    wape_alert: 0.20     # Alert if WAPE > 20%
+    mape_alert: 0.25
+    bias_alert: 0.10
+    degradation_pct: 0.20  # Retrain if 20% relative degradation
+
+models:
+  lightgbm:
+    n_estimators: 500
+    max_depth: 7
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+    min_child_samples: 20
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+    verbose: -1
+
+  xgboost:
+    n_estimators: 500
+    max_depth: 6
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+    min_child_weight: 5
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+    eval_metric: mae
+
+  catboost:
+    iterations: 500
+    depth: 7
+    learning_rate: 0.05
+    l2_leaf_reg: 3.0
+    verbose: 0
+
+  random_forest:
+    n_estimators: 200
+    max_depth: 10
+    min_samples_leaf: 10
+    n_jobs: -1
+
+  extra_trees:
+    n_estimators: 300
+    max_depth: 10
+    min_samples_leaf: 10
+    n_jobs: -1
+
+tuning:
+  enabled: true
+  n_trials: 50
+  models_to_tune: [xgboost, lightgbm]
+  sampler: tpe
+  pruner: median
+  direction: minimize
+  metric: wape
+
+inventory:
+  default_service_level: 0.95
+  default_lead_time_days: 7
+  default_ordering_cost: 50.0
+  holding_cost_rate: 0.25
+  stockout_cost_multiplier: 3.0
+  review_period_days: 7
+  abc_thresholds: [0.70, 0.90]
+  xyz_cv_thresholds: [0.50, 1.00]
+
+optimization:
+  nsga2:
+    population_size: 100
+    n_generations: 200
+    crossover_prob: 0.9
+    mutation_eta: 20
+  weighted_sum:
+    default_weights:
+      holding_cost: 0.20
+      stockout_cost: 0.35
+      service_level: 0.30
+      transportation_cost: 0.10
+      carbon_emissions: 0.05
+
+sustainability:
+  carbon_price_per_tonne_usd: 50.0
+  default_load_factor: 0.85
+  renewable_energy_target_pct: 0.50
+
+monitoring:
+  drift:
+    psi_moderate_threshold: 0.10
+    psi_significant_threshold: 0.25
+    feature_drift_pct_trigger: 0.30
+    check_frequency: daily
+  performance:
+    lookback_days_baseline: 30
+    lookback_days_current: 7
+    check_frequency: daily
+  alerting:
+    channels: [slack, email]
+    severity_levels: [critical, warning, info]

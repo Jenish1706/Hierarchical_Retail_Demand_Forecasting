@@ -1,0 +1,64 @@
+stages:
+  ingest:
+    cmd: python scripts/run_ingestion.py --data-dir data/raw
+    deps:
+      - scripts/run_ingestion.py
+      - src/ingestion/m5_ingester.py
+    outs:
+      - data/raw/sales_train_evaluation.csv
+      - data/raw/calendar.csv
+      - data/raw/sell_prices.csv
+
+  validate:
+    cmd: python scripts/run_validation.py --input data/raw --output data/validated
+    deps:
+      - scripts/run_validation.py
+      - src/validation/data_validator.py
+      - data/raw/sales_train_evaluation.csv
+    outs:
+      - data/validated/validation_report.json
+    metrics:
+      - data/validated/quality_metrics.json:
+          cache: false
+
+  feature_engineering:
+    cmd: python scripts/run_features.py --input data/raw --output data/features
+    deps:
+      - scripts/run_features.py
+      - src/feature_store/pipeline.py
+      - data/raw/sales_train_evaluation.csv
+      - data/raw/calendar.csv
+      - data/raw/sell_prices.csv
+    outs:
+      - data/features/feature_store.parquet
+    params:
+      - configs/model/model_config.yml:
+          - forecasting.feature_version
+
+  train:
+    cmd: python scripts/run_training.py --features data/features/feature_store.parquet --output models/
+    deps:
+      - scripts/run_training.py
+      - src/models/ml/trainer.py
+      - data/features/feature_store.parquet
+    outs:
+      - models/champion/
+    metrics:
+      - models/metrics.json:
+          cache: false
+    params:
+      - configs/model/model_config.yml:
+          - models.lightgbm
+          - models.xgboost
+          - tuning
+
+  evaluate:
+    cmd: python scripts/run_evaluation.py --model models/champion --output reports/
+    deps:
+      - scripts/run_evaluation.py
+      - models/champion/
+    outs:
+      - reports/evaluation_report.html
+    metrics:
+      - reports/metrics.json:
+          cache: false

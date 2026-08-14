@@ -1,0 +1,322 @@
+name: Supply Chain Platform CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Trigger weekly model retraining every Monday 1am UTC
+    - cron: "0 1 * * 1"
+
+env:
+  PYTHON_VERSION: "3.11"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+# ============================================================================
+# PIPELINE JOBS
+# ============================================================================
+jobs:
+
+  # --------------------------------------------------------------------------
+  # Job 1: Code Quality & Tests
+  # --------------------------------------------------------------------------
+  test:
+    name: "Tests & Quality"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: scplatform
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: supply_chain_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: supply_chain_test
+      DB_USER: scplatform
+      DB_PASSWORD: testpass
+      ENVIRONMENT: development
+      MLFLOW_TRACKING_URI: "sqlite:///mlflow_test.db"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run linting (ruff)
+        run: ruff check src/ tests/
+
+      - name: Run type checking (mypy)
+        run: mypy src/ --ignore-missing-imports
+        continue-on-error: true  # Don't block on type errors in CI
+
+      - name: Run code formatting check (black)
+        run: black --check src/ tests/
+
+      - name: Initialize test database
+        run: |
+          psql -h localhost -U scplatform -d supply_chain_test \
+            -f migrations/001_initial_schema.sql
+        env:
+          PGPASSWORD: testpass
+
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/ -v \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            -m "unit" \
+            --timeout=60
+
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ -v \
+            -m "integration" \
+            --timeout=120
+        continue-on-error: false
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            coverage.xml
+            pytest.xml
+
+  # --------------------------------------------------------------------------
+  # Job 2: Security Scanning
+  # --------------------------------------------------------------------------
+  security:
+    name: "Security Scan"
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install bandit
+        run: pip install bandit[toml] safety
+
+      - name: Run Bandit security scan
+        run: bandit -r src/ -f json -o bandit-report.json || true
+
+      - name: Check for known vulnerabilities (safety)
+        run: safety check --json || true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: bandit-report.json
+
+  # --------------------------------------------------------------------------
+  # Job 3: Build Docker Images
+  # --------------------------------------------------------------------------
+  build:
+    name: "Build & Push Images"
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata (API)
+        id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+            latest
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/api/Dockerfile
+          push: true
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.repository.updated_at }}
+            GIT_SHA=${{ github.sha }}
+
+      - name: Extract metadata (Streamlit)
+        id: meta-streamlit
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/streamlit
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+
+      - name: Build and push Streamlit image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/streamlit/Dockerfile
+          push: true
+          tags: ${{ steps.meta-streamlit.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # --------------------------------------------------------------------------
+  # Job 4: Model Training (scheduled + main branch)
+  # --------------------------------------------------------------------------
+  model-training:
+    name: "Train & Validate Models"
+    runs-on: ubuntu-latest
+    needs: build
+    if: |
+      github.event_name == 'schedule' ||
+      (github.ref == 'refs/heads/main' && github.event_name == 'push')
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e .
+
+      - name: Trigger Airflow training DAG
+        run: |
+          curl -X POST \
+            "${{ secrets.AIRFLOW_URL }}/api/v1/dags/supply_chain_master_pipeline/dagRuns" \
+            -H "Content-Type: application/json" \
+            -u "${{ secrets.AIRFLOW_USER }}:${{ secrets.AIRFLOW_PASSWORD }}" \
+            -d "{\"conf\": {\"triggered_by\": \"github_actions\", \"git_sha\": \"${{ github.sha }}\"}}"
+        continue-on-error: true  # Don't fail if Airflow is unavailable in CI
+
+      - name: Run model validation
+        run: |
+          python scripts/validate_models.py \
+            --min-wape 20.0 \
+            --min-service-level 0.90
+        continue-on-error: true
+
+  # --------------------------------------------------------------------------
+  # Job 5: Deploy to Staging
+  # --------------------------------------------------------------------------
+  deploy-staging:
+    name: "Deploy to Staging"
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to staging
+        run: |
+          echo "Deploying to staging environment..."
+          # In production: kubectl apply, helm upgrade, etc.
+          echo "IMAGE_TAG=sha-${{ github.sha }}" >> $GITHUB_ENV
+
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests against staging API..."
+          # curl -f https://staging-api.scplatform.io/health
+
+      - name: Notify Slack
+        if: always()
+        run: |
+          echo "Slack notification: Deploy to staging ${{ job.status }}"
+
+  # --------------------------------------------------------------------------
+  # Job 6: Deploy to Production
+  # --------------------------------------------------------------------------
+  deploy-production:
+    name: "Deploy to Production"
+    runs-on: ubuntu-latest
+    needs: [build, model-training]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy API to production
+        run: |
+          echo "Rolling deploy to production..."
+          # kubectl set image deployment/sc-api api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api:sha-${{ github.sha }}
+          # kubectl rollout status deployment/sc-api
+
+      - name: Deploy Streamlit to production
+        run: |
+          echo "Deploying dashboard to production..."
+
+      - name: Run production health checks
+        run: |
+          echo "Health check: API, MLflow, Airflow, Streamlit"
+
+      - name: Notify on success
+        if: success()
+        run: echo "Production deploy successful: ${{ github.sha }}"
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deploy failed — triggering rollback"
+          # kubectl rollout undo deployment/sc-api

@@ -1,0 +1,274 @@
+version: "3.9"
+
+# =============================================================================
+# Supply Chain Intelligence Platform — Docker Compose
+# Services: PostgreSQL, Redis, Airflow, MLflow, FastAPI, Streamlit, Prometheus, Grafana
+# =============================================================================
+
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.8.1-python3.11
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+    AIRFLOW__CORE__FERNET_KEY: "${AIRFLOW_FERNET_KEY:-46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLt0nfd3dQ=}"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+    AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
+    # Platform env vars
+    DB_HOST: postgres
+    DB_PORT: "5432"
+    DB_NAME: supply_chain
+    DB_USER: scplatform
+    DB_PASSWORD: "${DB_PASSWORD:-changeme}"
+    MLFLOW_TRACKING_URI: http://mlflow:5000
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/plugins:/opt/airflow/plugins
+    - ./src:/opt/airflow/src
+    - airflow_logs:/opt/airflow/logs
+    - ./data:/data
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — Primary database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: sc_postgres
+    environment:
+      POSTGRES_USER: scplatform
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-changeme}"
+      POSTGRES_DB: supply_chain
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scplatform -d supply_chain"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c work_mem=16MB
+      -c maintenance_work_mem=64MB
+      -c wal_buffers=16MB
+      -c checkpoint_completion_target=0.9
+
+  # ---------------------------------------------------------------------------
+  # Redis — Airflow Celery broker + cache
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: sc_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis_data:/data
+
+  # ---------------------------------------------------------------------------
+  # MLflow — Experiment tracking & model registry
+  # ---------------------------------------------------------------------------
+  mlflow:
+    build:
+      context: ./docker/mlflow
+      dockerfile: Dockerfile
+    container_name: sc_mlflow
+    environment:
+      MLFLOW_BACKEND_STORE_URI: "postgresql://scplatform:${DB_PASSWORD:-changeme}@postgres/supply_chain"
+      MLFLOW_ARTIFACT_ROOT: "/mlflow/artifacts"
+    volumes:
+      - mlflow_artifacts:/mlflow/artifacts
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://scplatform:${DB_PASSWORD:-changeme}@postgres/supply_chain
+      --default-artifact-root /mlflow/artifacts
+      --host 0.0.0.0
+      --port 5000
+      --workers 2
+
+  # ---------------------------------------------------------------------------
+  # Airflow Web Server
+  # ---------------------------------------------------------------------------
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: sc_airflow_web
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # Airflow Scheduler
+  # ---------------------------------------------------------------------------
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: sc_airflow_scheduler
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Airflow Worker
+  # ---------------------------------------------------------------------------
+  airflow-worker:
+    <<: *airflow-common
+    container_name: sc_airflow_worker
+    command: celery worker
+    environment:
+      <<: *airflow-env
+      DUMB_INIT_SETSID: "0"
+
+  # ---------------------------------------------------------------------------
+  # Airflow Init (one-time setup)
+  # ---------------------------------------------------------------------------
+  airflow-init:
+    <<: *airflow-common
+    container_name: sc_airflow_init
+    command: >
+      bash -c "
+        airflow db migrate &&
+        airflow users create
+          --username airflow
+          --firstname Airflow
+          --lastname Admin
+          --role Admin
+          --email admin@scplatform.io
+          --password airflow
+      "
+    restart: on-failure
+
+  # ---------------------------------------------------------------------------
+  # FastAPI — REST API
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    container_name: sc_api
+    environment:
+      ENVIRONMENT: production
+      DB_HOST: postgres
+      DB_NAME: supply_chain
+      DB_USER: scplatform
+      DB_PASSWORD: "${DB_PASSWORD:-changeme}"
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+    volumes:
+      - ./src:/app/src
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Streamlit — Business Dashboard
+  # ---------------------------------------------------------------------------
+  streamlit:
+    build:
+      context: .
+      dockerfile: docker/streamlit/Dockerfile
+    container_name: sc_streamlit
+    environment:
+      API_BASE_URL: http://api:8000
+      DB_HOST: postgres
+      DB_NAME: supply_chain
+      DB_USER: scplatform
+      DB_PASSWORD: "${DB_PASSWORD:-changeme}"
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+    volumes:
+      - ./src/dashboard:/app
+
+  # ---------------------------------------------------------------------------
+  # Prometheus — Metrics collection
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: sc_prometheus
+    volumes:
+      - ./configs/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+
+  # ---------------------------------------------------------------------------
+  # Grafana — Monitoring dashboards
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: sc_grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_PASSWORD:-admin}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./configs/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./configs/monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+
+volumes:
+  postgres_data:
+  redis_data:
+  mlflow_artifacts:
+  airflow_logs:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  default:
+    name: sc_network
+    driver: bridge

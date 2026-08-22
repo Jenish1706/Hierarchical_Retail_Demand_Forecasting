@@ -36,15 +36,16 @@ Prokhorenkova et al. (2018), "CatBoost: unbiased boosting with categorical
 """
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import TimeSeriesSplit
 
-from src.evaluation.point_metrics import compute_metrics
 from src.config.logging import get_logger
+from src.evaluation.point_metrics import compute_metrics
 
 log = get_logger(__name__)
 

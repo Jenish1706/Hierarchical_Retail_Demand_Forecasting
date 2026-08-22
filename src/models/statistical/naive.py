@@ -55,7 +55,7 @@ class BaselineForecaster(ABC):
     def _forecast(self, h: int) -> np.ndarray:
         """Produce h future values. Called only after `fit`."""
 
-    def fit(self, y: np.ndarray) -> "BaselineForecaster":
+    def fit(self, y: np.ndarray) -> BaselineForecaster:
         """Store the chronologically ordered history for this series."""
         y = np.asarray(y, dtype=float).ravel()
         if y.size == 0:
@@ -200,7 +200,7 @@ class SimpleExponentialSmoothing(BaselineForecaster):
             level = alpha * value + (1.0 - alpha) * level
         return sse
 
-    def fit(self, y: np.ndarray) -> "SimpleExponentialSmoothing":
+    def fit(self, y: np.ndarray) -> SimpleExponentialSmoothing:
         super().fit(y)
 
         if self.alpha is not None:

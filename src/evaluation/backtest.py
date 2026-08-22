@@ -51,16 +51,20 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.features.base import FeaturePipeline                      # noqa: E402
-from src.data.loader import M5Loader                           # noqa: E402
-from src.models.statistical.naive import build_baseline              # noqa: E402
-from src.models.statistical.intermittent import (                          # noqa: E402
-    ADIDAForecaster, CrostonForecaster, classify_demand,
+from src.config.logging import get_logger  # noqa: E402
+from src.config.settings import M5, settings  # noqa: E402
+from src.data.loader import M5Loader  # noqa: E402
+from src.evaluation.point_metrics import (  # noqa: E402
+    metrics_by_group,
+    naive_scale,
 )
-from src.evaluation.point_metrics import compute_metrics, metrics_by_group, naive_scale  # noqa: E402
-from src.models.router import SegmentRouter                    # noqa: E402
-from src.config.logging import get_logger                               # noqa: E402
-from src.config.settings import M5, settings                            # noqa: E402
+from src.features.base import FeaturePipeline  # noqa: E402
+from src.models.router import SegmentRouter  # noqa: E402
+from src.models.statistical.intermittent import (  # noqa: E402
+    ADIDAForecaster,
+    CrostonForecaster,
+)
+from src.models.statistical.naive import build_baseline  # noqa: E402
 
 log = get_logger("backtest")
 
@@ -262,11 +266,11 @@ def run_global_model(
     y_tr = train["sales"].astype(float).clip(lower=0)
     X_te = test[feature_cols].astype("float32").fillna(0.0)
 
-    common = dict(
-        n_estimators=400, learning_rate=0.05, num_leaves=63,
-        min_child_samples=20, subsample=0.8, subsample_freq=1,
-        colsample_bytree=0.8, n_jobs=-1, random_state=42, verbose=-1,
-    )
+    common: dict[str, Any] = {
+        "n_estimators": 400, "learning_rate": 0.05, "num_leaves": 63,
+        "min_child_samples": 20, "subsample": 0.8, "subsample_freq": 1,
+        "colsample_bytree": 0.8, "n_jobs": -1, "random_state": 42, "verbose": -1,
+    }
     if model_name == "lightgbm_tweedie":
         model = LGBMRegressor(objective="tweedie", tweedie_variance_power=1.1, **common)
     else:
@@ -489,8 +493,7 @@ def main() -> int:
     benefit_df = pd.DataFrame(routing_benefits)
 
     # --- persist ---
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    artefacts = {
+    artefacts: dict[str, pd.DataFrame] = {
         "accuracy_overall": overall,
         "accuracy_by_origin": by_origin,
         "accuracy_by_category": by_category,

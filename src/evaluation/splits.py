@@ -30,11 +30,10 @@ Bergmeir & Benitez (2012), "On the use of cross-validation for time series
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, timedelta
-from typing import Iterator, Sequence
+from datetime import date
 
-import numpy as np
 import pandas as pd
 
 from src.config.logging import get_logger

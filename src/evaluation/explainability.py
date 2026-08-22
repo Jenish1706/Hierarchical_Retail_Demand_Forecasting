@@ -59,15 +59,16 @@ Hooker, Mentch & Zhou (2021) -- on the extrapolation problem in permutation
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from src.evaluation.point_metrics import wape
 from src.config.logging import get_logger
+from src.evaluation.point_metrics import wape
 
 log = get_logger(__name__)
 

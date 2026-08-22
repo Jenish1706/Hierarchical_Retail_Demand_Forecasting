@@ -25,9 +25,10 @@ import argparse
 import json
 import sys
 import time
-from datetime import date, datetime
+from collections.abc import Iterator
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -36,8 +37,8 @@ import pyarrow.parquet as pq
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.config.logging import get_logger          # noqa: E402
-from src.config.settings import M5, settings       # noqa: E402
+from src.config.logging import get_logger  # noqa: E402
+from src.config.settings import M5, settings  # noqa: E402
 
 log = get_logger("extract_workbook")
 

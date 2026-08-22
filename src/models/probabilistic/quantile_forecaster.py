@@ -19,7 +19,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from lightgbm import LGBMRegressor
-from sklearn.model_selection import TimeSeriesSplit
 
 from src.config.logging import get_logger
 
@@ -79,7 +78,7 @@ class QuantileForecaster:
         self.models: dict[float, LGBMRegressor] = {}
         self._feature_cols: list[str] = []
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "QuantileForecaster":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> QuantileForecaster:
         """Train one LightGBM model per quantile."""
         self._feature_cols = X.columns.tolist()
 
@@ -170,7 +169,7 @@ class ConformalPredictor:
         y_train: pd.Series,
         X_calib: pd.DataFrame,
         y_calib: pd.Series,
-    ) -> "ConformalPredictor":
+    ) -> ConformalPredictor:
         """Fit model and calibrate intervals on held-out calibration set."""
         self.base_model.fit(X_train.fillna(0), y_train)
         y_calib_pred = self.base_model.predict(X_calib.fillna(0)).clip(0)
@@ -210,11 +209,11 @@ class BootstrapEnsembleForecaster:
         self.n_bootstraps = n_bootstraps
         self._models: list[Any] = []
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "BootstrapEnsembleForecaster":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> BootstrapEnsembleForecaster:
         rng = np.random.default_rng(42)
         n = len(X)
 
-        for i in range(self.n_bootstraps):
+        for _ in range(self.n_bootstraps):
             idx = rng.integers(0, n, size=n)
             model = self.base_model_factory()
             model.fit(X.iloc[idx].fillna(0), y.iloc[idx])
@@ -255,7 +254,7 @@ class ProbabilisticForecastingPipeline:
         y_train: pd.Series,
         X_val: pd.DataFrame | None = None,
         y_val: pd.Series | None = None,
-    ) -> "ProbabilisticForecastingPipeline":
+    ) -> ProbabilisticForecastingPipeline:
         self.quantile_forecaster.fit(X_train, y_train)
         self._is_fitted = True
 

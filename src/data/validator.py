@@ -10,13 +10,11 @@ Implements multi-layer validation:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
 from typing import Any
 
-import numpy as np
 import pandas as pd
 import pandera as pa
-from pandera.typing import DataFrame, Series
+from pandera.typing import Series
 
 from src.config.logging import get_logger
 
@@ -271,7 +269,7 @@ class SalesDataValidator:
             )
             intermittent_skus = (zero_pct_by_sku > self.MAX_ZERO_SALE_PCT).sum()
             highly_intermittent_skus = (zero_pct_by_sku > self.HIGH_ZERO_SALE_PCT).sum()
-            
+
             if highly_intermittent_skus > 0:
                 result.warnings.append(
                     f"{highly_intermittent_skus} SKU/store combinations have >{self.HIGH_ZERO_SALE_PCT:.0%} zero sales (highly intermittent)"
@@ -318,10 +316,10 @@ class PriceDataValidator:
             if "item_id" in df.columns and "store_id" in df.columns and "wm_yr_wk" in df.columns:
                 # Sort to ensure chronological order per item/store
                 sorted_df = df.sort_values(["store_id", "item_id", "wm_yr_wk"])
-                
+
                 # Calculate percentage change week over week
                 sorted_df["price_pct_change"] = sorted_df.groupby(["store_id", "item_id"])["sell_price"].pct_change().abs()
-                
+
                 volatile_prices = (sorted_df["price_pct_change"] > self.MAX_PRICE_CHANGE_WOW).sum()
                 if volatile_prices > 0:
                     result.warnings.append(

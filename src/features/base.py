@@ -55,13 +55,13 @@ the non-linear interactions between it and the calendar.
 """
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
 
 import numpy as np
 import pandas as pd
 
 from src.config.logging import PipelineLogger, get_logger
-from src.config.settings import M5, settings
+from src.config.settings import settings
 
 log = get_logger(__name__)
 

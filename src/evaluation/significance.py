@@ -44,9 +44,10 @@ Benjamini & Hochberg (1995), JRSS-B 57(1):289-300.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from itertools import combinations
-from typing import Any, Literal, Mapping, Sequence
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd

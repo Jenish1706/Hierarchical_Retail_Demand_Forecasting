@@ -37,14 +37,17 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import matplotlib
-matplotlib.use("Agg")                                   # headless
-import matplotlib.pyplot as plt                          # noqa: E402
-import seaborn as sns                                    # noqa: E402
 
-from src.config.logging import get_logger                # noqa: E402
-from src.config.settings import M5, settings             # noqa: E402
-from src.models.statistical.intermittent import (        # noqa: E402
-    ADI_CUTOFF, CV2_CUTOFF, classify_demand,
+matplotlib.use("Agg")                                   # headless
+import matplotlib.pyplot as plt  # noqa: E402
+import seaborn as sns  # noqa: E402
+
+from src.config.logging import get_logger  # noqa: E402
+from src.config.settings import M5, settings  # noqa: E402
+from src.models.statistical.intermittent import (  # noqa: E402
+    ADI_CUTOFF,
+    CV2_CUTOFF,
+    classify_demand,
 )
 
 log = get_logger("eda")
@@ -394,9 +397,6 @@ def section_events_snap(wide: pd.DataFrame, cal: pd.DataFrame, out: Path) -> dic
     rows: list[dict[str, Any]] = []
     for cat in wide["cat_id"].unique():
         mask = (wide["cat_id"] == cat).to_numpy()
-        daily = sales[mask].sum(axis=0)
-        base = daily.mean()
-
         for state in M5.STATES:
             snap_col = f"snap_{state}"
             # Restrict to stores in this state so the SNAP flag applies.
@@ -491,8 +491,6 @@ def section_stationarity_distributions(
 
     day_cols = [c for c in wide.columns if c.startswith("d_")]
     sales = wide[day_cols].to_numpy(dtype=np.float64)
-    cal_idx = cal.set_index("d").loc[day_cols]
-
     aggregates = {
         "total": sales.sum(axis=0),
         "state_CA": sales[(wide["state_id"] == "CA").to_numpy()].sum(axis=0),
@@ -686,7 +684,7 @@ def main() -> int:
     print(f"  introduced after day 1 : {s31['series_starting_after_day_1']:,} series")
     print()
     print(f"  zero-sales rate        : {s32['overall_zero_rate']:.1%} of all observations")
-    print(f"  by category            : " +
+    print("  by category            : " +
           ", ".join(f"{k} {v:.1%}" for k, v in s32["zero_rate_by_category"].items()))
     print(f"  overdispersed series   : {s32['pct_series_overdispersed']:.1%}")
     print(f"  top volume decile      : {s32['top_decile_volume_share']:.1%} of all units")

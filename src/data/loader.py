@@ -37,9 +37,10 @@ store was cut from the file", not "this item was not for sale".
 from __future__ import annotations
 
 import uuid
-from datetime import date, timedelta
+from collections.abc import Sequence
+from datetime import date
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 import numpy as np
 import pandas as pd

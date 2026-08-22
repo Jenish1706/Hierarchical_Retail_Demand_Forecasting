@@ -24,7 +24,7 @@ Tools: Evidently AI + custom statistical tests + Airflow integration
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date
 from enum import Enum
 from typing import Any
 
@@ -37,7 +37,7 @@ from src.config.settings import settings
 log = get_logger(__name__)
 
 
-class DriftType(str, Enum):
+class DriftType(str, Enum):  # noqa: UP042
     DATA = "data_drift"
     CONCEPT = "concept_drift"
     PREDICTION = "prediction_drift"

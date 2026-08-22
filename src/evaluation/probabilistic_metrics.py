@@ -40,7 +40,7 @@ Makridakis et al. (2022) -- the M5 Uncertainty track used weighted pinball
 """
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping
 
 import numpy as np
 import pandas as pd

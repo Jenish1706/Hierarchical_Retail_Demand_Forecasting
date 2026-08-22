@@ -50,9 +50,10 @@ import json
 import tempfile
 import time
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -61,9 +62,9 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from src.evaluation.point_metrics import compute_metrics, naive_scale
 from src.config.logging import get_logger
 from src.config.settings import settings
+from src.evaluation.point_metrics import compute_metrics, naive_scale
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 log = get_logger(__name__)
@@ -100,7 +101,6 @@ except ImportError:                                        # pragma: no cover
     CatBoostRegressor = None
 
 from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor
-
 
 # ===========================================================================
 # Model registry
@@ -189,7 +189,7 @@ if CatBoostRegressor is not None:
 # Hyperparameter search spaces
 # ===========================================================================
 
-def _lgbm_space(trial: "optuna.Trial") -> dict[str, Any]:
+def _lgbm_space(trial: optuna.Trial) -> dict[str, Any]:
     return {
         "n_estimators": trial.suggest_int("n_estimators", 200, 1000, step=100),
         "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2, log=True),
@@ -202,7 +202,7 @@ def _lgbm_space(trial: "optuna.Trial") -> dict[str, Any]:
     }
 
 
-def _xgb_space(trial: "optuna.Trial") -> dict[str, Any]:
+def _xgb_space(trial: optuna.Trial) -> dict[str, Any]:
     return {
         "n_estimators": trial.suggest_int("n_estimators", 200, 1000, step=100),
         "max_depth": trial.suggest_int("max_depth", 4, 10),
@@ -215,7 +215,7 @@ def _xgb_space(trial: "optuna.Trial") -> dict[str, Any]:
     }
 
 
-SEARCH_SPACES: dict[str, Callable[["optuna.Trial"], dict[str, Any]]] = {
+SEARCH_SPACES: dict[str, Callable[[optuna.Trial], dict[str, Any]]] = {
     "lightgbm": _lgbm_space,
     "lightgbm_tweedie": _lgbm_space,
     "xgboost": _xgb_space,
@@ -244,7 +244,7 @@ def _rebuild(model_name: str, params: dict[str, Any]) -> Any:
 # servable as a single LightGBM.
 # ===========================================================================
 
-from sklearn.base import BaseEstimator, RegressorMixin      # noqa: E402
+from sklearn.base import BaseEstimator, RegressorMixin  # noqa: E402
 
 
 class _BaseEnsemble(BaseEstimator, RegressorMixin):
@@ -263,7 +263,7 @@ class _BaseEnsemble(BaseEstimator, RegressorMixin):
             [np.clip(self.base_models[n].predict(X), 0.0, None) for n in self.base_names]
         )
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "_BaseEnsemble":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> _BaseEnsemble:
         # Base models arrive already fitted; the meta-parameters are set by
         # the trainer from out-of-fold predictions. Present only to satisfy
         # the sklearn estimator contract.
@@ -561,7 +561,7 @@ class DemandTrainer:
         inner_cv = TimeSeriesSplit(n_splits=self.config.inner_splits)
         space_fn = SEARCH_SPACES[model_name]
 
-        def objective(trial: "optuna.Trial") -> float:
+        def objective(trial: optuna.Trial) -> float:
             params = space_fn(trial)
             fold_scores: list[float] = []
 
@@ -1073,7 +1073,7 @@ class DemandTrainer:
             return {"promoted": False, "reason": f"registry_error: {exc}"}
 
     @staticmethod
-    def _current_production_version(client: "MlflowClient", model_name: str) -> Any:
+    def _current_production_version(client: MlflowClient, model_name: str) -> Any:
         """Return the Production version, or None if the model is new."""
         try:
             versions = client.search_model_versions(f"name='{model_name}'")
@@ -1085,7 +1085,7 @@ class DemandTrainer:
         return None
 
     @staticmethod
-    def _version_wape(client: "MlflowClient", version: Any) -> float | None:
+    def _version_wape(client: MlflowClient, version: Any) -> float | None:
         """Read a version's recorded CV WAPE from its tag, else its run metrics."""
         tags = getattr(version, "tags", {}) or {}
         if "cv_wape" in tags:
@@ -1101,7 +1101,7 @@ class DemandTrainer:
             return None
 
     def _transition(
-        self, client: "MlflowClient", name: str, version: str, stage: str, reason: str
+        self, client: MlflowClient, name: str, version: str, stage: str, reason: str
     ) -> dict[str, Any]:
         """Move a version to a stage and return a decision record."""
         client.transition_model_version_stage(

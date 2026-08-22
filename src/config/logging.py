@@ -48,7 +48,7 @@ def safe_add_logger_name(
 ) -> dict[str, Any]:
     """Safely inject logger name if logger object has .name attribute."""
     if hasattr(logger, "name"):
-        event_dict["logger"] = getattr(logger, "name")
+        event_dict["logger"] = logger.name
     return event_dict
 
 
@@ -151,7 +151,7 @@ class PipelineLogger:
         self.run_id = run_id or str(uuid.uuid4())[:8]
         self._log = get_logger(pipeline_name)
 
-    def __enter__(self) -> "PipelineLogger":
+    def __enter__(self) -> PipelineLogger:
         set_pipeline_name(self.pipeline_name)
         set_correlation_id(self.run_id)
         self._log.info("pipeline_started", run_id=self.run_id)

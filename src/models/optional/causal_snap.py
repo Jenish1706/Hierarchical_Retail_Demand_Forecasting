@@ -28,9 +28,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from lightgbm import LGBMRegressor, LGBMClassifier
-from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import KFold, cross_val_predict
+from lightgbm import LGBMClassifier, LGBMRegressor
+from sklearn.model_selection import KFold
 
 from src.config.logging import get_logger
 
@@ -227,7 +226,6 @@ class DiDEstimator:
         df_clean["treated_post"] = df_clean[treatment_col] * df_clean[post_col]
 
         try:
-            import statsmodels.api as sm
             import statsmodels.formula.api as smf
 
             # Two-way FE (entity + time dummies absorbed by within transformation)

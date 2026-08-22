@@ -120,7 +120,7 @@ class HierarchicalForecaster:
         df_train: pd.DataFrame,
         X_train: pd.DataFrame,
         y_train: pd.Series,
-    ) -> "HierarchicalForecaster":
+    ) -> HierarchicalForecaster:
         """Fit base forecaster. Reconciliation is applied at predict time."""
         self.base_forecaster.fit(X_train, y_train)
         self._df_train = df_train
@@ -291,7 +291,6 @@ class HierarchicalForecaster:
                 dept = row.get("dept_id", "")
                 store = row.get("store_id", "")
                 for j, iid in enumerate(item_ids):
-                    item_row = df_item[df_item.get("entity_id", pd.Series()) == iid]
                     # Simplified: mark all items in this dept/store
                     if dept in iid and store in iid:
                         S[row_i, j] = 1

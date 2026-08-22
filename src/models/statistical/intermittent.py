@@ -70,7 +70,7 @@ ADI_CUTOFF = 1.32     # average inter-demand interval, in periods
 CV2_CUTOFF = 0.49     # squared coefficient of variation of non-zero sizes
 
 
-class DemandPattern(str, Enum):
+class DemandPattern(str, Enum):  # noqa: UP042
     """The four SBT quadrants, plus a guard for series with no demand at all."""
 
     SMOOTH = "SMOOTH"                # frequent, stable    -> global ML
@@ -207,7 +207,7 @@ class CrostonForecaster:
         """SBA multiplier (1 - alpha/2); 1.0 for classical Croston."""
         return 1.0 - self.alpha / 2.0 if self.variant == "sba" else 1.0
 
-    def fit(self, y: np.ndarray) -> "CrostonForecaster":
+    def fit(self, y: np.ndarray) -> CrostonForecaster:
         y = np.asarray(y, dtype=float).ravel()
         if y.size == 0:
             raise ValueError("cannot fit on an empty series")
@@ -308,7 +308,7 @@ class ADIDAForecaster:
         trimmed = y[-(n_buckets * k):]        # drop the oldest ragged remainder
         return trimmed.reshape(n_buckets, k).sum(axis=1).astype(float)
 
-    def fit(self, y: np.ndarray) -> "ADIDAForecaster":
+    def fit(self, y: np.ndarray) -> ADIDAForecaster:
         y = np.asarray(y, dtype=float).ravel()
         if y.size == 0:
             raise ValueError("cannot fit on an empty series")
@@ -354,7 +354,7 @@ class ZeroForecaster:
 
     name = "zero"
 
-    def fit(self, y: np.ndarray) -> "ZeroForecaster":
+    def fit(self, y: np.ndarray) -> ZeroForecaster:
         return self
 
     def predict(self, h: int) -> np.ndarray:

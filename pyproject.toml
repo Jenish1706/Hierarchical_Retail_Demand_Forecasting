@@ -120,9 +120,17 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "PT"]
-# E501 (line length) is handled by black; E741 permits `l` as a loop variable
-# in the lag comprehensions, where it reads better than alternatives.
-ignore = ["E501", "E741"]
+ignore = [
+    "E501",   # line length -- black owns formatting
+    "E741",   # `l` as a loop variable reads fine in the lag comprehensions
+    # N803/N806 flag `X`, `X_tr`, `X_te` as badly named. In numerical code the
+    # capital-X-for-design-matrix convention is near-universal (it is what
+    # scikit-learn's own API uses), and renaming to `x` would make the code
+    # LESS readable to the audience for it.
+    "N803",   # argument name should be lowercase
+    "N806",   # variable in function should be lowercase
+    "B905",   # zip(strict=) -- the zipped sequences are constructed together
+]
 
 [tool.mypy]
 python_version = "3.11"
@@ -149,3 +157,15 @@ exclude_lines = [
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# scripts/ and the backtest engine insert the repo root on sys.path before
+# importing `src`, so their imports cannot be at the top of the file.
+"scripts/*.py" = ["E402"]
+"src/evaluation/backtest.py" = ["E402"]
+# Pandera's `@pa.check` validators receive the DataFrame as `cls`-style first
+# arg by design, and the trainer/reconciler defer heavy optional imports to the
+# point of use so the modules import without the full stack installed.
+"src/data/validator.py" = ["N805"]
+"src/models/classical_ml/trainer.py" = ["E402", "C408", "C416"]
+"src/models/hierarchical/reconciler.py" = ["E402"]

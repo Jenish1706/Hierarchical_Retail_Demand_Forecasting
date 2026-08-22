@@ -42,12 +42,15 @@ Petropoulos & Kourentzes (2015), "Forecast combinations for intermittent
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
+from src.config.logging import get_logger
+from src.evaluation.point_metrics import naive_scale
 from src.models.statistical.intermittent import (
     ADIDAForecaster,
     CrostonForecaster,
@@ -56,8 +59,6 @@ from src.models.statistical.intermittent import (
     ZeroForecaster,
     classify_demand,
 )
-from src.evaluation.point_metrics import compute_metrics, naive_scale
-from src.config.logging import get_logger
 
 log = get_logger(__name__)
 
@@ -167,7 +168,7 @@ class SegmentRouter:
 
     # -- fit -----------------------------------------------------------------
 
-    def fit(self, history: Mapping[str, np.ndarray]) -> "SegmentRouter":
+    def fit(self, history: Mapping[str, np.ndarray]) -> SegmentRouter:
         """
         Classify every series and fit the local models it needs.
 

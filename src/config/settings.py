@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Final
+from typing import Final
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -219,190 +219,19 @@ M5: Final[M5Facts] = M5Facts()
 
 
 # ===========================================================================
-# SECTION 2 -- DOCUMENTED ASSUMPTIONS (data M5 does not contain)
+# SECTION 2 -- ENVIRONMENT CONFIGURATION (genuinely variable)
+#
+# An `AssumptionRegistry` used to live here, holding unit-cost ratios, ordering
+# and holding costs, lead times, and inferred store coordinates -- every one of
+# them a parameter M5 does not contain. It existed to serve the inventory
+# optimisation, price elasticity and weather-join modules.
+#
+# All three modules were deleted as out of scope, which left the registry with
+# no callers. It is removed rather than kept "in case": an unused set of
+# invented constants is exactly the kind of thing that gets picked up later and
+# quietly treated as data. If a future module genuinely needs a non-M5
+# parameter, it should declare and document it at the point of use.
 # ===========================================================================
-
-
-@dataclass(frozen=True)
-class Assumption:
-    """
-    A single parameter that is NOT in the M5 dataset.
-
-    Every field is mandatory. An assumption without a stated source is
-    indistinguishable from a fabricated number, which is the exact failure
-    mode this platform was rebuilt to eliminate.
-    """
-
-    key: str
-    value: Any
-    unit: str
-    source: str          # where the number came from -- never just "assumed"
-    used_by: str         # which module depends on it
-    rationale: str       # why this value and not another
-
-
-class AssumptionRegistry:
-    """
-    Single source of truth for every non-M5 parameter.
-
-    API routers and the dashboard read from this registry so assumptions
-    travel with the results they influence. If you add a parameter the
-    dataset does not contain, register it here -- do not inline it.
-    """
-
-    _REGISTRY: Final[tuple[Assumption, ...]] = (
-        Assumption(
-            key="store_locations",
-            value={
-                # M5 gives state only. Coordinates are inferred from the
-                # largest metros in each state so a weather join is possible
-                # at all. Store-level precision is NOT claimed -- this is a
-                # state-level proxy and is labelled as such downstream.
-                "CA_1": (34.0522, -118.2437),   # Los Angeles
-                "CA_2": (34.0522, -118.2437),   # Los Angeles
-                "CA_3": (37.7749, -122.4194),   # San Francisco
-                "CA_4": (37.7749, -122.4194),   # San Francisco
-                "TX_1": (32.7767, -96.7970),    # Dallas
-                "TX_2": (29.7604, -95.3698),    # Houston
-                "TX_3": (32.7767, -96.7970),    # Dallas
-                "WI_1": (43.0389, -87.9065),    # Milwaukee
-                "WI_2": (43.0731, -89.4012),    # Madison
-                "WI_3": (44.5133, -88.0133),    # Green Bay
-            },
-            unit="(latitude, longitude)",
-            source="Geographic inference from state_id; not in M5",
-            used_by="ingestion.WeatherIngester",
-            rationale=(
-                "M5 provides state_id but no store address. Weather is a "
-                "regional signal, so metro-level coordinates capture most of "
-                "the usable variation. Treated as a state proxy, not a "
-                "store location."
-            ),
-        ),
-        Assumption(
-            key="unit_cost_ratio",
-            value=0.60,
-            unit="fraction of sell_price",
-            source="APICS/ASCM grocery gross-margin benchmark (~40% margin)",
-            used_by="analytics.holiday_and_inventory",
-            rationale=(
-                "M5 contains sell_price but no COGS. A 60% cost ratio is the "
-                "midpoint of published grocery benchmarks. Consequence: this "
-                "platform reports REVENUE, never profit. Any profit figure "
-                "derived from this ratio would be an artefact of the "
-                "assumption rather than a finding about the retailer."
-            ),
-        ),
-        Assumption(
-            key="ordering_cost",
-            value=50.0,
-            unit="USD per purchase order",
-            source="APICS/ASCM benchmark for retail replenishment",
-            used_by="analytics.holiday_and_inventory (EOQ)",
-            rationale=(
-                "EOQ requires a fixed per-order cost. M5 has no procurement "
-                "data. Sensitivity to this value is reported alongside every "
-                "EOQ result rather than assumed away."
-            ),
-        ),
-        Assumption(
-            key="holding_cost_rate",
-            value=0.25,
-            unit="fraction of unit value per year",
-            source="APICS/ASCM benchmark (capital + storage + obsolescence)",
-            used_by="analytics.holiday_and_inventory (EOQ, safety stock)",
-            rationale=(
-                "Standard retail carrying-cost rate. Combined with the unit "
-                "cost assumption, so EOQ inherits both uncertainties."
-            ),
-        ),
-        Assumption(
-            key="lead_time_mean_days",
-            value=7.0,
-            unit="days",
-            source="Typical DC-to-store replenishment cycle",
-            used_by="analytics.holiday_and_inventory (safety stock, ROP)",
-            rationale=(
-                "M5 has no supplier or lead-time data. Seven days matches a "
-                "weekly replenishment cadence, consistent with the weekly "
-                "granularity of the sell_prices table."
-            ),
-        ),
-        Assumption(
-            key="lead_time_std_days",
-            value=1.5,
-            unit="days",
-            source="Typical DC-to-store variability",
-            used_by="analytics.holiday_and_inventory (safety stock)",
-            rationale=(
-                "Safety stock under stochastic lead time needs a variance "
-                "term. 1.5 days is ~21% CV, a common planning default."
-            ),
-        ),
-    )
-
-    @classmethod
-    def all(cls) -> tuple[Assumption, ...]:
-        return cls._REGISTRY
-
-    @classmethod
-    def get(cls, key: str) -> Assumption:
-        for a in cls._REGISTRY:
-            if a.key == key:
-                return a
-        raise KeyError(
-            f"Unknown assumption {key!r}. Register it in AssumptionRegistry "
-            f"rather than inlining an undocumented constant."
-        )
-
-    @classmethod
-    def value(cls, key: str) -> Any:
-        return cls.get(key).value
-
-    @classmethod
-    def as_disclosure(cls, keys: list[str] | None = None) -> list[dict[str, Any]]:
-        """
-        Serialisable form for attaching to API responses and dashboards.
-
-        Callers pass the subset of keys their result actually depends on, so
-        the disclosure is specific rather than a blanket footer users learn
-        to ignore.
-        """
-        items = cls._REGISTRY if keys is None else [cls.get(k) for k in keys]
-        return [
-            {
-                "assumption": a.key,
-                "value": a.value,
-                "unit": a.unit,
-                "source": a.source,
-                "rationale": a.rationale,
-            }
-            for a in items
-        ]
-
-
-# Warnings that must accompany specific classes of result. Defined once here
-# so the exact wording cannot drift between API, dashboard and docs.
-ENDOGENEITY_WARNING: Final[str] = (
-    "ENDOGENEITY_WARNING: This elasticity is CORRELATIONAL, not causal. "
-    "Prices in M5 are set by the retailer and may respond to anticipated "
-    "demand (e.g. markdowns ahead of expected softness), biasing OLS "
-    "estimates toward zero. No instrument or randomised experiment is "
-    "available in this dataset. Do not use this coefficient to set prices."
-)
-
-INVENTORY_ASSUMPTION_WARNING: Final[str] = (
-    "ASSUMPTION_WARNING: M5 contains no inventory levels, lead times, or unit "
-    "costs. These figures are a policy SIMULATION driven by documented "
-    "benchmark assumptions, not a measurement of this retailer's operations. "
-    "See the `assumptions` field for every value the result depends on."
-)
-
-SNAP_CAUSAL_NOTE: Final[str] = (
-    "SNAP disbursement dates are fixed by state government and are plausibly "
-    "exogenous to item-level demand, which supports a causal reading. "
-    "Estimated via Double ML with cross-fitting (Chernozhukov et al., 2018)."
-)
 
 
 # ===========================================================================
@@ -512,8 +341,8 @@ class AppSettings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = Field(default="M5 Retail Demand Intelligence Platform")
-    app_version: str = Field(default="2.0.0")
+    app_name: str = Field(default="M5 Forecasting Model Laboratory")
+    app_version: str = Field(default="3.0.0")
     environment: str = Field(default="development")
     debug: bool = Field(default=False)
     log_level: str = Field(default="INFO")

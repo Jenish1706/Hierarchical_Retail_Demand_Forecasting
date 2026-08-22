@@ -47,7 +47,7 @@ import pandas as pd
 import polars as pl
 
 from src.config.logging import PipelineLogger, get_logger
-from src.config.settings import M5, AssumptionRegistry, settings
+from src.config.settings import M5, settings
 
 log = get_logger(__name__)
 
@@ -387,70 +387,3 @@ class M5Loader:
         )
         self._log.info("series_dict_loaded", n_series=len(series))
         return series, meta
-
-
-# ---------------------------------------------------------------------------
-# Optional external enrichment
-# ---------------------------------------------------------------------------
-
-class WeatherIngester:
-    """
-    Fetch daily weather for the assumed store locations (Open-Meteo archive).
-
-    IMPORTANT: M5 contains no store addresses. Coordinates come from the
-    `store_locations` assumption in `AssumptionRegistry`, which maps each
-    store to a large metro in its state. Weather joined this way is a
-    STATE-REGIONAL proxy, not a store-local measurement, and results using it
-    must say so.
-
-    Network access is required, so this is opt-in and never part of the
-    default panel load.
-    """
-
-    ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
-
-    def __init__(self, locations: dict[str, tuple[float, float]] | None = None) -> None:
-        self.locations = locations or AssumptionRegistry.value("store_locations")
-        self._log = get_logger("WeatherIngester")
-
-    def fetch(self, start: date, end: date) -> pd.DataFrame:
-        """Return one row per (store_id, date). Requires network access."""
-        import httpx
-
-        frames: list[pd.DataFrame] = []
-        for store_id, (lat, lon) in self.locations.items():
-            params = {
-                "latitude": lat,
-                "longitude": lon,
-                "start_date": start.isoformat(),
-                "end_date": end.isoformat(),
-                "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum",
-                "timezone": "America/Chicago",
-            }
-            try:
-                resp = httpx.get(self.ARCHIVE_URL, params=params, timeout=30.0)
-                resp.raise_for_status()
-                daily = resp.json().get("daily", {})
-                frames.append(
-                    pd.DataFrame(
-                        {
-                            "store_id": store_id,
-                            "date": pd.to_datetime(daily.get("time", [])),
-                            "temp_max": daily.get("temperature_2m_max", []),
-                            "temp_min": daily.get("temperature_2m_min", []),
-                            "precipitation": daily.get("precipitation_sum", []),
-                        }
-                    )
-                )
-            except Exception as exc:                        # pragma: no cover
-                self._log.warning("weather_fetch_failed", store_id=store_id, error=str(exc))
-
-        if not frames:
-            return pd.DataFrame(
-                columns=["store_id", "date", "temp_max", "temp_min", "precipitation"]
-            )
-
-        out = pd.concat(frames, ignore_index=True)
-        out["location_is_assumed"] = 1  # travels with the data, per the registry
-        self._log.info("weather_fetched", rows=len(out), stores=len(self.locations))
-        return out

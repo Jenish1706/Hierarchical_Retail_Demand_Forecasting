@@ -1,64 +1,144 @@
+# DVC pipeline for the M5 Forecasting Model Laboratory.
+#
+# Rewritten for v3. Every stage in the previous file invoked a
+# `scripts/run_*.py` that was never written, and its `params` pointed at
+# `configs/model/model_config.yml`, a path that does not exist -- so
+# `dvc repro` could not have run at any point. The reproducibility claim was
+# unbacked.
+#
+# Each stage below maps to a script that exists and has been executed. DVC is
+# the only orchestrator in this project: Airflow was removed because a research
+# project with no production schedule gains nothing from a scheduler and a
+# metadata database that `dvc repro` does not already provide.
+#
+# Usage:
+#   dvc repro                  # run the whole chain
+#   dvc repro run_eda          # run one stage and its dependencies
+#   dvc dag                    # show the dependency graph
+
 stages:
-  ingest:
-    cmd: python scripts/run_ingestion.py --data-dir data/raw
-    deps:
-      - scripts/run_ingestion.py
-      - src/ingestion/m5_ingester.py
-    outs:
-      - data/raw/sales_train_evaluation.csv
-      - data/raw/calendar.csv
-      - data/raw/sell_prices.csv
 
-  validate:
-    cmd: python scripts/run_validation.py --input data/raw --output data/validated
+  # -------------------------------------------------------------------------
+  # 1. Extract the four sheets from the source workbook into Parquet.
+  #
+  # Not marked with the .xlsx as a dep on purpose: the workbook is 229 MB and
+  # is gitignored, so DVC would refuse to hash it on a fresh clone. It is the
+  # human-supplied input to the pipeline, not a tracked intermediate.
+  # -------------------------------------------------------------------------
+  extract:
+    cmd: python scripts/extract_workbook.py
     deps:
-      - scripts/run_validation.py
-      - src/validation/data_validator.py
-      - data/raw/sales_train_evaluation.csv
+      - scripts/extract_workbook.py
+      - src/config/settings.py
     outs:
-      - data/validated/validation_report.json
+      - data/raw/sales_train_validation.parquet
+      - data/raw/calendar.parquet
+      - data/raw/sell_prices.parquet
+      - data/raw/sales_submission.parquet
     metrics:
-      - data/validated/quality_metrics.json:
+      - data/raw/extraction_report.json:
           cache: false
 
-  feature_engineering:
-    cmd: python scripts/run_features.py --input data/raw --output data/features
+  # -------------------------------------------------------------------------
+  # 2. Pillar 1 EDA. Runs over all 30,490 series in ~20s.
+  #
+  # A pipeline stage rather than a notebook because two of its outputs are
+  # inputs to modelling decisions: the SBT classification drives segment
+  # routing, and the distribution fitting decides the Tier 3 likelihood.
+  # -------------------------------------------------------------------------
+  eda:
+    cmd: python scripts/run_eda.py
     deps:
-      - scripts/run_features.py
-      - src/feature_store/pipeline.py
-      - data/raw/sales_train_evaluation.csv
-      - data/raw/calendar.csv
-      - data/raw/sell_prices.csv
+      - scripts/run_eda.py
+      - src/models/statistical/intermittent.py
+      - data/raw/sales_train_validation.parquet
+      - data/raw/calendar.parquet
     outs:
-      - data/features/feature_store.parquet
-    params:
-      - configs/model/model_config.yml:
-          - forecasting.feature_version
-
-  train:
-    cmd: python scripts/run_training.py --features data/features/feature_store.parquet --output models/
-    deps:
-      - scripts/run_training.py
-      - src/models/ml/trainer.py
-      - data/features/feature_store.parquet
-    outs:
-      - models/champion/
+      - reports/eda/series_classification.parquet
+      - reports/eda/fig_3_1_lifecycle.png
+      - reports/eda/fig_3_2_demand_distribution.png
+      - reports/eda/fig_3_3_intermittency.png
+      - reports/eda/fig_3_4_temporal.png
+      - reports/eda/fig_3_5_events_snap.png
+      - reports/eda/fig_3_8_distributions.png
     metrics:
-      - models/metrics.json:
+      - reports/eda/eda_findings.json:
           cache: false
-    params:
-      - configs/model/model_config.yml:
-          - models.lightgbm
-          - models.xgboost
-          - tuning
 
-  evaluate:
-    cmd: python scripts/run_evaluation.py --model models/champion --output reports/
+  # -------------------------------------------------------------------------
+  # 3. Tier 1 -- statistical models through the shared evaluation harness.
+  # -------------------------------------------------------------------------
+  tier1:
+    cmd: python scripts/run_tier1.py --sample-series 3000 --n-origins 3
     deps:
-      - scripts/run_evaluation.py
-      - models/champion/
+      - scripts/run_tier1.py
+      - src/models/statistical/statsforecast_models.py
+      - src/evaluation/point_metrics.py
+      - src/evaluation/splits.py
+      - src/data/loader.py
+      - data/raw/sales_train_validation.parquet
+      - data/raw/calendar.parquet
+    params:
+      - configs/model_config.yml:
+          - seed
+          - evaluation
+          - tier1_statistical
     outs:
-      - reports/evaluation_report.html
+      - reports/tier1/predictions.parquet
+      - reports/tier1/tier1_overall.csv
+      - reports/tier1/tier1_by_level.csv
+      - reports/tier1/tier1_by_origin.csv
+      - reports/tier1/tier1_timings.csv
     metrics:
-      - reports/metrics.json:
+      - reports/tier1/manifest.json:
+          cache: false
+
+  # -------------------------------------------------------------------------
+  # 4. Cross-tier backtest: baselines, intermittent methods, global ML.
+  # -------------------------------------------------------------------------
+  backtest:
+    cmd: python scripts/run_backtest.py --sample-series 3000 --n-origins 3 --history-days 900 --out-dir reports/backtest_main
+    deps:
+      - scripts/run_backtest.py
+      - src/evaluation/backtest.py
+      - src/features/base.py
+      - src/models/router.py
+      - src/models/statistical/naive.py
+      - src/models/statistical/intermittent.py
+      - data/raw/sales_train_validation.parquet
+    params:
+      - configs/model_config.yml:
+          - seed
+          - evaluation
+          - features
+    outs:
+      - reports/backtest_main/predictions.parquet
+      - reports/backtest_main/accuracy_overall.csv
+      - reports/backtest_main/accuracy_by_hierarchy_level.csv
+    metrics:
+      - reports/backtest_main/manifest.json:
+          cache: false
+
+  # -------------------------------------------------------------------------
+  # 5. Significance testing.
+  #
+  # A separate stage because it is the gate between "we have a ranking" and
+  # "we have a finding". Depends on the backtest predictions, so DVC re-runs it
+  # whenever those change -- which is the behaviour that stops a stale
+  # significance verdict being quoted against fresh numbers.
+  # -------------------------------------------------------------------------
+  significance:
+    cmd: python scripts/run_significance.py --backtest-dir reports/backtest_main
+    deps:
+      - scripts/run_significance.py
+      - src/evaluation/significance.py
+      - reports/backtest_main/predictions.parquet
+    params:
+      - configs/model_config.yml:
+          - evaluation
+    outs:
+      - reports/backtest_main/significance/diebold_mariano.csv
+      - reports/backtest_main/significance/mcb.csv
+    metrics:
+      - reports/backtest_main/significance/significance_report.json:
           cache: false

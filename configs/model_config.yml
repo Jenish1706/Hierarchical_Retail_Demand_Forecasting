@@ -1,111 +1,179 @@
-# Model configuration for all forecasting models
-# Override individual values via environment variables or CLI flags
+# M5 Forecasting Model Laboratory -- model and evaluation configuration.
+#
+# Rewritten for v3. The previous file configured NSGA-II populations, carbon
+# emission weights, transport costs and inventory service levels -- parameters
+# for modules that were deleted because M5 contains none of the data they
+# needed.
+#
+# Values here are genuine configuration: things a reader might legitimately
+# change to run a different experiment. M5 dataset FACTS (cardinalities, date
+# ranges, hierarchy levels) deliberately live in src/config/settings.py as a
+# frozen dataclass instead, so an environment variable cannot silently
+# contradict the data.
 
-forecasting:
-  target_col: sales
+# ---------------------------------------------------------------------------
+# Reproducibility
+# ---------------------------------------------------------------------------
+seed: 42          # applied to numpy, sklearn, torch, and every model factory
+
+# ---------------------------------------------------------------------------
+# Evaluation protocol
+# ---------------------------------------------------------------------------
+evaluation:
   horizon_days: 28
-  min_train_days: 365
-  cv_splits: 3
-  feature_version: 1
 
-  quantiles: [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95]
+  # Canonical splits. NOTE these are shifted back from the values in the
+  # project brief: the brief's test window (2016-04-25..2016-05-22) is
+  # d_1914..d_1941, and Sales_train_validation stops at d_1913, so it holds no
+  # actuals to score against. See src/config/settings.py.
+  train_end: "2016-02-28"        # d_1857
+  validation:  ["2016-02-29", "2016-03-27"]   # d_1858..d_1885
+  test:        ["2016-03-28", "2016-04-24"]   # d_1886..d_1913, held out
 
-  performance_thresholds:
-    wape_alert: 0.20     # Alert if WAPE > 20%
-    mape_alert: 0.25
-    bias_alert: 0.10
-    degradation_pct: 0.20  # Retrain if 20% relative degradation
+  # Walk-forward. The spec asks for >= 5 origins for a stability estimate;
+  # fewer and an origin-to-origin ranking flip cannot be told from noise.
+  n_origins: 5
+  origin_step_days: 28           # == horizon, so test windows do not overlap
+  expanding_window: true         # realistic: all history available at each origin
 
-models:
+  # Primary metric for model selection. RMSSE is the official M5 metric and is
+  # scale-free; WAPE is the volume-weighted business view. Both are always
+  # reported because they can disagree -- and on this data they do.
+  primary_metric: rmsse
+  secondary_metrics: [wape, mase, mae, bias]
+
+  significance:
+    alpha: 0.05
+    correction: holm             # family-wise error control across all pairs
+    dm_loss: absolute            # pair DM with the WAPE/MAE reporting
+
+# ---------------------------------------------------------------------------
+# Features
+# ---------------------------------------------------------------------------
+features:
+  version: 2
+  # Lags shorter than the horizon are dropped, not shifted: they are unknowable
+  # at forecast time. See src/features/base.py.
+  lags: [1, 2, 3, 7, 14, 21, 28, 364]
+  rolling_windows: [7, 28, 90, 364]
+  # Price features are dropped whenever any selected store lacks price data,
+  # or the model learns "price is null" as a store-identity proxy. The supplied
+  # workbook was truncated at Excel's row limit and covers CA_1, CA_2 only.
+  include_price: true
+
+# ---------------------------------------------------------------------------
+# Tier 1 -- statistical
+# ---------------------------------------------------------------------------
+tier1_statistical:
+  # The dominant cycle in M5 daily demand: EDA measured ACF 0.808 at lag 7
+  # against 0.673 at lag 1. Classical ETS/ARIMA admit only one seasonal period.
+  season_length: 7
+
+  # KEEP AT 1. statsforecast is already Numba-vectorised across series, so the
+  # process pool only helps at very large series counts; below that, spin-up
+  # dominates (~12s per model for 40 series). On Windows the spawn pool also
+  # raised BrokenProcessPool for ADIDA and Theta without a __main__ guard.
+  n_jobs: 1
+
+  models:
+    - autoets              # priority 1: reproduces the published ES_bu benchmark
+    - ets_damped
+    - ses
+    - theta
+    - autotheta
+    - autoces
+    - croston_classic
+    - croston_optimized
+    - croston_sba
+    - tsb                  # handles obsolescence; Croston cannot
+    - adida
+    - imapa
+    - sf_naive
+    - sf_seasonal_naive
+    - sf_window_average
+
+  # AutoARIMA is excluded from level 12 by default: Hyndman-Khandakar order
+  # selection over 95%-zero series is expensive and selects degenerate orders.
+  # Run it at aggregated levels, where series are continuous.
+  autoarima:
+    enabled: false
+    levels: [store, state, total]
+
+# ---------------------------------------------------------------------------
+# Tier 2 -- classical machine learning
+# ---------------------------------------------------------------------------
+tier2_classical_ml:
+  # Nested CV. The outer loop reports unbiased performance; the inner loop
+  # selects hyperparameters using outer-training rows only.
+  # Cawley & Talbot (2010), JMLR 11:2079-2107.
+  outer_splits: 3
+  inner_splits: 3
+  tune_trials: 30
+  tune_models: [lightgbm, lightgbm_tweedie, xgboost]
+
   lightgbm:
     n_estimators: 500
-    max_depth: 7
     learning_rate: 0.05
-    subsample: 0.8
-    colsample_bytree: 0.8
+    num_leaves: 63
     min_child_samples: 20
-    reg_alpha: 0.1
-    reg_lambda: 1.0
-    verbose: -1
-
-  xgboost:
-    n_estimators: 500
-    max_depth: 6
-    learning_rate: 0.05
     subsample: 0.8
     colsample_bytree: 0.8
-    min_child_weight: 5
-    reg_alpha: 0.1
-    reg_lambda: 1.0
-    eval_metric: mae
 
-  catboost:
-    iterations: 500
-    depth: 7
-    learning_rate: 0.05
-    l2_leaf_reg: 3.0
-    verbose: 0
+  lightgbm_tweedie:
+    # Tweedie is the textbook choice for zero-inflated retail counts. On this
+    # data it showed NO detectable difference from L2 (DM p = 1.00 after Holm)
+    # -- kept as a separate entry precisely so that result stays visible.
+    objective: tweedie
+    tweedie_variance_power: 1.1
 
-  random_forest:
-    n_estimators: 200
-    max_depth: 10
-    min_samples_leaf: 10
-    n_jobs: -1
+# ---------------------------------------------------------------------------
+# Tier 3 -- probabilistic
+# ---------------------------------------------------------------------------
+tier3_probabilistic:
+  # The nine levels used by the M5 Uncertainty track, so results are
+  # comparable with the published leaderboard.
+  quantiles: [0.005, 0.025, 0.165, 0.25, 0.5, 0.75, 0.835, 0.975, 0.995]
+  # Independently fitted quantiles can cross; sorting each row repairs it and
+  # weakly improves calibration (Chernozhukov, Fernandez-Val & Galichon 2010).
+  monotonic_rearrangement: true
+  conformal_alpha: 0.10
+  # EDA §3.8 measured 99.6% of series overdispersed and Negative Binomial
+  # beating Poisson on 91.5% of sampled series -- so Poisson is the wrong
+  # default here. Tested, not assumed.
+  distributions: [poisson, negative_binomial, tweedie]
 
-  extra_trees:
-    n_estimators: 300
-    max_depth: 10
-    min_samples_leaf: 10
-    n_jobs: -1
+# ---------------------------------------------------------------------------
+# Tier 4 -- deep learning
+# ---------------------------------------------------------------------------
+tier4_deep_learning:
+  input_size: 28          # lookback window
+  max_steps: 500
+  batch_size: 256
+  learning_rate: 0.001
+  early_stopping_patience: 20
+  models: [mlp, lstm, gru, tcn, nbeats, nhits, dlinear, patchtst, tide]
 
-tuning:
-  enabled: true
-  n_trials: 50
-  models_to_tune: [xgboost, lightgbm]
-  sampler: tpe
-  pruner: median
-  direction: minimize
-  metric: wape
+# ---------------------------------------------------------------------------
+# Tier 5 -- ensembles and hierarchy
+# ---------------------------------------------------------------------------
+tier5_ensembles:
+  # Stacking and blending use OUT-OF-FOLD predictions only. In-sample base
+  # predictions let the meta-learner assign weights that collapse on unseen
+  # data.
+  methods: [simple_average, weighted_blend, stacking, cross_family]
+  blend_solver: SLSQP
+  meta_learner: ridge
 
-inventory:
-  default_service_level: 0.95
-  default_lead_time_days: 7
-  default_ordering_cost: 50.0
-  holding_cost_rate: 0.25
-  stockout_cost_multiplier: 3.0
-  review_period_days: 7
-  abc_thresholds: [0.70, 0.90]
-  xyz_cv_thresholds: [0.50, 1.00]
+hierarchical:
+  levels: [item_store, dept_store, cat_store, store, state, total]
+  reconciliation: [bottom_up, top_down, mint_ols]
 
-optimization:
-  nsga2:
-    population_size: 100
-    n_generations: 200
-    crossover_prob: 0.9
-    mutation_eta: 20
-  weighted_sum:
-    default_weights:
-      holding_cost: 0.20
-      stockout_cost: 0.35
-      service_level: 0.30
-      transportation_cost: 0.10
-      carbon_emissions: 0.05
-
-sustainability:
-  carbon_price_per_tonne_usd: 50.0
-  default_load_factor: 0.85
-  renewable_energy_target_pct: 0.50
-
-monitoring:
-  drift:
-    psi_moderate_threshold: 0.10
-    psi_significant_threshold: 0.25
-    feature_drift_pct_trigger: 0.30
-    check_frequency: daily
-  performance:
-    lookback_days_baseline: 30
-    lookback_days_current: 7
-    check_frequency: daily
-  alerting:
-    channels: [slack, email]
-    severity_levels: [critical, warning, info]
+# ---------------------------------------------------------------------------
+# MLOps
+# ---------------------------------------------------------------------------
+mlflow:
+  experiment: m5_model_zoo        # one experiment across all tiers
+  registered_model_name: m5_demand_forecaster
+  # A challenger must beat the incumbent by this relative margin on the primary
+  # metric before promotion, so Production does not churn on fold-to-fold noise.
+  promotion_min_improvement_pct: 2.0

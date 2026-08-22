@@ -1,162 +1,200 @@
-# Architecture Decision Records (ADRs)
+# Architecture Decision Records
 
-Concise rationale for every major design decision.
-Format: Context → Options Considered → Decision → Consequences
-
----
-
-## ADR-001: LightGBM as Default Champion Model
-
-**Context**: Need a single model type for production serving. Evaluated 7 model types.
-
-**Options**:
-- Random Forest: robust, no tuning, slow inference
-- XGBoost: strong baseline, widely supported
-- **LightGBM**: histogram-based, fastest training, competitive accuracy
-- CatBoost: handles categoricals natively, slowest training
-- Temporal Fusion Transformer: state-of-the-art, requires GPU, complex
-
-**Decision**: LightGBM as champion, with XGBoost as challenger.
-
-**Consequences**:
-- ✅ 3× faster training than XGBoost on M5 (6h vs 18h)
-- ✅ Supports quantile regression natively (pinball loss objective)
-- ✅ MLflow native integration
-- ⚠️ Requires careful `min_child_samples` tuning to avoid overfitting on sparse SKUs
+Rewritten for v3. The previous file recorded decisions for modules that no
+longer exist (NSGA-II via pymoo, PostgreSQL for a FastAPI service, a Streamlit
+dashboard). Those ADRs are not amended here — they are gone, because the
+decisions they justified were reversed wholesale when the project was rescoped
+from a "supply chain platform" to a forecasting laboratory.
 
 ---
 
-## ADR-002: PostgreSQL over a Dedicated Time-Series Database
+## ADR-001 — Remove the serving and non-ML layers
 
-**Context**: Storing 1B+ prediction rows and 10M+ daily sales rows.
+**Status:** Accepted
 
-**Options**:
-- TimescaleDB: PostgreSQL extension, good for time-series queries
-- InfluxDB: purpose-built TSDB, limited SQL support
-- **PostgreSQL 15**: familiar, strong JSONB support, excellent partitioning
-- DuckDB: excellent analytics, poor concurrency
+**Context.** The project began as a "supply chain intelligence platform" with a
+FastAPI service, a Streamlit dashboard, a digital-twin simulation, supply-chain
+graph analytics, carbon-emissions accounting, and NSGA-II multi-objective
+inventory optimisation.
 
-**Decision**: PostgreSQL 15 with composite indexes and table partitioning.
+M5 contains four tables: wide-format unit sales, weekly prices, a calendar, and
+a submission template. It has no supplier network, no transport legs, no
+distances or weights, no warehouse metadata, no inventory levels, no lead times
+and no unit costs. Every one of those modules was therefore producing outputs
+derived entirely from invented constants.
 
-**Consequences**:
-- ✅ Single database technology (lower operational complexity)
-- ✅ Full SQL, transactions, referential integrity
-- ✅ Async driver (asyncpg) for FastAPI
-- ⚠️ At 100× scale, consider migrating `ml.predictions` to Apache Iceberg
+**Decision.** Delete them. Delete the API and dashboard with them: this is a
+research project whose deliverables are notebooks, figures and written analysis,
+so a serving layer adds surface area without adding evidence.
 
----
-
-## ADR-003: Polars over Pandas for ETL
-
-**Context**: M5 sales melt (wide→long) involves 30K rows × 1941 columns.
-
-**Options**:
-- **Polars**: Rust-based, lazy evaluation, 5-10× faster on wide melts
-- Pandas 2.0: improved, copy-on-write, familiar
-- Dask: distributed, complex setup for single-node workloads
-- PySpark: overkill for current scale
-
-**Decision**: Polars for ingestion/transformation, Pandas for ML (sklearn compatibility).
-
-**Consequences**:
-- ✅ M5 melt: 4min (Polars) vs 38min (Pandas 1.x)
-- ✅ Lower memory via Arrow chunking
-- ⚠️ Two DataFrame APIs in codebase — mitigated by clear module boundaries
+**Consequences.**
+- The scope is now exactly what the data supports.
+- ~6,700 lines removed.
+- Anything requiring absent data is stated as absent rather than simulated.
+- Trade-off accepted: the project no longer demonstrates API or frontend skills.
+  That is the right trade for a study whose subject is forecasting.
 
 ---
 
-## ADR-004: PSI for Drift Detection Primary Signal
+## ADR-002 — DuckDB and Parquet instead of PostgreSQL
 
-**Context**: Choosing statistical test for feature distribution monitoring.
+**Status:** Accepted
 
-**Options**:
-- KS test: sensitive to sample size, poor for multivariate
-- **PSI (Population Stability Index)**: industry standard in credit/retail, interpretable thresholds
-- Wasserstein distance: theoretically sound, less interpretable to business
-- MMD (Maximum Mean Discrepancy): powerful, computationally expensive
+**Context.** The original design ran a PostgreSQL server with eight schemas.
+Every workload in this project is an analytical scan over a columnar panel:
+melt 30,490 × 1,913 to long form, filter, aggregate, score. There is no
+concurrent writer, no transactional requirement, and no service reading rows by
+key.
 
-**Decision**: PSI as primary, KS test as secondary confirmation.
+**Decision.** Parquet on disk as the storage format, DuckDB for analytical
+queries over it. No database server.
 
-**Consequences**:
-- ✅ PSI < 0.10 / 0.10-0.25 / >0.25 thresholds are widely understood by DS teams
-- ✅ Matches industry standard (credit scoring, retail analytics)
-- ⚠️ PSI is sensitive to binning strategy — use percentile-based bins (robust)
-
----
-
-## ADR-005: Airflow TaskFlow API over Classic Operators
-
-**Context**: Airflow 2.x supports two styles: classic PythonOperator or TaskFlow (@task decorators).
-
-**Options**:
-- Classic PythonOperator + XCom: verbose, explicit
-- **TaskFlow API**: decorator-based, automatic XCom, Pythonic
-- Prefect: alternative orchestrator, better UX, less adoption at scale
-- Dagster: excellent DX, steep learning curve
-
-**Decision**: TaskFlow API for all new DAGs.
-
-**Consequences**:
-- ✅ 50% less boilerplate per task
-- ✅ Automatic XCom serialization of return values
-- ✅ Easier unit testing (tasks are plain Python functions)
-- ⚠️ Large XCom values (DataFrames) must not be returned — pass metadata only
+**Consequences.**
+- `docker compose up` is no longer a prerequisite for running an experiment.
+- The 229 MB workbook extracts once to 42 MB of Parquet; a filtered panel load
+  takes under a second.
+- DuckDB is an in-process library, so it is a dependency rather than a service.
+- Trade-off: no concurrent multi-user access. Nothing here needs it.
 
 ---
 
-## ADR-006: Conformal Prediction Intervals over Bayesian Intervals
+## ADR-003 — Nested cross-validation for every tuned model
 
-**Context**: Providing calibrated prediction intervals to inventory planners.
+**Status:** Accepted
 
-**Options**:
-- Bayesian Neural Networks: principled uncertainty, computationally expensive
-- Monte Carlo Dropout: approximation, requires specific architectures
-- **Conformal Prediction**: distribution-free, finite-sample coverage guarantee, model-agnostic
-- Bootstrap ensemble: computationally expensive (50 models), no formal guarantee
+**Context.** The original trainer selected hyperparameters on the last CV fold
+and then reported cross-validated performance using those same hyperparameters.
+The fold that chose the parameters was also scored with them, so the reported
+metric was optimistically biased — and the bias grows with the size of the
+search space, which is exactly the regime Optuna operates in.
 
-**Decision**: Quantile regression (primary) + conformal prediction (secondary validation).
+**Decision.** Nested CV. The outer `TimeSeriesSplit` reports performance; an
+inner `TimeSeriesSplit` over the outer-training rows only selects
+hyperparameters. The outer test fold is not merely excluded from fitting, it is
+absent from the frame the sampler can see.
 
-**Consequences**:
-- ✅ Conformal prediction guarantees P(y ∈ Ĉ) ≥ 1-α regardless of data distribution
-- ✅ Works with any base model (LightGBM in our case)
-- ✅ Simple calibration: compute residual quantile on holdout set
-- ⚠️ Intervals are symmetric and may be conservative for skewed demand distributions
-
----
-
-## ADR-007: NSGA-II over Weighted Sum for Multi-Objective Optimization
-
-**Context**: Optimizing inventory cost, service level, transport cost, and emissions simultaneously.
-
-**Options**:
-- **Weighted sum scalarization**: simple, single solution per weight vector
-- **NSGA-II**: Pareto front, non-dominated solutions, management selects trade-off
-- Goal programming: requires aspiration levels set in advance
-- ε-constraint: good for 2 objectives, complex for 4+
-
-**Decision**: NSGA-II via pymoo, with weighted sum as interactive fallback in dashboard.
-
-**Consequences**:
-- ✅ Presents full trade-off curve — no need to pre-commit to weights
-- ✅ Management can explore consequences of different cost-vs-service-level preferences
-- ✅ pymoo provides production-grade NSGA-II with constraint handling
-- ⚠️ 200 generations × 100 population = 20K evaluations — run nightly, not on-demand
+**Consequences.**
+- Cost rises from `n_trials` fits to `k_outer × n_trials × k_inner`.
+- The reported number is the number you get on unseen data.
+- Reference: Cawley & Talbot (2010), *JMLR* 11:2079–2107.
 
 ---
 
-## ADR-008: Precomputed Forecasts over Live Inference
+## ADR-004 — Horizon-safe ("direct") features
 
-**Context**: API must serve forecasts at < 200ms p99.
+**Status:** Accepted
 
-**Options**:
-- **Precomputed nightly**: store all 100K × 10K × 28-day predictions in PostgreSQL
-- Live inference per request: real-time, fresh, high latency (~2s per item)
-- Hybrid: precompute top 10K SKUs, live for the rest
+**Context.** Features were built with `shift(1)`, which is correct for a model
+re-run nightly with yesterday's actuals in hand. Evaluated over a 28-day
+window, however, `lag_1` on test day 14 is the *actual* sales of test day 13 —
+unknowable at the origin. The global ML models were effectively being scored on
+28 one-step forecasts while the baselines projected the whole horizon from the
+origin.
 
-**Decision**: Full precomputation nightly via Airflow, served from indexed PostgreSQL table.
+**Decision.** Shift every backward-looking feature by the full horizon, and drop
+lags shorter than it. `FeaturePipeline(horizon=h)`.
 
-**Consequences**:
-- ✅ Sub-10ms API response (primary key lookup)
-- ✅ Zero inference compute during business hours
-- ⚠️ Forecasts are up to 24h stale — acceptable for inventory planning (weekly cadence)
-- ⚠️ Storage: 100K × 10K × 28 × ~100 bytes = ~2.8TB/year — partition by month, archive older data
+**Consequences.**
+- Measured cost of the fix: LightGBM WAPE moved 86.76 → 88.79, Tweedie
+  81.95 → 85.72. Every per-series baseline was unchanged to the decimal, which
+  is what proved the leak was real and confined to the global models.
+- ~3.8 WAPE points of the previous headline were illusory.
+- The comparison against from-origin baselines is now like-for-like.
+
+---
+
+## ADR-005 — Significance testing gates every ranking claim
+
+**Status:** Accepted
+
+**Context.** A leaderboard spanning 75.17 to 77.46 WAPE invites the reading that
+the top model is better. Across thousands of heterogeneous, fat-tailed series a
+gap that size is frequently noise.
+
+**Decision.** No ranking is reported as a finding without a test behind it.
+Friedman gates the post-hoc tests; Nemenyi and MCB run only if it rejects;
+Diebold-Mariano covers pairs, always Holm-corrected.
+
+**Consequences.**
+- Produced a genuine negative result: `lightgbm` vs `lightgbm_tweedie` at
+  adjusted p = 1.0000, despite Tweedie being the textbook choice for
+  zero-inflated counts.
+- Surfaced that pooled and rank-based tests disagree on the leader — which
+  turned out to match a documented finding in the M5 paper itself.
+- Reported as "no evidence of a difference", never "evidence of no difference".
+
+---
+
+## ADR-006 — `n_jobs=1` for statsforecast
+
+**Status:** Accepted
+
+**Context.** statsforecast exposes process-level parallelism via `n_jobs`, and
+`-1` is the obvious default for 30,490 series.
+
+Measured behaviour: at 40 series, every model took ~12 seconds with `n_jobs=-1`,
+essentially all of it process-pool spin-up. ADIDA and Theta additionally raised
+`BrokenProcessPool` on Windows, where the `spawn` start method re-imports the
+module in each worker and requires a `__main__` guard.
+
+With `n_jobs=1`, the same 15 models at 200 series ran in 0.01–14.8 seconds.
+
+**Decision.** Default to 1. The estimators are already Numba-compiled and
+vectorised across series inside one process, so the pool only helps at very
+large series counts.
+
+**Consequences.**
+- Reproducible on Windows without a `__main__` guard.
+- Anyone reproducing this work will hit the same failure; documented here and in
+  the model card.
+- Raise `n_jobs` deliberately for full-panel runs from a guarded script — not by
+  default.
+
+---
+
+## ADR-007 — DVC as the only orchestrator
+
+**Status:** Accepted
+
+**Context.** The project carried an Airflow DAG with two schedules. Several of
+its tasks (`run_inventory_optimization`, `ingest_weather`,
+`generate_reorder_alerts`) invoked deleted modules; others returned hardcoded
+dicts. Meanwhile `dvc.yaml` referenced scripts that were never written, so
+neither orchestrator actually ran.
+
+**Decision.** Delete Airflow. Repair `dvc.yaml` so every stage maps to a script
+that exists and has been executed.
+
+**Consequences.**
+- One orchestrator, and it works: `dvc repro` reproduces extract → EDA → tier1 →
+  backtest → significance.
+- No scheduler, metadata database or webserver to run for a project with no
+  production schedule.
+- Trade-off: no time-based triggering. Nothing here needs it.
+- The `significance` stage depends on the backtest predictions, so a stale
+  verdict cannot be quoted against fresh numbers.
+
+---
+
+## ADR-008 — Deep learning is permitted, and is a hypothesis to test
+
+**Status:** Accepted
+
+**Context.** Earlier versions prohibited neural models, citing the M5 finding
+that all top-50 entries were gradient-boosting based.
+
+That finding is from a competition that closed in 2020. N-HiTS, PatchTST,
+DLinear and TiDE were all published afterwards. Treating a 2020 result as a
+standing prohibition converts an empirical finding into an assumption.
+
+**Decision.** The prohibition is void. Deep learning enters as Tier 4 and is
+scored through the same harness as everything else.
+
+**Consequences.**
+- `torch` and `neuralforecast` added.
+- Given 95.2% sparsity and RMSSE converging near 1.0 at item-store level, the
+  realistic expectation is that DL does not win at level 12. The question worth
+  answering is *where* it is competitive — high-volume series and higher
+  aggregation levels — rather than what the overall average says.
+- DLinear specifically tests the Zeng et al. (2023) claim that one linear layer
+  matches transformers on forecasting benchmarks.

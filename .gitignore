@@ -1,0 +1,13 @@
+data/raw/*.parquet
+data/raw/*.json
+reports/
+mlruns/
+mlflow.db
+*.xlsx
+.venv/
+__pycache__/
+*.pyc
+.coverage
+htmlcov/
+.pytest_cache/
+.idea/

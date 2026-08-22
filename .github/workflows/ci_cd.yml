@@ -1,0 +1,164 @@
+name: M5 Forecasting Lab CI
+
+# Rewritten for the v3 scope. The previous workflow provisioned PostgreSQL,
+# built API and Streamlit container images, and ran a deploy job -- all for
+# components this project no longer has. It also could not have passed: it
+# imported modules that were deleted.
+#
+# This project is a research lab, not a deployed service, so CI's job is
+# narrower and more useful: prove the code imports, the M5 facts hold, and the
+# evaluation harness is mathematically correct. There is nothing to deploy.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  # Pinned to 3.11: 3.12+ lacks wheels for some of the forecasting stack, and
+  # the project was rebuilt on 3.11 for that reason (spec Part 10, Phase 0).
+  PYTHON_VERSION: "3.11"
+
+concurrency:
+  # A new push supersedes an in-flight run on the same ref.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # --------------------------------------------------------------------------
+  # Job 1: lint + type-check. Fast, no heavy dependencies.
+  # --------------------------------------------------------------------------
+  quality:
+    name: "Lint & type-check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install linters
+        run: python -m pip install --upgrade pip ruff black mypy
+
+      - name: Ruff
+        run: ruff check src scripts
+
+      - name: Black (check only)
+        # Non-blocking: formatting drift should be visible without failing a
+        # build over whitespace while the model zoo is still being written.
+        run: black --check --diff src scripts
+        continue-on-error: true
+
+      - name: Mypy
+        # Also non-blocking. The scientific stack is loosely typed and
+        # `ignore_missing_imports` already suppresses most of it; this surfaces
+        # genuine signature errors without gating the build.
+        run: mypy src --ignore-missing-imports
+        continue-on-error: true
+
+  # --------------------------------------------------------------------------
+  # Job 2: unit tests. No database, no network, no M5 workbook required --
+  # every test here runs on synthetic data or asserts pure functions.
+  # --------------------------------------------------------------------------
+  test:
+    name: "Unit tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: quality
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        # Deliberately NOT the full stack. torch, neuralforecast and prophet
+        # add ~10 minutes to every run and no unit test needs them; the
+        # modules that use them import lazily.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            "pandas>=2.1" "numpy>=1.26,<2.2" "polars>=0.20" "pyarrow>=14" \
+            "scikit-learn>=1.3.2" "lightgbm>=4.2" "scipy>=1.11" \
+            "statsmodels>=0.14" "pydantic>=2.5" "pydantic-settings>=2.1" \
+            "holidays>=0.40" "structlog>=23.2" "loguru>=0.7" \
+            "pytest>=7.4" "pytest-cov>=4.1" "pyyaml" "python-dateutil"
+
+      - name: Verify every module imports
+        # Catches the failure mode that broke the previous workflow: a rename
+        # or deletion leaving a dangling import that no test happens to cover.
+        run: |
+          python - <<'PY'
+          import importlib, pkgutil, sys
+          import src
+          failed = []
+          for mod in pkgutil.walk_packages(src.__path__, prefix="src."):
+              name = mod.name
+              # Skip modules whose heavy optional deps are not installed here.
+              if any(s in name for s in ("deep_learning", "optional")):
+                  continue
+              try:
+                  importlib.import_module(name)
+              except Exception as exc:
+                  failed.append(f"{name}: {type(exc).__name__}: {exc}")
+          if failed:
+              print("IMPORT FAILURES:")
+              for f in failed:
+                  print(" ", f)
+              sys.exit(1)
+          print("all modules import cleanly")
+          PY
+
+      - name: Run unit tests
+        run: pytest tests/unit -v --tb=short --cov=src --cov-report=term-missing
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: .coverage
+          if-no-files-found: ignore
+
+  # --------------------------------------------------------------------------
+  # Job 3: integration tests. Separated because they need the extracted
+  # Parquet, which CI does not have -- the 229 MB workbook is not in the repo.
+  # They run only when the data is present, and skip cleanly otherwise rather
+  # than failing and training everyone to ignore a red badge.
+  # --------------------------------------------------------------------------
+  integration:
+    name: "Integration tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: test
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            "pandas>=2.1" "numpy>=1.26,<2.2" "polars>=0.20" "pyarrow>=14" \
+            "scikit-learn>=1.3.2" "lightgbm>=4.2" "scipy>=1.11" \
+            "statsmodels>=0.14" "pydantic>=2.5" "pydantic-settings>=2.1" \
+            "pandera>=0.18" "holidays>=0.40" "structlog>=23.2" "loguru>=0.7" \
+            "pytest>=7.4" "pyyaml" "python-dateutil"
+
+      - name: Run integration tests
+        run: pytest tests/integration -v --tb=short -m "not slow"

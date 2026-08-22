@@ -21,7 +21,7 @@ import pandas as pd
 from lightgbm import LGBMRegressor
 from sklearn.model_selection import TimeSeriesSplit
 
-from src.utils.logging import get_logger
+from src.config.logging import get_logger
 
 log = get_logger(__name__)
 

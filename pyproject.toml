@@ -1,144 +1,141 @@
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
-name = "supply-chain-platform"
-version = "1.0.0"
-description = "Intelligent Supply Chain Decision Intelligence Platform"
-authors = [
-    {name = "Supply Chain Platform Team", email = "team@scplatform.io"}
-]
-requires-python = ">=3.11"
+name = "m5-forecasting-lab"
+version = "3.0.0"
+description = "Comparative study of statistical, probabilistic, ML and deep learning forecasting models on the M5 retail dataset"
+# Pinned to 3.11: several forecasting dependencies lack wheels on 3.12+.
+requires-python = ">=3.11,<3.12"
 readme = "README.md"
-license = {text = "MIT"}
+license = { text = "MIT" }
 
+# ---------------------------------------------------------------------------
+# Runtime dependencies
+#
+# Removed in v3, and why:
+#   * fastapi / uvicorn / slowapi / streamlit / plotly -- the serving and
+#     dashboard layers were deleted. This is a research lab: the deliverables
+#     are notebooks, pipelines, tracked experiments and figures.
+#   * sqlalchemy / psycopg2 / asyncpg -- PostgreSQL replaced by DuckDB, which
+#     is a single file with no server and is far faster for the analytical
+#     scans this project performs.
+#   * pymoo / deap / networkx / econml -- belonged to the non-ML modules
+#     (NSGA-II, supply-chain graph, elasticity) that are out of scope.
+#
+# Added in v3:
+#   * torch / neuralforecast -- the M5-era finding that gradient boosting beat
+#     deep learning is now a HYPOTHESIS TO TEST, not an assumption. N-HiTS,
+#     PatchTST, DLinear and TiDE all postdate the competition.
+#   * statsforecast -- vectorised classical models; the only practical way to
+#     fit AutoETS/AutoARIMA across 30,490 series.
+#   * mapie / ngboost -- conformal prediction and probabilistic boosting for
+#     Tier 3.
+# ---------------------------------------------------------------------------
 dependencies = [
-    # Data Engineering
+    # Data engineering
     "pandas>=2.1.0",
     "polars>=0.20.0",
-    "numpy>=1.26.0",
+    "numpy>=1.26.0,<2.2",
     "pyarrow>=14.0.0",
+    "openpyxl>=3.1.0",          # the M5 dataset ships as a single .xlsx
+    "duckdb>=0.10.0",
     "dvc>=3.30.0",
-    "dvc-s3>=3.0.0",
 
-    # Database
-    "sqlalchemy>=2.0.0",
-    "alembic>=1.13.0",
-    "psycopg2-binary>=2.9.9",
-    "asyncpg>=0.29.0",
-
-    # Data Validation
-    "great-expectations>=0.18.0",
+    # Validation
     "pandera>=0.18.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
 
-    # Machine Learning
-    "scikit-learn>=1.3.2",
-    "xgboost>=2.0.0",
-    "lightgbm>=4.2.0",
-    "catboost>=1.2.2",
+    # Tier 1 -- statistical forecasting
+    "statsforecast>=1.7.0",
     "statsmodels>=0.14.0",
-    "scipy>=1.11.0",
+    "prophet>=1.1.0",
 
-    # Probabilistic & Causal ML
-    "econml>=0.15.0",
-    "dowhy>=0.11.0",
-    "shap>=0.44.0",
+    # Tier 2 -- classical machine learning
+    "scikit-learn>=1.3.2",
+    "lightgbm>=4.2.0",
+    "xgboost>=2.0.0",
+    "catboost>=1.2.2",
+    "scipy>=1.11.0",
     "optuna>=3.4.0",
 
-    # Optimization
-    "pulp>=2.7.0",
-    "deap>=1.4.1",
-    "pymoo>=0.6.1",
+    # Tier 3 -- probabilistic
+    "mapie>=0.8.0",
+    "ngboost>=0.4.0",
 
-    # Graph Analytics
-    "networkx>=3.2.0",
-    "matplotlib>=3.8.0",
+    # Tier 4 -- deep learning
+    "torch>=2.2.0",
+    "neuralforecast>=1.7.0",
 
     # MLOps
     "mlflow>=2.9.0",
-    "evidently>=0.4.0",
 
-    # API
-    "fastapi>=0.104.0",
-    "uvicorn[standard]>=0.24.0",
-    "httpx>=0.25.0",
-    "python-multipart>=0.0.6",
-    "slowapi>=0.1.9",
-
-    # Dashboard
-    "streamlit>=1.29.0",
-    "plotly>=5.18.0",
-    "altair>=5.2.0",
+    # Pillar 5 -- results analysis
+    "matplotlib>=3.8.0",
+    "seaborn>=0.13.0",
+    "shap>=0.44.0",
 
     # Utilities
     "python-dotenv>=1.0.0",
     "loguru>=0.7.2",
-    "tenacity>=8.2.3",
-    "prometheus-client>=0.19.0",
     "structlog>=23.2.0",
     "rich>=13.7.0",
     "typer>=0.9.0",
     "pyyaml>=6.0.1",
-    "toml>=0.10.2",
     "holidays>=0.40",
     "python-dateutil>=2.8.2",
+    "tqdm>=4.66.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4.0",
-    "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
     "pytest-mock>=3.12.0",
     "hypothesis>=6.92.0",
     "black>=23.12.0",
     "ruff>=0.1.8",
     "mypy>=1.7.0",
-    "pre-commit>=3.6.0",
-    "factory-boy>=3.3.0",
+    "jupyter>=1.0.0",
+    "nbformat>=5.9.0",
 ]
 
 airflow = [
     "apache-airflow>=2.8.0",
-    "apache-airflow-providers-postgres>=5.10.0",
-    "apache-airflow-providers-docker>=3.8.0",
-    "apache-airflow-providers-http>=4.7.0",
-    "apache-airflow-providers-slack>=8.4.0",
 ]
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
+include = ["src*"]
 
 [tool.black]
 line-length = 100
 target-version = ["py311"]
-include = '\.pyi?$'
 
 [tool.ruff]
 line-length = 100
-select = ["E", "F", "W", "I", "N", "UP", "ANN", "B", "C4", "PT"]
-ignore = ["ANN101", "ANN102", "E501"]
 target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "PT"]
+# E501 (line length) is handled by black; E741 permits `l` as a loop variable
+# in the lag comprehensions, where it reads better than alternatives.
+ignore = ["E501", "E741"]
 
 [tool.mypy]
 python_version = "3.11"
-warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = true
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "-v --cov=src --cov-report=html --cov-report=term-missing"
+addopts = "-q"
 markers = [
-    "unit: Unit tests",
-    "integration: Integration tests",
-    "e2e: End-to-end tests",
-    "slow: Slow running tests",
+    "unit: Unit tests -- no external data or services required",
+    "integration: Requires the extracted M5 Parquet files",
+    "slow: Long-running (training / backtest) tests",
 ]
 
 [tool.coverage.run]

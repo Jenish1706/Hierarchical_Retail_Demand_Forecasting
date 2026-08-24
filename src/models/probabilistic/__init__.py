@@ -15,12 +15,14 @@ from src.models.probabilistic.distributions import (
     NGBoostPoissonForecaster,
     fit_count_distributions,
 )
+from src.models.probabilistic.hurdle import HurdleForecaster
 
 __all__ = [
     "BootstrapEnsembleForecaster",
     "ConformalizedQuantileRegressor",
     "DistributionComparison",
     "EnbPIPredictor",
+    "HurdleForecaster",
     "LinearQuantileForecaster",
     "NGBoostPoissonForecaster",
     "ProbabilisticForecast",
@@ -29,3 +31,4 @@ __all__ = [
     "SplitConformalPredictor",
     "fit_count_distributions",
 ]
+

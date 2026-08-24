@@ -323,7 +323,32 @@ class WindowedTorchForecaster:
         return np.clip(result, 0.0, None)
 
     def predict_mc_dropout(self, X: np.ndarray, n_samples: int = 100) -> np.ndarray:
-        """Sample model uncertainty by retaining dropout at inference time."""
+        """Sample model uncertainty by retaining dropout at inference time.
+
+        Calibration caveat
+        ------------------
+        This implementation applies dropout only on the final hidden-to-output
+        projection (the nn.Dropout layers in MLPForecastNet / the standalone
+        dropout in RecurrentForecastNet / TCNForecastNet).  For recurrent
+        architectures, the LSTM's own ``dropout`` parameter (inter-layer
+        recurrent dropout) is only active with ``num_layers >= 2``, so with the
+        default single-layer config, stochasticity is sampled at one point in
+        the network.
+
+        This yields systematically **narrower** epistemic uncertainty than
+        dropout applied throughout the recurrent stack (Gal & Ghahramani 2016,
+        "A theoretically grounded application of dropout in recurrent neural
+        networks", NeurIPS).  If empirical coverage from MC dropout falls below
+        nominal while bootstrap ensembles or deep ensembles calibrate
+        acceptably, this architectural choice is the first thing to check —
+        not a bug in the interval construction.
+
+        Two fixes if under-coverage is observed:
+        1. Set ``num_layers >= 2`` so the LSTM's built-in inter-layer dropout
+           becomes active.
+        2. Implement variational / recurrent dropout with a shared mask across
+           timesteps (Gal & Ghahramani 2016).
+        """
         if self.model_ is None:
             raise RuntimeError("call fit before predict_mc_dropout")
         if n_samples < 2:

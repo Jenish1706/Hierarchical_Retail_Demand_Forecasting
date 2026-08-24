@@ -269,7 +269,7 @@ def run_global_model(
     common: dict[str, Any] = {
         "n_estimators": 400, "learning_rate": 0.05, "num_leaves": 63,
         "min_child_samples": 20, "subsample": 0.8, "subsample_freq": 1,
-        "colsample_bytree": 0.8, "n_jobs": -1, "random_state": 42, "verbose": -1,
+        "colsample_bytree": 0.8, "n_jobs": 1, "random_state": 42, "verbose": -1,
     }
     if model_name == "lightgbm_tweedie":
         model = LGBMRegressor(objective="tweedie", tweedie_variance_power=1.1, **common)

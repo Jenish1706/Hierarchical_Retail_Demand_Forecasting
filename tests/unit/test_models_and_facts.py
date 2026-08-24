@@ -25,6 +25,7 @@ from src.models.statistical.intermittent import (
     ADIDAForecaster, CrostonForecaster, DemandPattern, classify_demand,
 )
 from src.models.statistical.naive import BASELINE_REGISTRY, build_baseline
+from src.models.router import DEFAULT_ROUTING, LITERATURE_ROUTING
 
 
 # ===========================================================================
@@ -151,6 +152,13 @@ class TestBaselines:
 
 
 class TestIntermittentClassification:
+    def test_empirical_router_only_assigns_the_supported_quadrant(self):
+        # The project evidence supports ADIDA only for INTERMITTENT. LUMPY's
+        # marginal p_adj=0.052 is inconclusive, so it remains on the default.
+        assert DEFAULT_ROUTING[DemandPattern.INTERMITTENT] == "adida"
+        assert DEFAULT_ROUTING[DemandPattern.LUMPY] == "global"
+        assert LITERATURE_ROUTING[DemandPattern.INTERMITTENT] == "croston_sba"
+
     def test_quadrants_are_assigned_correctly(self):
         rng = np.random.default_rng(1)
         dense_stable = rng.poisson(30, 600).astype(float)

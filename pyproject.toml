@@ -52,7 +52,8 @@ dependencies = [
     "pydantic-settings>=2.1.0",
 
     # Tier 1 -- statistical forecasting
-    "statsforecast>=1.7.0",
+    "statsforecast>=2.0.3",
+    "numba>=0.60.0",
     "statsmodels>=0.14.0",
     "prophet>=1.1.0",
 

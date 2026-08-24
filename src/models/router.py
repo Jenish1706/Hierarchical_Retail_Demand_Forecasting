@@ -1,37 +1,25 @@
 """
 Segment routing: send each series to the method suited to its demand pattern.
 
-Motivation
-----------
-A single global LightGBM trained across all 30,490 M5 series is a strong
-default, but it is not uniformly best. On series that sell nothing for weeks
-at a time, a squared-error objective pulls the forecast toward the
-unconditional mean and the model effectively predicts a small constant --
-which is exactly what Croston does, only Croston does it with two parameters
-instead of several hundred trees, and without pretending the daily variation
-is learnable.
+Evidence-led routing
+--------------------
+The Syntetos-Boylan-Teunter (SBT) quadrant chart is a useful *description* of
+intermittency, but it is not a validated universal model-selection rule.  Its
+cutoffs were derived for Croston, SBA, and SES; they did not test later
+temporal-aggregation methods such as ADIDA.
 
-So the router classifies each series with the Syntetos-Boylan-Teunter scheme
-and dispatches:
+The project backtest found a defensible assignment only for INTERMITTENT:
+ADIDA decisively beat Croston-SBA after family-wise Holm correction.  The
+other three quadrants were either not separable or marginal.  Therefore the
+default does exactly one evidence-backed reroute:
 
-    ADI  < 1.32  and  CV^2 < 0.49  ->  SMOOTH        ->  global LightGBM
-    ADI >= 1.32  and  CV^2 < 0.49  ->  INTERMITTENT  ->  Croston-SBA
-    ADI  < 1.32  and  CV^2 >= 0.49 ->  ERRATIC       ->  global LightGBM
-    ADI >= 1.32  and  CV^2 >= 0.49 ->  LUMPY         ->  ADIDA
-    (no demand at all)             ->  NO_DEMAND     ->  zero forecast
+    INTERMITTENT -> ADIDA
+    every other nonzero quadrant -> one supplied global/default forecast
+    NO_DEMAND -> zero forecast
 
-The frequent quadrants go to the global model because that is where the
-engineered lag and calendar features carry real signal. The sparse quadrants
-go to dedicated estimators.
-
-The important part
-------------------
-`evaluate_routing_benefit()` MEASURES whether this actually helps, by scoring
-the routed forecast against the all-global forecast on the same holdout. The
-routing rule above is a hypothesis drawn from the literature, not a result.
-If the measurement says routing loses on this data, the honest response is to
-report that and route everything to the global model -- and the method
-returns the per-segment breakdown needed to make that call.
+``LITERATURE_ROUTING`` is retained as an explicit experimental comparator,
+not as a production default.  It prevents a rerun from silently relabeling an
+old textbook-style result as the empirical rule.
 
 References
 ----------
@@ -63,15 +51,26 @@ from src.models.statistical.intermittent import (
 log = get_logger(__name__)
 
 
-# Which method each SBT quadrant is routed to. Declared as data rather than
-# an if/else chain so the mapping can be overridden wholesale in an
-# experiment (e.g. to test "route ERRATIC to ADIDA too") without editing
-# control flow.
-DEFAULT_ROUTING: Mapping[DemandPattern, str] = {
+# Textbook-style routing retained only for a controlled comparator.  Its
+# LUMPY -> ADIDA assignment is not a project finding because the observed
+# p_adj=0.052 result is inconclusive, and the INTERMITTENT -> Croston-SBA
+# assignment lost to ADIDA decisively.
+LITERATURE_ROUTING: Mapping[DemandPattern, str] = {
     DemandPattern.SMOOTH: "global",
     DemandPattern.ERRATIC: "global",
     DemandPattern.INTERMITTENT: "croston_sba",
     DemandPattern.LUMPY: "adida",
+    DemandPattern.NO_DEMAND: "zero",
+}
+
+# The empirical rule.  Declaring it as data makes a later preregistered
+# replication easy, while refusing to manufacture assignments for quadrants
+# where the evidence is insufficient.
+DEFAULT_ROUTING: Mapping[DemandPattern, str] = {
+    DemandPattern.SMOOTH: "global",
+    DemandPattern.ERRATIC: "global",
+    DemandPattern.INTERMITTENT: "adida",
+    DemandPattern.LUMPY: "global",
     DemandPattern.NO_DEMAND: "zero",
 }
 

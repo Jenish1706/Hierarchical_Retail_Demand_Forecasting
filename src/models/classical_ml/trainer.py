@@ -65,6 +65,8 @@ from sklearn.preprocessing import StandardScaler
 from src.config.logging import get_logger
 from src.config.settings import settings
 from src.evaluation.point_metrics import compute_metrics, naive_scale
+from src.mlops.registry import PromotionCandidate, PromotionGate
+from src.mlops.tracking import ExperimentTracker
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 log = get_logger(__name__)
@@ -74,11 +76,10 @@ log = get_logger(__name__)
 # model simply drops out of the registry.
 try:
     import mlflow
-    from mlflow.tracking import MlflowClient
 
     _HAS_MLFLOW = True
 except ImportError:                                        # pragma: no cover
-    mlflow, MlflowClient, _HAS_MLFLOW = None, None, False
+    mlflow, _HAS_MLFLOW = None, False
 
 try:
     import optuna
@@ -396,59 +397,20 @@ class DemandTrainer:
         self.fitted_models_: dict[str, Any] = {}
         self.feature_names_: list[str] = []
         self._rmsse_scale: float = float("nan")
+        self._tracker: ExperimentTracker | None = None
 
         self._mlflow_ready = self._init_mlflow() if _HAS_MLFLOW else False
 
     def _init_mlflow(self) -> bool:
         """
-        Point MLflow at a tracking store, falling back to a local file store.
+        Configure the shared tracking adapter.
 
-        The configured tracking URI is usually an HTTP server that only exists
-        under docker-compose. When it is not running, mlflow's client retries
-        with backoff and a training run can block for minutes before failing --
-        which previously made an otherwise healthy run look hung.
-
-        So reachability is probed once, with a short timeout, and an
-        unreachable server degrades to `./mlruns` on disk. Training is the
-        point of the run; tracking is important but must never be the thing
-        that stops it.
+        Tracking is used by every tier, so the fallback and reachability policy
+        lives in ``src.mlops.tracking`` rather than being reimplemented in each
+        trainer.  A failure to configure MLflow remains non-fatal.
         """
-        uri = settings.mlflow.tracking_uri
-
-        if uri.startswith(("http://", "https://")):
-            import socket
-            from urllib.parse import urlparse
-
-            parsed = urlparse(uri)
-            host, port = parsed.hostname or "localhost", parsed.port or 80
-            try:
-                with socket.create_connection((host, port), timeout=1.5):
-                    pass
-            except OSError:
-                # SQLite rather than a bare './mlruns' directory: MLflow 3.x
-                # put the filesystem backend into maintenance mode and raises
-                # on it, and only a database backend supports the Model
-                # Registry -- which the promotion gate depends on.
-                db_path = settings.base_dir / "mlflow.db"
-                fallback = f"sqlite:///{db_path.as_posix()}"
-                self._log.warning(
-                    "mlflow_server_unreachable",
-                    configured_uri=uri,
-                    falling_back_to=fallback,
-                    consequence="run is tracked locally, not in the shared registry",
-                )
-                uri = fallback
-
-        try:
-            mlflow.set_tracking_uri(uri)
-            mlflow.set_experiment(
-                f"{settings.mlflow.experiment_prefix}/{self.config.experiment_name}"
-            )
-            self._log.info("mlflow_ready", tracking_uri=uri)
-            return True
-        except Exception as exc:                           # pragma: no cover
-            self._log.warning("mlflow_unavailable", error=str(exc))
-            return False
+        self._tracker = ExperimentTracker(self.config.experiment_name)
+        return self._tracker.available
 
     # -- data preparation ---------------------------------------------------
 
@@ -875,26 +837,25 @@ class DemandTrainer:
         self, name: str, result: ModelResult, model: Any, X: pd.DataFrame
     ) -> str | None:
         """Log params, outer-fold metrics and the model artefact. Never fatal."""
-        if not (_HAS_MLFLOW and self._mlflow_ready):
+        if not (_HAS_MLFLOW and self._mlflow_ready and self._tracker is not None):
             return None
 
         try:
-            with mlflow.start_run(run_name=name) as run:
-                mlflow.set_tags(
-                    {
-                        "model_name": name,
-                        "tuned": str(result.tuned),
-                        "cv_scheme": f"nested({self.config.outer_splits}x{self.config.inner_splits})",
-                        "dataset": "M5",
-                        "n_features": str(len(self.feature_names_)),
-                    }
-                )
+            with self._tracker.run(
+                run_name=name,
+                tags={
+                    "model_name": name,
+                    "tuned": str(result.tuned),
+                    "cv_scheme": f"nested({self.config.outer_splits}x{self.config.inner_splits})",
+                    "dataset": "M5",
+                    "n_features": str(len(self.feature_names_)),
+                },
+            ) as run:
+                if run is None:
+                    return None
                 if result.best_params:
-                    mlflow.log_params(
-                        {k: v for k, v in result.best_params.items()
-                         if isinstance(v, (int, float, str, bool))}
-                    )
-                mlflow.log_metrics(
+                    self._tracker.log_params(result.best_params)
+                self._tracker.log_metrics(
                     {
                         "cv_wape": result.cv_wape,
                         "cv_mae": result.cv_mae,
@@ -908,9 +869,9 @@ class DemandTrainer:
                 # one fold is worth seeing before promotion.
                 for m in result.fold_metrics:
                     step = int(m.get("fold", 0))
-                    mlflow.log_metric("fold_wape", m["wape"], step=step)
+                    self._tracker.log_metrics({"fold_wape": m["wape"]}, step=step)
                     if np.isfinite(m.get("rmsse", np.nan)):
-                        mlflow.log_metric("fold_rmsse", m["rmsse"], step=step)
+                        self._tracker.log_metrics({"fold_rmsse": m["rmsse"]}, step=step)
 
                 if model is not None:
                     self._log_model_artifact(name, model, X)
@@ -960,29 +921,16 @@ class DemandTrainer:
                 imp.to_csv(path, index=False)
                 mlflow.log_artifact(str(path), "feature_importance")
 
-    # -- the promotion gate (GAP 3) -----------------------------------------
+    # -- promotion registry --------------------------------------------------
 
     def promote_champion(self, force: bool = False) -> dict[str, Any]:
         """
-        Register the champion and decide whether it replaces Production.
+        Delegate promotion to the reusable registry gate.
 
-        The gate, in order:
-
-          1. Register the champion run under `settings.mlflow.registered_model_name`.
-          2. Look up the version currently in the Production stage.
-          3. If there is none, promote (first model always wins by default).
-          4. Otherwise compare the challenger's CV WAPE against the
-             incumbent's recorded CV WAPE. Promote only if the challenger is
-             better by at least `promotion_min_improvement_pct` RELATIVE.
-          5. Losers are left in Staging, not deleted -- they remain auditable.
-
-        The relative margin exists because fold-to-fold WAPE noise on M5 is
-        easily a few tenths of a percent. Promoting on any improvement would
-        swap the Production model every week on noise, destroying the ability
-        to attribute a change in forecast quality to anything.
-
-        Returns a decision record; never raises on MLflow being unreachable,
-        so a training run is not lost to a registry outage.
+        The trainer remains responsible for choosing a champion from nested CV;
+        registering and staging its artifact belongs to ``src.mlops.registry``.
+        Keeping those responsibilities separate lets Tier 1, Tier 3, and Tier
+        4 experiments use the same auditable promotion policy.
         """
         if not (_HAS_MLFLOW and self._mlflow_ready):
             return {"promoted": False, "reason": "mlflow_unavailable"}
@@ -993,128 +941,15 @@ class DemandTrainer:
         if champion.run_id is None:
             return {"promoted": False, "reason": "champion_has_no_mlflow_run"}
 
-        model_name = settings.mlflow.registered_model_name
-        min_improvement = settings.model.promotion_min_improvement_pct
-
-        try:
-            client = MlflowClient()
-            mv = mlflow.register_model(
-                model_uri=f"runs:/{champion.run_id}/model",
-                name=model_name,
-                tags={
-                    "algorithm": self.champion_,
-                    "cv_wape": f"{champion.cv_wape:.4f}",
-                    "cv_rmsse": f"{champion.cv_rmsse:.4f}",
-                    "cv_scheme": f"nested({self.config.outer_splits}x{self.config.inner_splits})",
-                },
-            )
-            # WAPE is recorded on the version itself so a future run can read
-            # the incumbent's score without re-resolving its training run.
-            client.set_model_version_tag(model_name, mv.version, "cv_wape", f"{champion.cv_wape:.6f}")
-
-            incumbent = self._current_production_version(client, model_name)
-
-            if incumbent is None:
-                decision = self._transition(
-                    client, model_name, mv.version, "Production",
-                    reason="no_incumbent_production_model",
-                )
-                decision.update(
-                    challenger_wape=champion.cv_wape, incumbent_wape=None, improvement_pct=None
-                )
-                return decision
-
-            incumbent_wape = self._version_wape(client, incumbent)
-
-            if incumbent_wape is None:
-                # Cannot compare, so do not gamble on Production. Stage it and
-                # surface the reason for a human to resolve.
-                decision = self._transition(
-                    client, model_name, mv.version, "Staging",
-                    reason="incumbent_wape_unrecorded_manual_review_required",
-                )
-                decision.update(challenger_wape=champion.cv_wape, incumbent_wape=None)
-                return decision
-
-            improvement_pct = 100.0 * (incumbent_wape - champion.cv_wape) / incumbent_wape
-            passes = improvement_pct >= min_improvement
-
-            if passes or force:
-                decision = self._transition(
-                    client, model_name, mv.version, "Production",
-                    reason="forced" if (force and not passes) else "beat_incumbent",
-                )
-                # Retire the previous Production version to Archived so exactly
-                # one version is ever live.
-                self._transition(
-                    client, model_name, incumbent.version, "Archived",
-                    reason="superseded",
-                )
-            else:
-                decision = self._transition(
-                    client, model_name, mv.version, "Staging",
-                    reason=(
-                        f"improvement {improvement_pct:.2f}% below required "
-                        f"{min_improvement:.2f}%"
-                    ),
-                )
-
-            decision.update(
-                challenger_wape=round(champion.cv_wape, 4),
-                incumbent_wape=round(incumbent_wape, 4),
-                improvement_pct=round(improvement_pct, 4),
-                required_improvement_pct=min_improvement,
-            )
-            self._log.info("promotion_decision", **decision)
-            return decision
-
-        except Exception as exc:                            # pragma: no cover
-            self._log.error("promotion_gate_failed", error=str(exc))
-            return {"promoted": False, "reason": f"registry_error: {exc}"}
-
-    @staticmethod
-    def _current_production_version(client: MlflowClient, model_name: str) -> Any:
-        """Return the Production version, or None if the model is new."""
-        try:
-            versions = client.search_model_versions(f"name='{model_name}'")
-        except Exception:
-            return None
-        for v in versions:
-            if getattr(v, "current_stage", None) == "Production":
-                return v
-        return None
-
-    @staticmethod
-    def _version_wape(client: MlflowClient, version: Any) -> float | None:
-        """Read a version's recorded CV WAPE from its tag, else its run metrics."""
-        tags = getattr(version, "tags", {}) or {}
-        if "cv_wape" in tags:
-            try:
-                return float(tags["cv_wape"])
-            except (TypeError, ValueError):
-                pass
-        try:
-            run = client.get_run(version.run_id)
-            value = run.data.metrics.get("cv_wape")
-            return float(value) if value is not None else None
-        except Exception:
-            return None
-
-    def _transition(
-        self, client: MlflowClient, name: str, version: str, stage: str, reason: str
-    ) -> dict[str, Any]:
-        """Move a version to a stage and return a decision record."""
-        client.transition_model_version_stage(
-            name=name, version=version, stage=stage, archive_existing_versions=False
+        candidate = PromotionCandidate(
+            run_id=champion.run_id,
+            algorithm=self.champion_,
+            cv_wape=champion.cv_wape,
+            cv_rmsse=champion.cv_rmsse if np.isfinite(champion.cv_rmsse) else None,
+            cv_scheme=f"nested({self.config.outer_splits}x{self.config.inner_splits})",
         )
-        return {
-            "promoted": stage == "Production",
-            "model_name": name,
-            "version": str(version),
-            "stage": stage,
-            "algorithm": self.champion_,
-            "reason": reason,
-        }
+        decision = PromotionGate().promote(candidate, force=force)
+        return decision.to_dict()
 
     # -- persistence --------------------------------------------------------
 

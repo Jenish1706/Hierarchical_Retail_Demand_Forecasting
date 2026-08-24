@@ -82,7 +82,19 @@ class RecurrentForecastNet(nn.Module):
             input_size=n_features,
             hidden_size=hidden_size,
             batch_first=True,
-            dropout=dropout if dropout > 0.0 else 0.0,
+            num_layers=1,
+            # torch's `dropout` argument applies BETWEEN stacked recurrent
+            # layers, so with num_layers=1 it does nothing and torch emits a
+            # UserWarning saying so. Passing 0.0 here is the honest value --
+            # it documents that the recurrent stack is not regularised -- and
+            # keeps the warning out of every test run.
+            #
+            # This does NOT disable MC dropout. The stochasticity that
+            # `predict_mc_dropout` samples comes from `self.dropout` below,
+            # which is a standalone module applied to the final hidden state
+            # and stays active whenever the net is in train mode, regardless
+            # of layer count.
+            dropout=0.0,
         )
         self.dropout = nn.Dropout(dropout)
         self.output = nn.Linear(hidden_size, horizon)

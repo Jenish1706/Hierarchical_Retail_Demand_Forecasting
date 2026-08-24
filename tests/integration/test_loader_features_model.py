@@ -29,12 +29,16 @@ def test_loader_features_lightgbm_metric_path_on_fifty_series():
 
     loader = M5Loader()
     panel = loader.load_panel(sample_series=50, last_n_days=430, with_prices=False, random_state=42)
-    features = FeaturePipeline(horizon=28, include_price=False).transform(panel)
+    # Keep the pipeline instance: `model_feature_columns` is a FeaturePipeline
+    # method (it depends on the configured horizon and price settings), not a
+    # loader method.
+    pipeline = FeaturePipeline(horizon=28, include_price=False)
+    features = pipeline.transform(panel)
     dates = np.sort(features["date"].unique())
     cutoff = dates[-29]
     train = features[features["date"] <= cutoff]
     test = features[features["date"] > cutoff]
-    feature_cols = loader.model_feature_columns(features, drop_price=True)
+    feature_cols = pipeline.model_feature_columns(features, drop_price=True)
 
     model = LGBMRegressor(n_estimators=8, learning_rate=0.1, n_jobs=1, random_state=42, verbosity=-1)
     model.fit(train[feature_cols].fillna(0.0), train["sales"].astype(float))

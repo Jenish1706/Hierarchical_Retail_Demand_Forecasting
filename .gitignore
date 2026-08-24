@@ -11,3 +11,5 @@ __pycache__/
 htmlcov/
 .pytest_cache/
 .idea/
+lightning_logs/
+prompt.txt

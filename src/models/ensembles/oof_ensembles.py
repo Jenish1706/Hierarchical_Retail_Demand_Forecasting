@@ -21,7 +21,6 @@ import pandas as pd
 from scipy.optimize import minimize
 from sklearn.linear_model import Ridge
 
-
 OOF_REQUIRED_COLUMNS = {"series_id", "date", "origin", "model", "y_true", "y_pred"}
 
 
@@ -229,7 +228,7 @@ def best_cross_family_blend(
     diagnostics = ensemble_diagnostics(full)
     available = set(full.model_names)
     selected: list[str] = []
-    for family, candidates in model_families.items():
+    for _family, candidates in model_families.items():
         usable = [name for name in candidates if name in available]
         if not usable:
             continue

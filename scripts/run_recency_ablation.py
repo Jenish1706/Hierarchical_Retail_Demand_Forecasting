@@ -4,9 +4,6 @@ Evaluate the LightGBM decay hyperparameter against no-decay on the full subsampl
 """
 import sys
 from pathlib import Path
-import time
-import pandas as pd
-import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -14,16 +11,17 @@ from src.data.loader import M5Loader
 from src.features.base import FeaturePipeline
 from src.models.classical_ml.trainer import DemandTrainer, TrainingConfig
 
+
 def main():
     print("Loading data...")
     loader = M5Loader()
     # Loading a 3000 series subsample to run the ablation
     panel = loader.load_panel(sample_series=3000, random_state=42)
-    
+
     print("Building features...")
     pipeline = FeaturePipeline()
     df_features = pipeline.transform(panel)
-    
+
     print("Running without recency weighting (half_life = 0.0)...")
     cfg_no_decay = TrainingConfig(
         models=("lightgbm",),
@@ -38,7 +36,7 @@ def main():
     res_no = trainer_no_decay.leaderboard_
     print("No decay results:")
     print(res_no[["model", "cv_wape", "cv_rmsse"]])
-    
+
     print("\nRunning with recency weighting (half_life = 365.0)...")
     cfg_decay = TrainingConfig(
         models=("lightgbm",),
@@ -53,6 +51,6 @@ def main():
     res_decay = trainer_decay.leaderboard_
     print("Decay results:")
     print(res_decay[["model", "cv_wape", "cv_rmsse"]])
-    
+
 if __name__ == "__main__":
     main()

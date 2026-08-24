@@ -26,7 +26,6 @@ from lightgbm import LGBMRegressor
 
 from src.evaluation.probabilistic_metrics import enforce_monotonic_quantiles
 
-
 DEFAULT_QUANTILES: tuple[float, ...] = (0.10, 0.25, 0.50, 0.75, 0.90)
 # Backwards-compatible public name used in early notebooks.
 QUANTILES = list(DEFAULT_QUANTILES)

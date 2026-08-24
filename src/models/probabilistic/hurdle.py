@@ -93,28 +93,28 @@ class HurdleForecaster:
         regressor_params: dict[str, Any] | None = None,
         random_state: int = 42,
     ) -> None:
-        _gate_defaults = dict(
-            n_estimators=300,
-            max_depth=6,
-            learning_rate=0.05,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            min_child_samples=20,
-            n_jobs=1,
-            random_state=random_state,
-            verbosity=-1,
-        )
-        _reg_defaults = dict(
-            n_estimators=400,
-            max_depth=7,
-            learning_rate=0.05,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            min_child_samples=20,
-            n_jobs=1,
-            random_state=random_state,
-            verbosity=-1,
-        )
+        _gate_defaults = {
+            "n_estimators": 300,
+            "max_depth": 6,
+            "learning_rate": 0.05,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "min_child_samples": 20,
+            "n_jobs": 1,
+            "random_state": random_state,
+            "verbosity": -1,
+        }
+        _reg_defaults = {
+            "n_estimators": 400,
+            "max_depth": 7,
+            "learning_rate": 0.05,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "min_child_samples": 20,
+            "n_jobs": 1,
+            "random_state": random_state,
+            "verbosity": -1,
+        }
         if gate_params:
             _gate_defaults.update(gate_params)
         if regressor_params:

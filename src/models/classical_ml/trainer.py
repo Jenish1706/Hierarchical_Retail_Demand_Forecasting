@@ -63,7 +63,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from src.config.logging import get_logger
-from src.config.settings import settings
 from src.evaluation.point_metrics import compute_metrics, naive_scale
 from src.mlops.registry import PromotionCandidate, PromotionGate
 from src.mlops.tracking import ExperimentTracker

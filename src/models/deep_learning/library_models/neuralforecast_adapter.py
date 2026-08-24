@@ -13,7 +13,6 @@ from typing import Any
 
 import pandas as pd
 
-
 SUPPORTED_NEURALFORECAST_MODELS = {
     "nbeats": "NBEATS",
     "nhits": "NHITS",
@@ -87,8 +86,8 @@ class NeuralForecastAdapter:
             raise ValueError("panel contains duplicate series/date rows")
 
         try:
-            from neuralforecast import NeuralForecast
             import neuralforecast.models as models
+            from neuralforecast import NeuralForecast
         except ImportError as exc:  # pragma: no cover - declared dependency
             raise ImportError("install neuralforecast to use library deep-learning models") from exc
 

@@ -28,6 +28,7 @@ Usage:
     python scripts/run_significance.py
     python scripts/run_significance.py --backtest-dir reports/backtest_main --metric rmsse
 """
+
 from __future__ import annotations
 
 import argparse
@@ -99,8 +100,7 @@ def main() -> int:
     print("=" * 82)
     print(f"  source        : {preds_path.relative_to(settings.base_dir)}")
     print(f"  models        : {len(models)}")
-    print(f"  series        : {len(complete):,} with complete scores "
-          f"(of {len(matrix):,} total)")
+    print(f"  series        : {len(complete):,} with complete scores (of {len(matrix):,} total)")
     print(f"  observations  : {len(preds):,}")
 
     print("\n--- Pooled leaderboard (for reference; NOT a significance claim) " + "-" * 17)
@@ -168,24 +168,33 @@ def main() -> int:
     print(f"    {'model':<24} {'rank':>7} {'CI low':>8} {'CI high':>8}   verdict")
     for _, row in mcb.iterrows():
         verdict = (
-            "BEST" if row["is_best"]
-            else ("indistinguishable from best" if row["indistinguishable_from_best"]
-                  else "significantly worse")
+            "BEST"
+            if row["is_best"]
+            else (
+                "indistinguishable from best"
+                if row["indistinguishable_from_best"]
+                else "significantly worse"
+            )
         )
-        print(f"    {row['model']:<24} {row['average_rank']:7.3f} "
-              f"{row['ci_lower']:8.3f} {row['ci_upper']:8.3f}   {verdict}")
+        print(
+            f"    {row['model']:<24} {row['average_rank']:7.3f} "
+            f"{row['ci_lower']:8.3f} {row['ci_upper']:8.3f}   {verdict}"
+        )
     mcb.to_csv(out_dir / "mcb.csv", index=False)
     results["mcb"] = mcb.to_dict(orient="records")
 
     # ---------------------------------------------------------------- 4. DM
     print("\n--- 4. DIEBOLD-MARIANO (pairwise, Holm-corrected) " + "-" * 32)
     errors = {
-        str(model): (g.sort_values(["series_id", "date"])["y_true"].to_numpy(float)
-                     - g.sort_values(["series_id", "date"])["y_pred"].to_numpy(float))
+        str(model): (
+            g.sort_values(["series_id", "date"])["y_true"].to_numpy(float)
+            - g.sort_values(["series_id", "date"])["y_pred"].to_numpy(float)
+        )
         for model, g in preds.groupby("model", observed=True)
     }
-    dm = pairwise_dm(errors, horizon=args.horizon, loss="absolute",
-                     alpha=args.alpha, correction="holm")
+    dm = pairwise_dm(
+        errors, horizon=args.horizon, loss="absolute", alpha=args.alpha, correction="holm"
+    )
     dm.to_csv(out_dir / "diebold_mariano.csv", index=False)
 
     n_sep = int(dm["significant_adjusted"].sum())
@@ -195,21 +204,22 @@ def main() -> int:
     if len(indistinguishable):
         print(f"\n    INDISTINGUISHABLE pairs ({len(indistinguishable)}):")
         for _, r in indistinguishable.iterrows():
-            print(f"      {r['model_a']:<22} vs {r['model_b']:<22} "
-                  f"p_adj = {r['p_adjusted']:.4f}")
+            print(f"      {r['model_a']:<22} vs {r['model_b']:<22} p_adj = {r['p_adjusted']:.4f}")
 
     print("\n    Most significant separations:")
     for _, r in dm.head(8).iterrows():
-        print(f"      {r['model_a']:<22} vs {r['model_b']:<22} "
-              f"DM={r['dm_statistic']:+7.2f}  p_adj={r['p_adjusted']:.3g}  "
-              f"better: {r['better']}")
+        print(
+            f"      {r['model_a']:<22} vs {r['model_b']:<22} "
+            f"DM={r['dm_statistic']:+7.2f}  p_adj={r['p_adjusted']:.3g}  "
+            f"better: {r['better']}"
+        )
 
     results["diebold_mariano"] = {
         "n_pairs": int(len(dm)),
         "n_separable_holm": n_sep,
-        "indistinguishable_pairs": indistinguishable[
-            ["model_a", "model_b", "p_adjusted"]
-        ].to_dict(orient="records"),
+        "indistinguishable_pairs": indistinguishable[["model_a", "model_b", "p_adjusted"]].to_dict(
+            orient="records"
+        ),
     }
 
     # ---------------------------------------------------------------- verdict
@@ -219,7 +229,8 @@ def main() -> int:
 
     best = str(ranks.index[0])
     tied_with_best = [
-        str(r["model"]) for _, r in mcb.iterrows()
+        str(r["model"])
+        for _, r in mcb.iterrows()
         if r["indistinguishable_from_best"] and not r["is_best"]
     ]
 

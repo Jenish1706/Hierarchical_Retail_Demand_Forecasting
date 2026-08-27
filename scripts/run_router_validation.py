@@ -1,6 +1,7 @@
 """
 Router validation (empirical re-derivation per §4.3)
 """
+
 import sys
 from pathlib import Path
 
@@ -18,20 +19,29 @@ from src.models.router import DEFAULT_ROUTING, SegmentRouter
 
 def main():
     loader = M5Loader()
-    panel = loader.load_panel(sample_series=3000, random_state=42, with_prices=False, with_calendar=False)
+    panel = loader.load_panel(
+        sample_series=3000, random_state=42, with_prices=False, with_calendar=False
+    )
     panel["unique_id"] = panel["item_id"].astype(str) + "_" + panel["store_id"].astype(str)
     panel = panel.rename(columns={"date": "ds", "sales": "y"})
     panel["ds"] = pd.to_datetime(panel["ds"])
     panel["y"] = panel["y"].astype(float)
 
     horizon = 28
-    origin = list(rolling_origins(n_origins=1, horizon=horizon, last_date=panel["ds"].max(), first_date=panel["ds"].min()))[0]
+    origin = list(
+        rolling_origins(
+            n_origins=1, horizon=horizon, last_date=panel["ds"].max(), first_date=panel["ds"].min()
+        )
+    )[0]
 
     train = panel[panel["ds"] <= pd.to_datetime(origin.train_end)]
-    test = panel[(panel["ds"] >= pd.to_datetime(origin.test_start)) & (panel["ds"] <= pd.to_datetime(origin.test_end))]
+    test = panel[
+        (panel["ds"] >= pd.to_datetime(origin.test_start))
+        & (panel["ds"] <= pd.to_datetime(origin.test_end))
+    ]
 
     print("Fitting statistical models for routing comparison...")
-    sf = StatsForecast(models=[SeasonalNaive(season_length=7), ADIDA()], freq='D')
+    sf = StatsForecast(models=[SeasonalNaive(season_length=7), ADIDA()], freq="D")
     sf.fit(train[["unique_id", "ds", "y"]])
     preds = sf.predict(h=horizon).reset_index()
 
@@ -59,8 +69,9 @@ def main():
 
     print("\nOverall:")
     print(f"Improved: {benefit.improved}")
-    print(f"Routed WAPE: {benefit.wape_routed:.4f}")
-    print(f"Global WAPE: {benefit.wape_global:.4f}")
+    print(f"Routed WAPE: {benefit.routed_wape:.4f}")
+    print(f"Global WAPE: {benefit.global_wape:.4f}")
+
 
 if __name__ == "__main__":
     main()

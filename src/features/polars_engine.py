@@ -35,6 +35,7 @@ incomparable. Three details carry that:
 `tests/unit/test_polars_parity.py` asserts this equivalence on real data rather
 than trusting the claim.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -83,12 +84,18 @@ def rolling_expressions(windows: Sequence[int], horizon: int) -> list[pl.Expr]:
         exprs.extend(
             [
                 shifted.rolling_mean(window_size=w, min_samples=1)
-                .over(SERIES_KEYS).cast(pl.Float32).alias(f"roll_mean_{w}"),
+                .over(SERIES_KEYS)
+                .cast(pl.Float32)
+                .alias(f"roll_mean_{w}"),
                 # min_samples=2: the sample std of a single point is undefined.
                 shifted.rolling_std(window_size=w, min_samples=2)
-                .over(SERIES_KEYS).cast(pl.Float32).alias(f"roll_std_{w}"),
+                .over(SERIES_KEYS)
+                .cast(pl.Float32)
+                .alias(f"roll_std_{w}"),
                 shifted.rolling_max(window_size=w, min_samples=1)
-                .over(SERIES_KEYS).cast(pl.Float32).alias(f"roll_max_{w}"),
+                .over(SERIES_KEYS)
+                .cast(pl.Float32)
+                .alias(f"roll_max_{w}"),
             ]
         )
     return exprs
@@ -102,6 +109,7 @@ def derived_ratio_expressions() -> list[pl.Expr]:
     infinity -- a tree splits on null sensibly, but an inf poisons any
     downstream mean.
     """
+
     def safe_ratio(numerator: str, denominator: str) -> pl.Expr:
         denom = pl.col(denominator)
         return (
@@ -140,8 +148,11 @@ def intermittency_expressions(horizon: int, windows: Sequence[int] = (28, 90)) -
     # rather than silently voting. Verified as the source of the parity gap.
     is_zero = (pl.col("sales") == 0).cast(pl.Float32)
     exprs: list[pl.Expr] = [
-        is_zero.shift(horizon).rolling_mean(window_size=w, min_samples=1)
-        .over(SERIES_KEYS).cast(pl.Float32).alias(f"zero_rate_{w}")
+        is_zero.shift(horizon)
+        .rolling_mean(window_size=w, min_samples=1)
+        .over(SERIES_KEYS)
+        .cast(pl.Float32)
+        .alias(f"zero_rate_{w}")
         for w in windows
     ]
 
@@ -200,7 +211,9 @@ def price_expressions(horizon: int) -> list[pl.Expr]:
             pl.when(previous_price.abs() > 0)
             .then((price - previous_price) / previous_price)
             .otherwise(None)
-        ).cast(pl.Float32).alias("price_change_pct"),
+        )
+        .cast(pl.Float32)
+        .alias("price_change_pct"),
         ratio_to_mean.alias("price_ratio_to_28d_mean"),
         # 2% threshold: below that is rounding, not a promotion. A null ratio
         # (no price history yet) encodes as 0 -- "not known to be discounted"
@@ -211,7 +224,9 @@ def price_expressions(horizon: int) -> list[pl.Expr]:
             pl.when(pl.col("sell_price").mean().over(["item_id", "wm_yr_wk"]).abs() > 0)
             .then(price / pl.col("sell_price").mean().over(["item_id", "wm_yr_wk"]))
             .otherwise(None)
-        ).cast(pl.Float32).alias("price_rel_to_item_mean"),
+        )
+        .cast(pl.Float32)
+        .alias("price_rel_to_item_mean"),
     ]
 
 
@@ -289,7 +304,8 @@ def build_series_features(
     # Ratios depend on roll_mean_* / roll_std_*, so they must follow.
     available = set(out.columns)
     ratios = [
-        expr for expr in derived_ratio_expressions()
+        expr
+        for expr in derived_ratio_expressions()
         if {"roll_mean_7", "roll_mean_28", "roll_mean_90", "roll_std_28"} & available
     ]
     if ratios:

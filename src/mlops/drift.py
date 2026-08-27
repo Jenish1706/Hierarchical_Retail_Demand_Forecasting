@@ -21,6 +21,7 @@ Retraining Triggers:
 
 Tools: Evidently AI + custom statistical tests + Airflow integration
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -112,6 +113,7 @@ class StatisticalDriftDetector:
         Returns (statistic, p_value, drift_detected).
         """
         from scipy.stats import ks_2samp
+
         stat, p_value = ks_2samp(reference, current)
         return float(stat), float(p_value), (p_value < alpha)
 
@@ -122,6 +124,7 @@ class StatisticalDriftDetector:
     ) -> float:
         """Earth Mover's Distance between distributions."""
         from scipy.stats import wasserstein_distance
+
         # Normalize by reference std to make scale-independent
         std = np.std(reference) + 1e-6
         return float(wasserstein_distance(reference / std, current / std))
@@ -203,14 +206,23 @@ class PerformanceMonitor:
         mae = float(np.mean(np.abs(actuals - preds)))
         wape = float(np.sum(np.abs(actuals - preds)) / max(np.sum(actuals), 1e-6) * 100)
         mask = actuals > 0
-        mape = float(np.mean(np.abs((actuals[mask] - preds[mask]) / actuals[mask])) * 100) if mask.sum() > 0 else -1
+        mape = (
+            float(np.mean(np.abs((actuals[mask] - preds[mask]) / actuals[mask])) * 100)
+            if mask.sum() > 0
+            else -1
+        )
 
         bias = float(np.mean(preds - actuals))
-        coverage_80 = float(
-            ((df.get("forecast_p10", pd.Series([0])) <= df["actual_sales"]) &
-             (df["actual_sales"] <= df.get("forecast_p90", pd.Series([float("inf")]))))
-            .mean()
-        ) if "forecast_p10" in df.columns else -1
+        coverage_80 = (
+            float(
+                (
+                    (df.get("forecast_p10", pd.Series([0])) <= df["actual_sales"])
+                    & (df["actual_sales"] <= df.get("forecast_p90", pd.Series([float("inf")])))
+                ).mean()
+            )
+            if "forecast_p10" in df.columns
+            else -1
+        )
 
         return {
             "model_id": model_id,
@@ -241,23 +253,27 @@ class PerformanceMonitor:
             threshold = getattr(settings.model, f"{metric}_threshold", 0.20)
 
             if current > threshold:
-                alerts.append({
-                    "metric": metric,
-                    "baseline": baseline,
-                    "current": current,
-                    "pct_change": round(pct_change * 100, 2),
-                    "threshold": threshold,
-                    "alert_type": "absolute_threshold_breach",
-                })
+                alerts.append(
+                    {
+                        "metric": metric,
+                        "baseline": baseline,
+                        "current": current,
+                        "pct_change": round(pct_change * 100, 2),
+                        "threshold": threshold,
+                        "alert_type": "absolute_threshold_breach",
+                    }
+                )
             elif pct_change > self.degradation_pct:
-                alerts.append({
-                    "metric": metric,
-                    "baseline": baseline,
-                    "current": current,
-                    "pct_change": round(pct_change * 100, 2),
-                    "threshold": self.degradation_pct * 100,
-                    "alert_type": "relative_degradation",
-                })
+                alerts.append(
+                    {
+                        "metric": metric,
+                        "baseline": baseline,
+                        "current": current,
+                        "pct_change": round(pct_change * 100, 2),
+                        "threshold": self.degradation_pct * 100,
+                        "alert_type": "relative_degradation",
+                    }
+                )
 
         should_retrain = len(alerts) > 0
         return {
@@ -307,7 +323,8 @@ class DriftMonitoringPipeline:
 
         # 1. Feature drift
         feature_cols = feature_cols or [
-            c for c in reference_features.columns
+            c
+            for c in reference_features.columns
             if reference_features[c].dtype in (np.float64, np.float32, np.int64)
             and c not in ("item_id", "store_id", "date")
         ]
@@ -322,12 +339,14 @@ class DriftMonitoringPipeline:
                 continue
 
             report = self.drift_detector.detect_feature_drift(col, ref_vals, cur_vals)
-            results["drift_reports"].append({
-                "feature": col,
-                "drift_detected": report.drift_detected,
-                "psi": report.details.get("psi"),
-                "p_value": report.p_value,
-            })
+            results["drift_reports"].append(
+                {
+                    "feature": col,
+                    "drift_detected": report.drift_detected,
+                    "psi": report.details.get("psi"),
+                    "p_value": report.p_value,
+                }
+            )
             if report.drift_detected:
                 drift_count += 1
 
@@ -342,9 +361,7 @@ class DriftMonitoringPipeline:
             baseline_m = self.perf_monitor.evaluate_period(
                 reference_predictions, model_id, "baseline"
             )
-            current_m = self.perf_monitor.evaluate_period(
-                current_predictions, model_id, "current"
-            )
+            current_m = self.perf_monitor.evaluate_period(current_predictions, model_id, "current")
             degradation = self.perf_monitor.check_degradation(baseline_m, current_m)
 
             results["performance"] = {

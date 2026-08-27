@@ -11,6 +11,7 @@ model names.  Two strong models with nearly identical residuals offer little
 diversification; two strong models that miss at different times can improve a
 blend even when neither wins every series.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

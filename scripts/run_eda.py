@@ -22,6 +22,7 @@ Usage:
     python scripts/run_eda.py
     python scripts/run_eda.py --sample-series 5000     # faster iteration
 """
+
 from __future__ import annotations
 
 import argparse
@@ -38,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import matplotlib
 
-matplotlib.use("Agg")                                   # headless
+matplotlib.use("Agg")  # headless
 import matplotlib.pyplot as plt  # noqa: E402
 import seaborn as sns  # noqa: E402
 
@@ -55,8 +56,11 @@ log = get_logger("eda")
 sns.set_theme(style="whitegrid", context="notebook")
 PALETTE = {"FOODS": "#2a7fb8", "HOBBIES": "#e07b39", "HOUSEHOLD": "#4c9a52"}
 CLASS_COLORS = {
-    "SMOOTH": "#2a7fb8", "ERRATIC": "#e07b39",
-    "INTERMITTENT": "#7a5ea8", "LUMPY": "#c1444a", "NO_DEMAND": "#999999",
+    "SMOOTH": "#2a7fb8",
+    "ERRATIC": "#e07b39",
+    "INTERMITTENT": "#7a5ea8",
+    "LUMPY": "#c1444a",
+    "NO_DEMAND": "#999999",
 }
 
 
@@ -72,6 +76,7 @@ def _save(fig: plt.Figure, out_dir: Path, name: str) -> Path:
 # ===========================================================================
 # 3.1 Structure
 # ===========================================================================
+
 
 def section_structure(wide: pd.DataFrame, cal: pd.DataFrame, out: Path) -> dict[str, Any]:
     """Cardinality at every hierarchy level; series-length and lifecycle checks."""
@@ -119,15 +124,24 @@ def section_structure(wide: pd.DataFrame, cal: pd.DataFrame, out: Path) -> dict[
 
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
     axes[0].hist(first_sale[has_any] + 1, bins=60, color="#2a7fb8", edgecolor="white")
-    axes[0].set(xlabel="Day index of first sale", ylabel="Series",
-                title="Item introduction over time")
-    axes[0].axvline(1, color="#c1444a", ls="--", lw=1,
-                    label=f"{int((first_sale == 0).sum()):,} present from day 1")
+    axes[0].set(
+        xlabel="Day index of first sale", ylabel="Series", title="Item introduction over time"
+    )
+    axes[0].axvline(
+        1,
+        color="#c1444a",
+        ls="--",
+        lw=1,
+        label=f"{int((first_sale == 0).sum()):,} present from day 1",
+    )
     axes[0].legend(fontsize=8)
 
     axes[1].hist(active_len[has_any], bins=60, color="#4c9a52", edgecolor="white")
-    axes[1].set(xlabel="Active length (days, first sale to last)", ylabel="Series",
-                title="Series active lifespan")
+    axes[1].set(
+        xlabel="Active length (days, first sale to last)",
+        ylabel="Series",
+        title="Series active lifespan",
+    )
     fig.suptitle("§3.1 Structure: series lifecycle", y=1.02, fontsize=12)
     _save(fig, out, "fig_3_1_lifecycle")
 
@@ -137,6 +151,7 @@ def section_structure(wide: pd.DataFrame, cal: pd.DataFrame, out: Path) -> dict[
 # ===========================================================================
 # 3.2 Demand distribution
 # ===========================================================================
+
 
 def section_demand(wide: pd.DataFrame, out: Path) -> dict[str, Any]:
     """Zero-inflation and volume distribution, overall and by segment."""
@@ -158,15 +173,18 @@ def section_demand(wide: pd.DataFrame, out: Path) -> dict[str, Any]:
     by_cat = (
         wide.assign(_zero=(sales == 0).mean(axis=1), _mean=series_mean)
         .groupby("cat_id", observed=True)
-        .agg(n_series=("_zero", "size"), zero_rate=("_zero", "mean"),
-             mean_daily=("_mean", "mean"), total_units=("_mean", "sum"))
+        .agg(
+            n_series=("_zero", "size"),
+            zero_rate=("_zero", "mean"),
+            mean_daily=("_mean", "mean"),
+            total_units=("_mean", "sum"),
+        )
         .reset_index()
     )
     by_store = (
         wide.assign(_zero=(sales == 0).mean(axis=1), _mean=series_mean)
         .groupby("store_id", observed=True)
-        .agg(n_series=("_zero", "size"), zero_rate=("_zero", "mean"),
-             mean_daily=("_mean", "mean"))
+        .agg(n_series=("_zero", "size"), zero_rate=("_zero", "mean"), mean_daily=("_mean", "mean"))
         .reset_index()
     )
     by_cat.to_csv(out / "table_demand_by_category.csv", index=False)
@@ -177,21 +195,27 @@ def section_demand(wide: pd.DataFrame, out: Path) -> dict[str, Any]:
     counts = np.bincount(flat[flat <= 30])
     axes[0].bar(range(len(counts)), counts, color="#2a7fb8")
     axes[0].set_yscale("log")
-    axes[0].set(xlabel="Units sold in a day", ylabel="Observations (log)",
-                title=f"Daily sales distribution\n{zero_rate:.1%} of all observations are zero")
+    axes[0].set(
+        xlabel="Units sold in a day",
+        ylabel="Observations (log)",
+        title=f"Daily sales distribution\n{zero_rate:.1%} of all observations are zero",
+    )
 
-    axes[1].barh(by_cat["cat_id"], by_cat["zero_rate"],
-                 color=[PALETTE.get(c, "#888") for c in by_cat["cat_id"]])
+    axes[1].barh(
+        by_cat["cat_id"],
+        by_cat["zero_rate"],
+        color=[PALETTE.get(c, "#888") for c in by_cat["cat_id"]],
+    )
     axes[1].set(xlabel="Zero-sales rate", title="Zero-inflation by category")
     for i, v in enumerate(by_cat["zero_rate"]):
         axes[1].text(v + 0.005, i, f"{v:.1%}", va="center", fontsize=9)
 
     finite_vmr = vmr[np.isfinite(vmr)]
-    axes[2].hist(np.log10(np.clip(finite_vmr, 1e-3, None)), bins=60,
-                 color="#7a5ea8", edgecolor="white")
+    axes[2].hist(
+        np.log10(np.clip(finite_vmr, 1e-3, None)), bins=60, color="#7a5ea8", edgecolor="white"
+    )
     axes[2].axvline(0, color="#c1444a", ls="--", lw=1.5, label="Poisson (var = mean)")
-    axes[2].set(xlabel="log10(variance / mean)", ylabel="Series",
-                title="Overdispersion")
+    axes[2].set(xlabel="log10(variance / mean)", ylabel="Series", title="Overdispersion")
     axes[2].legend(fontsize=8)
 
     fig.suptitle("§3.2 Demand distribution", y=1.02, fontsize=12)
@@ -213,6 +237,7 @@ def section_demand(wide: pd.DataFrame, out: Path) -> dict[str, Any]:
 # ===========================================================================
 # 3.3 Intermittency -- SBT classification
 # ===========================================================================
+
 
 def section_intermittency(wide: pd.DataFrame, out: Path) -> dict[str, Any]:
     """
@@ -249,11 +274,13 @@ def section_intermittency(wide: pd.DataFrame, out: Path) -> dict[str, Any]:
 
     summary = (
         cls_df.groupby("pattern", observed=True)
-        .agg(n_series=("series_id", "size"),
-             total_units=("total_units", "sum"),
-             median_adi=("adi", "median"),
-             median_cv2=("cv2", "median"),
-             mean_zero_fraction=("zero_fraction", "mean"))
+        .agg(
+            n_series=("series_id", "size"),
+            total_units=("total_units", "sum"),
+            median_adi=("adi", "median"),
+            median_cv2=("cv2", "median"),
+            mean_zero_fraction=("zero_fraction", "mean"),
+        )
         .reset_index()
     )
     summary["pct_of_series"] = 100 * summary["n_series"] / summary["n_series"].sum()
@@ -267,12 +294,23 @@ def section_intermittency(wide: pd.DataFrame, out: Path) -> dict[str, Any]:
     finite = cls_df[np.isfinite(cls_df["adi"]) & np.isfinite(cls_df["cv2"])]
     sample = finite.sample(n=min(12000, len(finite)), random_state=0)
     for pattern, g in sample.groupby("pattern", observed=True):
-        axes[0].scatter(g["adi"], g["cv2"], s=4, alpha=0.35,
-                        color=CLASS_COLORS.get(pattern, "#888"), label=pattern)
+        axes[0].scatter(
+            g["adi"],
+            g["cv2"],
+            s=4,
+            alpha=0.35,
+            color=CLASS_COLORS.get(pattern, "#888"),
+            label=pattern,
+        )
     axes[0].axvline(ADI_CUTOFF, color="black", ls="--", lw=1)
     axes[0].axhline(CV2_CUTOFF, color="black", ls="--", lw=1)
-    axes[0].set(xscale="log", yscale="log", xlabel="ADI (log)", ylabel="CV² (log)",
-                title=f"SBT quadrants (cut-offs {ADI_CUTOFF} / {CV2_CUTOFF})")
+    axes[0].set(
+        xscale="log",
+        yscale="log",
+        xlabel="ADI (log)",
+        ylabel="CV² (log)",
+        title=f"SBT quadrants (cut-offs {ADI_CUTOFF} / {CV2_CUTOFF})",
+    )
     axes[0].legend(markerscale=3, fontsize=8, loc="upper left")
 
     # Series count vs volume share -- the key contrast.
@@ -284,11 +322,13 @@ def section_intermittency(wide: pd.DataFrame, out: Path) -> dict[str, Any]:
     axes[1].set(ylabel="Percent", title="Series count vs volume share")
     axes[1].legend(fontsize=8)
 
-    comp = (
-        pd.crosstab(cls_df["cat_id"], cls_df["pattern"], normalize="index") * 100
+    comp = pd.crosstab(cls_df["cat_id"], cls_df["pattern"], normalize="index") * 100
+    comp.plot(
+        kind="barh",
+        stacked=True,
+        ax=axes[2],
+        color=[CLASS_COLORS.get(c, "#888") for c in comp.columns],
     )
-    comp.plot(kind="barh", stacked=True, ax=axes[2],
-              color=[CLASS_COLORS.get(c, "#888") for c in comp.columns])
     axes[2].set(xlabel="% of series", title="Pattern composition by category")
     axes[2].legend(fontsize=7, loc="lower right")
 
@@ -300,7 +340,10 @@ def section_intermittency(wide: pd.DataFrame, out: Path) -> dict[str, Any]:
         "pct_of_series": summary.set_index("pattern")["pct_of_series"].round(2).to_dict(),
         "pct_of_volume": summary.set_index("pattern")["pct_of_volume"].round(2).to_dict(),
         "intermittent_or_lumpy_pct": round(
-            float(summary[summary["pattern"].isin(["INTERMITTENT", "LUMPY"])]["pct_of_series"].sum()), 2
+            float(
+                summary[summary["pattern"].isin(["INTERMITTENT", "LUMPY"])]["pct_of_series"].sum()
+            ),
+            2,
         ),
     }
 
@@ -308,6 +351,7 @@ def section_intermittency(wide: pd.DataFrame, out: Path) -> dict[str, Any]:
 # ===========================================================================
 # 3.4 Temporal patterns
 # ===========================================================================
+
 
 def section_temporal(wide: pd.DataFrame, cal: pd.DataFrame, out: Path) -> dict[str, Any]:
     """Day-of-week, monthly and multi-year structure at the aggregate level."""
@@ -341,8 +385,9 @@ def section_temporal(wide: pd.DataFrame, cal: pd.DataFrame, out: Path) -> dict[s
     for cat, prof in cat_dow.items():
         axes[0, 0].plot(labels, prof, marker="o", label=cat, color=PALETTE.get(cat, "#888"))
     axes[0, 0].axhline(1.0, color="grey", ls=":", lw=1)
-    axes[0, 0].set(ylabel="Demand index (1.0 = weekly mean)",
-                   title="Day-of-week profile by category")
+    axes[0, 0].set(
+        ylabel="Demand index (1.0 = weekly mean)", title="Day-of-week profile by category"
+    )
     axes[0, 0].legend(fontsize=8)
 
     monthly = ts.groupby("month")["total"].mean()
@@ -351,21 +396,28 @@ def section_temporal(wide: pd.DataFrame, cal: pd.DataFrame, out: Path) -> dict[s
     axes[0, 1].set(xlabel="Month", ylabel="Demand index", title="Monthly seasonality")
 
     axes[1, 0].plot(ts["date"], ts["total"], lw=0.4, color="#2a7fb8", alpha=0.7)
-    axes[1, 0].plot(ts["date"], ts["total"].rolling(28, center=True).mean(),
-                    lw=1.8, color="#c1444a", label="28-day rolling mean")
+    axes[1, 0].plot(
+        ts["date"],
+        ts["total"].rolling(28, center=True).mean(),
+        lw=1.8,
+        color="#c1444a",
+        label="28-day rolling mean",
+    )
     axes[1, 0].set(ylabel="Total units/day", title="Aggregate demand, full history")
     axes[1, 0].legend(fontsize=8)
 
     # ACF of the aggregate series -- directly informs ARIMA order selection.
     from statsmodels.tsa.stattools import acf
+
     acf_vals = acf(ts["total"].to_numpy(), nlags=60, fft=True)
     axes[1, 1].stem(range(len(acf_vals)), acf_vals, basefmt=" ")
     conf = 1.96 / np.sqrt(len(ts))
     axes[1, 1].axhspan(-conf, conf, color="#c1444a", alpha=0.15, label="95% band")
     for lag in (7, 14, 21, 28):
         axes[1, 1].axvline(lag, color="#e07b39", ls=":", lw=1)
-    axes[1, 1].set(xlabel="Lag (days)", ylabel="ACF",
-                   title="Autocorrelation (weekly spikes marked)")
+    axes[1, 1].set(
+        xlabel="Lag (days)", ylabel="ACF", title="Autocorrelation (weekly spikes marked)"
+    )
     axes[1, 1].legend(fontsize=8)
 
     fig.suptitle("§3.4 Temporal patterns", y=1.00, fontsize=12)
@@ -388,6 +440,7 @@ def section_temporal(wide: pd.DataFrame, cal: pd.DataFrame, out: Path) -> dict[s
 # 3.5 Events and SNAP
 # ===========================================================================
 
+
 def section_events_snap(wide: pd.DataFrame, cal: pd.DataFrame, out: Path) -> dict[str, Any]:
     """Descriptive event lift and SNAP contrast. Descriptive, not causal."""
     day_cols = [c for c in wide.columns if c.startswith("d_")]
@@ -408,8 +461,10 @@ def section_events_snap(wide: pd.DataFrame, cal: pd.DataFrame, out: Path) -> dic
             off = s_daily[cal_idx[snap_col].to_numpy() == 0].mean()
             rows.append(
                 {
-                    "cat_id": str(cat), "state_id": state,
-                    "snap_day_mean": float(on), "non_snap_day_mean": float(off),
+                    "cat_id": str(cat),
+                    "state_id": state,
+                    "snap_day_mean": float(on),
+                    "non_snap_day_mean": float(off),
                     "lift_pct": float(100 * (on - off) / off) if off else np.nan,
                 }
             )
@@ -427,7 +482,8 @@ def section_events_snap(wide: pd.DataFrame, cal: pd.DataFrame, out: Path) -> dic
             continue
         ev_rows.append(
             {
-                "event_type": etype, "n_days": int(sel.sum()),
+                "event_type": etype,
+                "n_days": int(sel.sum()),
                 "mean_units": float(daily_total[sel].mean()),
                 "baseline_units": float(baseline),
                 "lift_pct": float(100 * (daily_total[sel].mean() - baseline) / baseline),
@@ -441,8 +497,10 @@ def section_events_snap(wide: pd.DataFrame, cal: pd.DataFrame, out: Path) -> dic
     piv = snap_df.pivot(index="cat_id", columns="state_id", values="lift_pct")
     piv.plot(kind="bar", ax=axes[0], color=["#2a7fb8", "#e07b39", "#4c9a52"])
     axes[0].axhline(0, color="black", lw=1)
-    axes[0].set(ylabel="Demand lift on SNAP days (%)",
-                title="SNAP-day demand contrast by category and state")
+    axes[0].set(
+        ylabel="Demand lift on SNAP days (%)",
+        title="SNAP-day demand contrast by category and state",
+    )
     axes[0].legend(title="State", fontsize=8)
     axes[0].tick_params(axis="x", rotation=0)
 
@@ -455,7 +513,10 @@ def section_events_snap(wide: pd.DataFrame, cal: pd.DataFrame, out: Path) -> dic
     _save(fig, out, "fig_3_5_events_snap")
 
     return {
-        "snap_lift_by_category_pct": snap_df.groupby("cat_id")["lift_pct"].mean().round(2).to_dict(),
+        "snap_lift_by_category_pct": snap_df.groupby("cat_id")["lift_pct"]
+        .mean()
+        .round(2)
+        .to_dict(),
         "snap_lift_overall_pct": round(float(snap_df["lift_pct"].mean()), 2),
         "event_lift_by_type_pct": ev_df.set_index("event_type")["lift_pct"].round(2).to_dict(),
         "note": (
@@ -469,6 +530,7 @@ def section_events_snap(wide: pd.DataFrame, cal: pd.DataFrame, out: Path) -> dic
 # ===========================================================================
 # 3.8 Stationarity and distribution fitting -- gates Tier 1 and Tier 3
 # ===========================================================================
+
 
 def section_stationarity_distributions(
     wide: pd.DataFrame, cal: pd.DataFrame, out: Path, n_fit: int = 400
@@ -506,6 +568,7 @@ def section_stationarity_distributions(
             adf_p = np.nan
         try:
             import warnings as _w
+
             with _w.catch_warnings():
                 _w.simplefilter("ignore")
                 kpss_p = float(kpss(series, regression="c", nlags="auto")[1])
@@ -515,13 +578,17 @@ def section_stationarity_distributions(
         adf_stationary = adf_p < 0.05
         kpss_stationary = kpss_p > 0.05
         verdict = (
-            "stationary" if adf_stationary and kpss_stationary
-            else "non-stationary" if not adf_stationary and not kpss_stationary
+            "stationary"
+            if adf_stationary and kpss_stationary
+            else "non-stationary"
+            if not adf_stationary and not kpss_stationary
             else "conflicting -- inspect trend/differencing"
         )
         stat_rows.append(
             {
-                "level": name, "adf_p": adf_p, "kpss_p": kpss_p,
+                "level": name,
+                "adf_p": adf_p,
+                "kpss_p": kpss_p,
                 "adf_says_stationary": adf_stationary,
                 "kpss_says_stationary": kpss_stationary,
                 "verdict": verdict,
@@ -539,7 +606,7 @@ def section_stationarity_distributions(
     fit_rows = []
     for i in idx:
         y = sales[i]
-        y = y[-730:]                                   # last two years
+        y = y[-730:]  # last two years
         mu, var = y.mean(), y.var()
         if mu <= 0:
             continue
@@ -561,7 +628,8 @@ def section_stationarity_distributions(
         fit_rows.append(
             {
                 "series_idx": int(i),
-                "mean": float(mu), "var": float(var),
+                "mean": float(mu),
+                "var": float(var),
                 "zero_frac": float((y == 0).mean()),
                 "overdispersed": bool(var > mu),
                 "aic_poisson": aic_pois,
@@ -577,9 +645,13 @@ def section_stationarity_distributions(
     axes[0].scatter(fit_df["mean"], fit_df["var"], s=12, alpha=0.5, color="#2a7fb8")
     lim = [0, float(fit_df["mean"].quantile(0.98)) * 1.5]
     axes[0].plot(lim, lim, color="#c1444a", ls="--", lw=1.5, label="Poisson (var = mean)")
-    axes[0].set(xlim=lim, ylim=[0, float(fit_df["var"].quantile(0.98)) * 1.2],
-                xlabel="Series mean", ylabel="Series variance",
-                title="Mean-variance relationship")
+    axes[0].set(
+        xlim=lim,
+        ylim=[0, float(fit_df["var"].quantile(0.98)) * 1.2],
+        xlabel="Series mean",
+        ylabel="Series variance",
+        title="Mean-variance relationship",
+    )
     axes[0].legend(fontsize=8)
 
     share = pd.Series(
@@ -593,11 +665,17 @@ def section_stationarity_distributions(
     for i, v in enumerate(share):
         axes[1].text(i, v + 0.01, f"{v:.1%}", ha="center", fontsize=9)
 
-    axes[2].scatter(fit_df["zero_frac"], np.log10(np.clip(fit_df["var"] / fit_df["mean"], 1e-2, None)),
-                    s=12, alpha=0.5, color="#7a5ea8")
+    axes[2].scatter(
+        fit_df["zero_frac"],
+        np.log10(np.clip(fit_df["var"] / fit_df["mean"], 1e-2, None)),
+        s=12,
+        alpha=0.5,
+        color="#7a5ea8",
+    )
     axes[2].axhline(0, color="#c1444a", ls="--", lw=1.2)
-    axes[2].set(xlabel="Zero fraction", ylabel="log10(var/mean)",
-                title="Zero-inflation vs overdispersion")
+    axes[2].set(
+        xlabel="Zero fraction", ylabel="log10(var/mean)", title="Zero-inflation vs overdispersion"
+    )
 
     fig.suptitle("§3.8 Stationarity and count distributions", y=1.02, fontsize=12)
     _save(fig, out, "fig_3_8_distributions")
@@ -620,10 +698,15 @@ def section_stationarity_distributions(
 # Driver
 # ===========================================================================
 
+
 def main() -> int:
     p = argparse.ArgumentParser(description="M5 exploratory data analysis")
-    p.add_argument("--sample-series", type=int, default=None,
-                   help="subsample series for faster iteration (default: all 30,490)")
+    p.add_argument(
+        "--sample-series",
+        type=int,
+        default=None,
+        help="subsample series for faster iteration (default: all 30,490)",
+    )
     p.add_argument("--out-dir", default=None)
     p.add_argument("--seed", type=int, default=42)
     args = p.parse_args()
@@ -639,8 +722,11 @@ def main() -> int:
 
     if args.sample_series:
         wide = wide.sample(n=min(args.sample_series, len(wide)), random_state=args.seed)
-        log.warning("eda_on_subsample", n_series=len(wide),
-                    note="figures describe the sample, not the full panel")
+        log.warning(
+            "eda_on_subsample",
+            n_series=len(wide),
+            note="figures describe the sample, not the full panel",
+        )
 
     log.info("eda_start", n_series=len(wide), n_days=sum(c.startswith("d_") for c in wide.columns))
 
@@ -677,15 +763,19 @@ def main() -> int:
     print("\n" + "=" * 78)
     print("PILLAR 1 -- EXPLORATORY DATA ANALYSIS")
     print("=" * 78)
-    print(f"  series analysed        : {s31['n_series']:,}  x {s31['n_days']:,} days "
-          f"= {s31['long_format_rows']:,} long-format rows")
+    print(
+        f"  series analysed        : {s31['n_series']:,}  x {s31['n_days']:,} days "
+        f"= {s31['long_format_rows']:,} long-format rows"
+    )
     print(f"  total units sold       : {s31['total_units_sold']:,}")
     print(f"  never sold a unit      : {s31['series_never_sold']:,} series")
     print(f"  introduced after day 1 : {s31['series_starting_after_day_1']:,} series")
     print()
     print(f"  zero-sales rate        : {s32['overall_zero_rate']:.1%} of all observations")
-    print("  by category            : " +
-          ", ".join(f"{k} {v:.1%}" for k, v in s32["zero_rate_by_category"].items()))
+    print(
+        "  by category            : "
+        + ", ".join(f"{k} {v:.1%}" for k, v in s32["zero_rate_by_category"].items())
+    )
     print(f"  overdispersed series   : {s32['pct_series_overdispersed']:.1%}")
     print(f"  top volume decile      : {s32['top_decile_volume_share']:.1%} of all units")
     print()
@@ -693,15 +783,21 @@ def main() -> int:
     for pattern, pct in sorted(s33["pct_of_series"].items(), key=lambda kv: -kv[1]):
         vol = s33["pct_of_volume"].get(pattern, 0.0)
         print(f"    {pattern:<14} {pct:>5.1f}% of series  |  {vol:>5.1f}% of volume")
-    print(f"    -> {s33['intermittent_or_lumpy_pct']:.1f}% of series are sparse "
-          f"(INTERMITTENT or LUMPY)")
+    print(
+        f"    -> {s33['intermittent_or_lumpy_pct']:.1f}% of series are sparse "
+        f"(INTERMITTENT or LUMPY)"
+    )
     print()
     print(f"  weekend uplift         : {s34['weekend_uplift_pct']:+.1f}%")
-    print(f"  ACF lag 1 / 7 / 28     : {s34['acf_lag_1']:.3f} / {s34['acf_lag_7']:.3f} / {s34['acf_lag_28']:.3f}")
+    print(
+        f"  ACF lag 1 / 7 / 28     : {s34['acf_lag_1']:.3f} / {s34['acf_lag_7']:.3f} / {s34['acf_lag_28']:.3f}"
+    )
     print()
     print("  Stationarity (aggregate levels):")
     for row in s38["stationarity"]:
-        print(f"    {row['level']:<12} ADF p={row['adf_p']:.4f}  KPSS p={row['kpss_p']:.4f}  -> {row['verdict']}")
+        print(
+            f"    {row['level']:<12} ADF p={row['adf_p']:.4f}  KPSS p={row['kpss_p']:.4f}  -> {row['verdict']}"
+        )
     print(f"  overdispersed          : {s38['pct_overdispersed']:.1f}% of sampled series")
     print(f"  NegBinom beats Poisson : {s38['pct_negbinom_beats_poisson']:.1f}% of sampled series")
     print()

@@ -57,6 +57,7 @@ Fisher, Rudin & Dominici (2019), "All models are wrong but many are useful",
 Hooker, Mentch & Zhou (2021) -- on the extrapolation problem in permutation
     methods under correlated features.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
@@ -76,7 +77,7 @@ try:
     import shap
 
     _HAS_SHAP = True
-except ImportError:                                        # pragma: no cover
+except ImportError:  # pragma: no cover
     shap, _HAS_SHAP = None, False
 
 
@@ -90,8 +91,13 @@ FEATURE_GROUPS: dict[str, tuple[str, ...]] = {
     "trend": ("trend_",),
     "intermittency": ("zero_rate_", "days_since_sale"),
     "calendar_cyclical": ("dow_", "month_sin", "month_cos", "week_of_year", "quarter"),
-    "calendar_flags": ("is_weekend", "is_month_start", "is_month_end", "is_event_day",
-                       "event_type_"),
+    "calendar_flags": (
+        "is_weekend",
+        "is_month_start",
+        "is_month_end",
+        "is_event_day",
+        "event_type_",
+    ),
     "snap": ("snap_flag",),
     "price": ("price", "is_discounted"),
     "time": ("time_idx", "year_num", "day_of_month", "month_num"),
@@ -124,9 +130,7 @@ class ImportanceReport:
                 self.permutation.set_index("feature")["importance_mean"].rename("permutation")
             )
         if not self.shap_global.empty:
-            frames.append(
-                self.shap_global.set_index("feature")["mean_abs_shap"].rename("shap")
-            )
+            frames.append(self.shap_global.set_index("feature")["mean_abs_shap"].rename("shap"))
         if not frames:
             return pd.DataFrame()
 
@@ -205,7 +209,7 @@ class ModelExplainer:
 
         explainer = shap.TreeExplainer(self.model)
         values = explainer.shap_values(sample)
-        if isinstance(values, list):          # multi-output; regression -> [0]
+        if isinstance(values, list):  # multi-output; regression -> [0]
             values = values[0]
 
         self._shap_values = np.asarray(values)
@@ -360,7 +364,7 @@ class ModelExplainer:
                 pred = np.clip(self.model.predict(self.X), 0.0, None)
                 deltas.append(score_fn(self.y, pred) - baseline)
 
-            self.X[col] = original           # always restore
+            self.X[col] = original  # always restore
 
             records.append(
                 {
@@ -409,7 +413,8 @@ class ModelExplainer:
 
         for group_name, prefixes in groups.items():
             members = [
-                c for c in self.feature_names
+                c
+                for c in self.feature_names
                 if c in self.X.columns and any(c.startswith(p) for p in prefixes)
             ]
             if not members:
@@ -459,7 +464,7 @@ class ModelExplainer:
             try:
                 self.compute_shap(sample_rows=shap_rows)
                 report.shap_global = self.shap_global_importance()
-            except Exception as exc:                       # pragma: no cover
+            except Exception as exc:  # pragma: no cover
                 self._log.warning("shap_failed", error=str(exc))
         else:
             self._log.warning("shap_unavailable", reason="package not installed")
@@ -490,22 +495,26 @@ class ModelExplainer:
             return written
 
         import matplotlib
-        matplotlib.use("Agg")                 # headless; no display needed
+
+        matplotlib.use("Agg")  # headless; no display needed
         import matplotlib.pyplot as plt
 
         for kind, filename in (("bar", "shap_bar.png"), ("dot", "shap_beeswarm.png")):
             try:
                 plt.figure()
                 shap.summary_plot(
-                    self._shap_values, self._shap_sample,
-                    plot_type=kind, show=False, max_display=25,
+                    self._shap_values,
+                    self._shap_sample,
+                    plot_type=kind,
+                    show=False,
+                    max_display=25,
                 )
                 path = out_dir / filename
                 plt.tight_layout()
                 plt.savefig(path, dpi=130, bbox_inches="tight")
                 plt.close()
                 written.append(path)
-            except Exception as exc:                       # pragma: no cover
+            except Exception as exc:  # pragma: no cover
                 self._log.warning("plot_failed", kind=kind, error=str(exc))
 
         self._log.info("shap_plots_saved", files=[str(p) for p in written])

@@ -2,6 +2,7 @@
 Recency-weighting ablation.
 Evaluate the LightGBM decay hyperparameter against no-decay on the full subsample.
 """
+
 import sys
 from pathlib import Path
 
@@ -28,8 +29,8 @@ def main():
         recency_half_life_days=0.0,
         build_stack=False,
         build_blend=False,
-        tune_trials=0,
-        outer_splits=1,
+        tune_trials=1,
+        outer_splits=2,
     )
     trainer_no_decay = DemandTrainer(cfg_no_decay)
     trainer_no_decay.fit(df_features)
@@ -43,14 +44,15 @@ def main():
         recency_half_life_days=365.0,
         build_stack=False,
         build_blend=False,
-        tune_trials=0,
-        outer_splits=1,
+        tune_trials=1,
+        outer_splits=2,
     )
     trainer_decay = DemandTrainer(cfg_decay)
     trainer_decay.fit(df_features)
     res_decay = trainer_decay.leaderboard_
     print("Decay results:")
     print(res_decay[["model", "cv_wape", "cv_rmsse"]])
+
 
 if __name__ == "__main__":
     main()

@@ -19,6 +19,7 @@ Usage:
     python scripts/extract_workbook.py
     python scripts/extract_workbook.py --workbook path/to/file.xlsx --force
 """
+
 from __future__ import annotations
 
 import argparse
@@ -78,6 +79,7 @@ def _header(ws) -> list[str]:
 # Per-sheet extractors
 # ---------------------------------------------------------------------------
 
+
 def extract_calendar(ws, out: Path) -> dict[str, Any]:
     """Calendar is small (1,969 rows); read it whole."""
     cols = _header(ws)
@@ -90,7 +92,9 @@ def extract_calendar(ws, out: Path) -> dict[str, Any]:
 
     df.to_parquet(out, index=False, compression="snappy")
 
-    events = set(df["event_name_1"].dropna()) | set(df.get("event_name_2", pd.Series(dtype=object)).dropna())
+    events = set(df["event_name_1"].dropna()) | set(
+        df.get("event_name_2", pd.Series(dtype=object)).dropna()
+    )
     return {
         "rows": len(df),
         "expected_rows": M5.N_CALENDAR_ROWS,
@@ -195,12 +199,7 @@ def extract_sales(ws, out: Path) -> dict[str, Any]:
         chunk = pd.DataFrame(buffer, columns=cols)
         for c in id_cols:
             chunk[c] = chunk[c].astype(str)
-        day_block = (
-            chunk[day_cols]
-            .apply(pd.to_numeric, errors="coerce")
-            .fillna(0)
-            .astype("int16")
-        )
+        day_block = chunk[day_cols].apply(pd.to_numeric, errors="coerce").fillna(0).astype("int16")
         unit_total += int(day_block.to_numpy(dtype=np.int64).sum())
         chunk = pd.concat([chunk[id_cols], day_block], axis=1)
 
@@ -246,6 +245,7 @@ def extract_sales(ws, out: Path) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Extract M5 workbook sheets to Parquet")
@@ -301,8 +301,11 @@ def main() -> int:
         stats["output_size_bytes"] = out_path.stat().st_size
         stats["extract_seconds"] = round(time.time() - t0, 1)
         report["sheets"][stem] = stats
-        log.info("sheet_extracted", sheet=sheet, **{k: v for k, v in stats.items()
-                                                    if isinstance(v, (int, float, bool, str))})
+        log.info(
+            "sheet_extracted",
+            sheet=sheet,
+            **{k: v for k, v in stats.items() if isinstance(v, (int, float, bool, str))},
+        )
 
     wb.close()
 
@@ -365,13 +368,17 @@ def main() -> int:
         if "error" in stats:
             print(f"  {stem:<26} ERROR: {stats['error']}")
             continue
-        print(f"  {stem:<26} {stats.get('rows', 0):>10,} rows  "
-              f"-> {stats.get('output_size_bytes', 0)/1e6:>7.1f} MB  "
-              f"({stats.get('extract_seconds', 0)}s)")
+        print(
+            f"  {stem:<26} {stats.get('rows', 0):>10,} rows  "
+            f"-> {stats.get('output_size_bytes', 0) / 1e6:>7.1f} MB  "
+            f"({stats.get('extract_seconds', 0)}s)"
+        )
 
     violations = report.get("cardinality_violations", [])
-    print("\n  Cardinality vs M5 facts:",
-          "CLEAN" if not violations else f"{len(violations)} VIOLATION(S)")
+    print(
+        "\n  Cardinality vs M5 facts:",
+        "CLEAN" if not violations else f"{len(violations)} VIOLATION(S)",
+    )
     for v in violations:
         print(f"    - {v}")
 

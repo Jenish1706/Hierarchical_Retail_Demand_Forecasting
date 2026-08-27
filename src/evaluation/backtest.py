@@ -35,6 +35,7 @@ Usage:
     python scripts/backtest.py --stores CA_1 CA_2 --categories FOODS
     python scripts/backtest.py --full            # all 30,490 series (slow)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -78,7 +79,7 @@ class Origin:
     """One rolling-origin split."""
 
     index: int
-    train_end: pd.Timestamp        # last date the model may see
+    train_end: pd.Timestamp  # last date the model may see
     test_start: pd.Timestamp
     test_end: pd.Timestamp
 
@@ -117,12 +118,13 @@ def build_origins(dates: pd.Series, horizon: int, n_origins: int) -> list[Origin
                 test_end=pd.Timestamp(unique_dates[end_pos]),
             )
         )
-    return list(reversed(origins))          # chronological order
+    return list(reversed(origins))  # chronological order
 
 
 # ---------------------------------------------------------------------------
 # Per-series models
 # ---------------------------------------------------------------------------
+
 
 def run_series_models(
     panel: pd.DataFrame,
@@ -173,7 +175,9 @@ def run_series_models(
             except Exception:
                 preds = np.zeros(horizon)
             rows.extend(
-                _emit(sid, model_name, test_dates, actuals[sid], preds, scales[sid], meta[sid], origin)
+                _emit(
+                    sid, model_name, test_dates, actuals[sid], preds, scales[sid], meta[sid], origin
+                )
             )
 
     # --- intermittent methods, applied to every series so the accuracy table
@@ -189,7 +193,9 @@ def run_series_models(
             except Exception:
                 preds = np.zeros(horizon)
             rows.extend(
-                _emit(sid, model_name, test_dates, actuals[sid], preds, scales[sid], meta[sid], origin)
+                _emit(
+                    sid, model_name, test_dates, actuals[sid], preds, scales[sid], meta[sid], origin
+                )
             )
 
     router = SegmentRouter().fit({sid: history[sid] for sid in common})
@@ -227,6 +233,7 @@ def _emit(
 # Global ML model
 # ---------------------------------------------------------------------------
 
+
 def run_global_model(
     features: pd.DataFrame,
     feature_cols: list[str],
@@ -256,9 +263,7 @@ def run_global_model(
     from lightgbm import LGBMRegressor
 
     train = features[features["date"] <= origin.train_end]
-    test = features[
-        (features["date"] >= origin.test_start) & (features["date"] <= origin.test_end)
-    ]
+    test = features[(features["date"] >= origin.test_start) & (features["date"] <= origin.test_end)]
     if train.empty or test.empty:
         return pd.DataFrame()
 
@@ -267,9 +272,16 @@ def run_global_model(
     X_te = test[feature_cols].astype("float32").fillna(0.0)
 
     common: dict[str, Any] = {
-        "n_estimators": 400, "learning_rate": 0.05, "num_leaves": 63,
-        "min_child_samples": 20, "subsample": 0.8, "subsample_freq": 1,
-        "colsample_bytree": 0.8, "n_jobs": 1, "random_state": 42, "verbose": -1,
+        "n_estimators": 400,
+        "learning_rate": 0.05,
+        "num_leaves": 63,
+        "min_child_samples": 20,
+        "subsample": 0.8,
+        "subsample_freq": 1,
+        "colsample_bytree": 0.8,
+        "n_jobs": 1,
+        "random_state": 42,
+        "verbose": -1,
     }
     if model_name == "lightgbm_tweedie":
         model = LGBMRegressor(objective="tweedie", tweedie_variance_power=1.1, **common)
@@ -281,12 +293,16 @@ def run_global_model(
     preds = np.clip(model.predict(X_te), 0.0, None)
     log.info(
         "global_model_fitted",
-        model=model_name, origin=origin.index,
-        n_train=len(X_tr), n_test=len(X_te), seconds=round(time.time() - t0, 1),
+        model=model_name,
+        origin=origin.index,
+        n_train=len(X_tr),
+        n_test=len(X_te),
+        seconds=round(time.time() - t0, 1),
     )
 
-    out = test[["series_id", "date", "sales", "item_id", "store_id",
-                "dept_id", "cat_id", "state_id"]].copy()
+    out = test[
+        ["series_id", "date", "sales", "item_id", "store_id", "dept_id", "cat_id", "state_id"]
+    ].copy()
     out = out.rename(columns={"sales": "y_true"})
     out["y_pred"] = preds
     out["model"] = model_name
@@ -299,6 +315,7 @@ def run_global_model(
 # ---------------------------------------------------------------------------
 # Hierarchical evaluation
 # ---------------------------------------------------------------------------
+
 
 def evaluate_by_hierarchy_level(preds: pd.DataFrame) -> pd.DataFrame:
     """
@@ -326,9 +343,11 @@ def evaluate_by_hierarchy_level(preds: pd.DataFrame) -> pd.DataFrame:
     records: list[dict[str, Any]] = []
     for level, keys in level_keys.items():
         group_cols = ["model", "origin", "date"] + keys
-        agg = preds.groupby(group_cols, observed=True).agg(
-            y_true=("y_true", "sum"), y_pred=("y_pred", "sum")
-        ).reset_index()
+        agg = (
+            preds.groupby(group_cols, observed=True)
+            .agg(y_true=("y_true", "sum"), y_pred=("y_pred", "sum"))
+            .reset_index()
+        )
 
         for model, g in agg.groupby("model", observed=True):
             denom = g["y_true"].abs().sum()
@@ -336,11 +355,10 @@ def evaluate_by_hierarchy_level(preds: pd.DataFrame) -> pd.DataFrame:
                 {
                     "level": level,
                     "model": model,
-                    "n_series_at_level": int(
-                        g[keys].drop_duplicates().shape[0] if keys else 1
-                    ),
+                    "n_series_at_level": int(g[keys].drop_duplicates().shape[0] if keys else 1),
                     "wape": float(100.0 * (g["y_true"] - g["y_pred"]).abs().sum() / denom)
-                    if denom > 0 else np.nan,
+                    if denom > 0
+                    else np.nan,
                     "bias": float((g["y_pred"] - g["y_true"]).mean()),
                     "n_obs": len(g),
                 }
@@ -356,19 +374,28 @@ def evaluate_by_hierarchy_level(preds: pd.DataFrame) -> pd.DataFrame:
 # Driver
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     p = argparse.ArgumentParser(description="Walk-forward M5 backtest")
     p.add_argument("--stores", nargs="*", default=None)
     p.add_argument("--states", nargs="*", default=None)
     p.add_argument("--categories", nargs="*", default=None)
     p.add_argument("--departments", nargs="*", default=None)
-    p.add_argument("--sample-series", type=int, default=300,
-                   help="random sample of series (default 300); use --full for all")
+    p.add_argument(
+        "--sample-series",
+        type=int,
+        default=300,
+        help="random sample of series (default 300); use --full for all",
+    )
     p.add_argument("--full", action="store_true", help="use every series (slow)")
     p.add_argument("--horizon", type=int, default=M5.HORIZON_DAYS)
     p.add_argument("--n-origins", type=int, default=3)
-    p.add_argument("--history-days", type=int, default=730,
-                   help="days of history to load before the earliest origin")
+    p.add_argument(
+        "--history-days",
+        type=int,
+        default=730,
+        help="days of history to load before the earliest origin",
+    )
     p.add_argument("--out-dir", default=None)
     p.add_argument("--seed", type=int, default=42)
     args = p.parse_args()
@@ -489,7 +516,9 @@ def main() -> int:
     by_store = metrics_by_group(preds, ["model", "store_id"], scale_col="scale")
     by_level = evaluate_by_hierarchy_level(preds)
 
-    routing_df = pd.concat(routing_reports, ignore_index=True) if routing_reports else pd.DataFrame()
+    routing_df = (
+        pd.concat(routing_reports, ignore_index=True) if routing_reports else pd.DataFrame()
+    )
     benefit_df = pd.DataFrame(routing_benefits)
 
     # --- persist ---
@@ -526,8 +555,10 @@ def main() -> int:
             for o in origins
         ],
         "filters": {
-            "stores": args.stores, "states": args.states,
-            "categories": args.categories, "departments": args.departments,
+            "stores": args.stores,
+            "states": args.states,
+            "categories": args.categories,
+            "departments": args.departments,
             "sample_series": None if args.full else args.sample_series,
         },
         "n_features": len(feature_cols),
@@ -539,9 +570,13 @@ def main() -> int:
         ),
         "champion": overall.iloc[0]["model"] if not overall.empty else None,
         "champion_wape": float(overall.iloc[0]["wape"]) if not overall.empty else None,
-        "champion_rmsse": float(overall.iloc[0].get("rmsse", np.nan)) if not overall.empty else None,
+        "champion_rmsse": float(overall.iloc[0].get("rmsse", np.nan))
+        if not overall.empty
+        else None,
     }
-    (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, default=str), encoding="utf-8")
+    (out_dir / "manifest.json").write_text(
+        json.dumps(manifest, indent=2, default=str), encoding="utf-8"
+    )
 
     # --- console report ---
     pd.set_option("display.width", 200)
@@ -550,8 +585,10 @@ def main() -> int:
     print("\n" + "=" * 86)
     print("M5 WALK-FORWARD BACKTEST")
     print("=" * 86)
-    print(f"  series: {n_series:,}   origins: {args.n_origins}   horizon: {args.horizon}d   "
-          f"features: {len(feature_cols)}   elapsed: {manifest['elapsed_seconds']}s")
+    print(
+        f"  series: {n_series:,}   origins: {args.n_origins}   horizon: {args.horizon}d   "
+        f"features: {len(feature_cols)}   elapsed: {manifest['elapsed_seconds']}s"
+    )
     for o in origins:
         print(f"    {o.describe()}")
 

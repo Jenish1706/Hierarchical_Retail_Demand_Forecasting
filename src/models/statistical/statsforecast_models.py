@@ -40,6 +40,7 @@ cycle as by far the stronger: ACF at lag 7 is 0.808 against 0.673 at lag 1.
 Multi-seasonal structure is the specific job of MSTL and TBATS, which is why
 they are separate entries rather than a replacement for ETS.
 """
+
 from __future__ import annotations
 
 import time
@@ -65,6 +66,7 @@ WEEKLY_SEASON = 7
 # ---------------------------------------------------------------------------
 # Model registry
 # ---------------------------------------------------------------------------
+
 
 def build_model_registry(season_length: int = WEEKLY_SEASON) -> dict[str, Callable[[], Any]]:
     """
@@ -95,7 +97,9 @@ def build_model_registry(season_length: int = WEEKLY_SEASON) -> dict[str, Callab
     # Damped trend: phi^h prevents a linear trend extrapolating absurdly at
     # h=28. Gardner & McKenzie (1985) found damping improves accuracy on most
     # empirical series, and the M3/M4 competitions confirmed it.
-    registry["ets_damped"] = lambda: sfm.AutoETS(season_length=season_length, model="ZZZ", damped=True)
+    registry["ets_damped"] = lambda: sfm.AutoETS(
+        season_length=season_length, model="ZZZ", damped=True
+    )
     registry["ses"] = lambda: sfm.SimpleExponentialSmoothingOptimized()
     registry["holt_winters"] = lambda: sfm.HoltWinters(season_length=season_length)
 
@@ -138,7 +142,14 @@ MODEL_GROUPS: dict[str, tuple[str, ...]] = {
     "exponential_smoothing": ("autoets", "ets_damped", "ses", "holt_winters"),
     "arima": ("autoarima",),
     "decomposition": ("theta", "autotheta", "autoces", "mstl"),
-    "intermittent": ("croston_classic", "croston_optimized", "croston_sba", "tsb", "adida", "imapa"),
+    "intermittent": (
+        "croston_classic",
+        "croston_optimized",
+        "croston_sba",
+        "tsb",
+        "adida",
+        "imapa",
+    ),
 }
 
 # Priority tiers from the execution spec. Priority 1 is the validation target.
@@ -159,6 +170,7 @@ DEFAULT_MODELS = (
 # ---------------------------------------------------------------------------
 # Panel <-> statsforecast format
 # ---------------------------------------------------------------------------
+
 
 def to_statsforecast_format(
     panel: pd.DataFrame,
@@ -184,8 +196,8 @@ def to_statsforecast_format(
 class Tier1Result:
     """Fit/predict outcome for one statsforecast run."""
 
-    predictions: pd.DataFrame               # long: model, series_id, date, y_pred
-    timings: pd.DataFrame                   # per-model fit and predict seconds
+    predictions: pd.DataFrame  # long: model, series_id, date, y_pred
+    timings: pd.DataFrame  # per-model fit and predict seconds
     models_run: list[str] = field(default_factory=list)
     models_failed: dict[str, str] = field(default_factory=dict)
 
@@ -193,6 +205,7 @@ class Tier1Result:
 # ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
+
 
 class Tier1Runner:
     """
@@ -236,9 +249,7 @@ class Tier1Runner:
 
         unknown = [m for m in self.model_names if m not in self._registry]
         if unknown:
-            raise KeyError(
-                f"unknown Tier 1 models {unknown}; available: {sorted(self._registry)}"
-            )
+            raise KeyError(f"unknown Tier 1 models {unknown}; available: {sorted(self._registry)}")
 
     def fit_predict(
         self,
@@ -287,7 +298,8 @@ class Tier1Runner:
                 # which varies (AutoETS, CrostonSBA, ...). Take whatever column
                 # is not an identifier and is not an interval bound.
                 value_cols = [
-                    c for c in fcst.columns
+                    c
+                    for c in fcst.columns
                     if c not in ("unique_id", "ds") and "-lo-" not in c and "-hi-" not in c
                 ]
                 if not value_cols:
@@ -329,9 +341,7 @@ class Tier1Runner:
                 failed[name] = f"{type(exc).__name__}: {exc}"
                 self._log.warning("tier1_model_failed", model=name, error=str(exc)[:200])
 
-        predictions = (
-            pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-        )
+        predictions = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
         return Tier1Result(
             predictions=predictions,
             timings=pd.DataFrame(timings),

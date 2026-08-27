@@ -38,6 +38,7 @@ Dawid (1984), "Statistical theory: the prequential approach", JRSS-A
 Makridakis et al. (2022) -- the M5 Uncertainty track used weighted pinball
     loss over nine quantile levels.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -50,13 +51,22 @@ _EPS = 1e-12
 # The nine levels used by the M5 Uncertainty competition. Retained as the
 # default so results are comparable with the published leaderboard.
 M5_QUANTILES: tuple[float, ...] = (
-    0.005, 0.025, 0.165, 0.250, 0.500, 0.750, 0.835, 0.975, 0.995,
+    0.005,
+    0.025,
+    0.165,
+    0.250,
+    0.500,
+    0.750,
+    0.835,
+    0.975,
+    0.995,
 )
 
 
 # ---------------------------------------------------------------------------
 # Quantile losses
 # ---------------------------------------------------------------------------
+
 
 def pinball_loss(y_true: np.ndarray, y_pred_q: np.ndarray, q: float) -> float:
     """
@@ -98,6 +108,7 @@ def mean_pinball_loss(
 # ---------------------------------------------------------------------------
 # CRPS
 # ---------------------------------------------------------------------------
+
 
 def crps_from_quantiles(
     y_true: np.ndarray,
@@ -167,6 +178,7 @@ def crps_from_samples(y_true: np.ndarray, samples: np.ndarray) -> float:
 # ---------------------------------------------------------------------------
 # Interval metrics -- coverage ALWAYS reported with sharpness
 # ---------------------------------------------------------------------------
+
 
 def empirical_coverage(y_true: np.ndarray, lower: np.ndarray, upper: np.ndarray) -> float:
     """Percentage of actuals inside [lower, upper]."""
@@ -251,6 +263,7 @@ def scaled_interval_score(
 # Calibration diagnostics
 # ---------------------------------------------------------------------------
 
+
 def pit_values(
     y_true: np.ndarray,
     quantile_preds: Mapping[float, np.ndarray],
@@ -300,8 +313,8 @@ def randomised_pit(
     levels = sorted(quantile_preds)
     matrix = np.column_stack([quantile_preds[q] for q in levels])
 
-    f_at = (matrix <= y_true[:, None]).mean(axis=1)      # F(y)
-    f_below = (matrix < y_true[:, None]).mean(axis=1)    # F(y-)
+    f_at = (matrix <= y_true[:, None]).mean(axis=1)  # F(y)
+    f_below = (matrix < y_true[:, None]).mean(axis=1)  # F(y-)
     return f_below + rng.random(len(y_true)) * (f_at - f_below)
 
 
@@ -318,7 +331,9 @@ def pit_histogram(
     reader can see the SHAPE at a glance: positive at both ends = U-shaped =
     intervals too narrow; positive in the middle = too wide.
     """
-    pit = randomised_pit(y_true, quantile_preds) if randomised else pit_values(y_true, quantile_preds)
+    pit = (
+        randomised_pit(y_true, quantile_preds) if randomised else pit_values(y_true, quantile_preds)
+    )
     counts, edges = np.histogram(pit, bins=n_bins, range=(0.0, 1.0))
     freq = counts / max(counts.sum(), 1)
     expected = 1.0 / n_bins
@@ -365,6 +380,7 @@ def reliability_curve(
 # ---------------------------------------------------------------------------
 # Bundled reports
 # ---------------------------------------------------------------------------
+
 
 def interval_report(
     y_true: np.ndarray,
@@ -427,9 +443,7 @@ def compute_probabilistic_metrics(
             continue
         level = hi - lo
         label = f"{level * 100:.0f}"
-        report = interval_report(
-            y_true, quantile_preds[lo], quantile_preds[hi], level, y_insample
-        )
+        report = interval_report(y_true, quantile_preds[lo], quantile_preds[hi], level, y_insample)
         out[f"coverage_{label}"] = report["empirical_coverage"]
         out[f"coverage_gap_{label}"] = report["coverage_gap"]
         out[f"width_{label}"] = report["mean_width"]

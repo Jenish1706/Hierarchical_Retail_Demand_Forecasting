@@ -34,6 +34,7 @@ Harrell (2015), "Regression Modeling Strategies", 2nd ed., ch. 2 -- harmonic
 Prokhorenkova et al. (2018), "CatBoost: unbiased boosting with categorical
     features", NeurIPS -- on target-leakage in encoding schemes.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
@@ -55,6 +56,7 @@ _EPS = 1e-12
 # ===========================================================================
 # Target encoding
 # ===========================================================================
+
 
 class TargetEncoder:
     """
@@ -153,9 +155,7 @@ class TargetEncoder:
             encoded = pd.Series(np.nan, index=out.index, dtype=float)
 
             for train_idx, valid_idx in splits:
-                mapping = self._smoothed_map(
-                    keys.iloc[train_idx], y.iloc[train_idx], prior
-                )
+                mapping = self._smoothed_map(keys.iloc[train_idx], y.iloc[train_idx], prior)
                 encoded.iloc[valid_idx] = keys.iloc[valid_idx].map(mapping).to_numpy()
 
             # Rows never in a validation fold (the first block) and categories
@@ -192,6 +192,7 @@ class TargetEncoder:
 # ===========================================================================
 # Fourier / harmonic terms
 # ===========================================================================
+
 
 def add_fourier_terms(
     df: pd.DataFrame,
@@ -249,23 +250,27 @@ def add_fourier_terms(
 # becoming a combinatorial dump of every column pair.
 DEFAULT_INTERACTIONS: tuple[tuple[str, str, str], ...] = (
     (
-        "snap_flag", "price_ratio_to_28d_mean",
+        "snap_flag",
+        "price_ratio_to_28d_mean",
         "SNAP benefit days concentrate purchasing among price-sensitive "
         "households, so a discount landing on a SNAP day should act more "
         "strongly than the same discount off-SNAP.",
     ),
     (
-        "is_weekend", "roll_mean_7",
+        "is_weekend",
+        "roll_mean_7",
         "Weekend uplift is roughly proportional to a series' base rate rather "
         "than a constant number of units, so the effect is multiplicative.",
     ),
     (
-        "is_event_day", "roll_mean_28",
+        "is_event_day",
+        "roll_mean_28",
         "Same argument for calendar events: a holiday lifts a high-volume "
         "staple by far more units than a slow item.",
     ),
     (
-        "price_ratio_to_28d_mean", "roll_mean_28",
+        "price_ratio_to_28d_mean",
+        "roll_mean_28",
         "Absolute unit response to a price change scales with base volume; "
         "the ratio alone carries no volume information.",
     ),
@@ -303,6 +308,7 @@ def add_interaction_terms(
 # ===========================================================================
 # Ablation harness -- the part that decides what survives
 # ===========================================================================
+
 
 @dataclass
 class AblationResult:
@@ -402,24 +408,41 @@ class FeatureAblationStudy:
         # Fixed, deliberately middle-of-the-road settings. Identical across
         # every arm.
         return LGBMRegressor(
-            n_estimators=300, learning_rate=0.05, num_leaves=63,
-            min_child_samples=20, subsample=0.8, subsample_freq=1,
-            colsample_bytree=0.8, n_jobs=-1, random_state=42, verbose=-1,
+            n_estimators=300,
+            learning_rate=0.05,
+            num_leaves=63,
+            min_child_samples=20,
+            subsample=0.8,
+            subsample_freq=1,
+            colsample_bytree=0.8,
+            n_jobs=-1,
+            random_state=42,
+            verbose=-1,
         )
 
     def _numeric_features(self, df: pd.DataFrame) -> list[str]:
         exclude = {
-            self.target_col, self.date_col, "id", "d", "wm_yr_wk",
-            "item_id", "store_id", "dept_id", "cat_id", "state_id",
-            "feature_version", "event_name_1", "event_name_2",
-            "event_type_1", "event_type_2",
+            self.target_col,
+            self.date_col,
+            "id",
+            "d",
+            "wm_yr_wk",
+            "item_id",
+            "store_id",
+            "dept_id",
+            "cat_id",
+            "state_id",
+            "feature_version",
+            "event_name_1",
+            "event_name_2",
+            "event_type_1",
+            "event_type_2",
         }
-        return [
-            c for c in df.columns
-            if c not in exclude and pd.api.types.is_numeric_dtype(df[c])
-        ]
+        return [c for c in df.columns if c not in exclude and pd.api.types.is_numeric_dtype(df[c])]
 
-    def _evaluate(self, df: pd.DataFrame, feature_cols: list[str], name: str) -> tuple[dict[str, float], int]:
+    def _evaluate(
+        self, df: pd.DataFrame, feature_cols: list[str], name: str
+    ) -> tuple[dict[str, float], int]:
         """Train on everything before the holdout window, score inside it."""
         d = df.copy()
         d[self.date_col] = pd.to_datetime(d[self.date_col])
@@ -443,9 +466,7 @@ class FeatureAblationStudy:
         model.fit(X_tr, y_tr)
         preds = np.clip(model.predict(X_te), 0.0, None)
 
-        metrics = compute_metrics(
-            y_te.to_numpy(), preds, y_insample=y_tr.to_numpy()
-        )
+        metrics = compute_metrics(y_te.to_numpy(), preds, y_insample=y_tr.to_numpy())
         return metrics, len(feature_cols)
 
     def run(
@@ -468,9 +489,7 @@ class FeatureAblationStudy:
         if arms is None:
             arms = self._default_arms(df_base)
 
-        base_metrics, base_n = self._evaluate(
-            df_base, self._numeric_features(df_base), "baseline"
-        )
+        base_metrics, base_n = self._evaluate(df_base, self._numeric_features(df_base), "baseline")
         baseline_wape = base_metrics["wape"]
 
         results = [
@@ -527,14 +546,13 @@ class FeatureAblationStudy:
             )
             self._log.info(
                 "ablation_arm_complete",
-                arm=name, wape=round(metrics["wape"], 4),
+                arm=name,
+                wape=round(metrics["wape"], 4),
                 rel_improvement_pct=round(rel, 3) if np.isfinite(rel) else None,
                 verdict=verdict,
             )
 
-        return AblationStudy(
-            results=results, baseline_wape=baseline_wape, keep=keep, drop=drop
-        )
+        return AblationStudy(results=results, baseline_wape=baseline_wape, keep=keep, drop=drop)
 
     def _default_arms(self, df_base: pd.DataFrame) -> dict[str, tuple[pd.DataFrame, str]]:
         """Construct the four standard arms from the base frame."""
@@ -559,9 +577,9 @@ class FeatureAblationStudy:
 
         combined = df_base
         if te_cols:
-            combined = TargetEncoder(
-                cols=te_cols, target_col=self.target_col
-            ).fit_transform(combined, date_col=self.date_col)
+            combined = TargetEncoder(cols=te_cols, target_col=self.target_col).fit_transform(
+                combined, date_col=self.date_col
+            )
         combined = add_interaction_terms(add_fourier_terms(combined, date_col=self.date_col))
         arms["all_advanced"] = (combined, "Base + target encoding + Fourier + interactions")
 

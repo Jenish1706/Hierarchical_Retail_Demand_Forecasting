@@ -6,6 +6,7 @@ loss budget would answer a tuning-budget question rather than an architecture
 question.  They predict non-negative unit demand over the whole horizon in one
 forward pass; no validation path uses future actuals recursively.
 """
+
 from __future__ import annotations
 
 import copy
@@ -49,7 +50,9 @@ def make_windows(
 
 
 class MLPForecastNet(nn.Module):
-    def __init__(self, context_length: int, n_features: int, horizon: int, hidden_size: int, dropout: float) -> None:
+    def __init__(
+        self, context_length: int, n_features: int, horizon: int, hidden_size: int, dropout: float
+    ) -> None:
         super().__init__()
         self.network = nn.Sequential(
             nn.Flatten(),
@@ -110,15 +113,23 @@ class _TemporalBlock(nn.Module):
         super().__init__()
         kernel_size = 3
         padding = (kernel_size - 1) * dilation
-        self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation)
-        self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size, padding=padding, dilation=dilation)
+        self.conv1 = nn.Conv1d(
+            in_channels, out_channels, kernel_size, padding=padding, dilation=dilation
+        )
+        self.conv2 = nn.Conv1d(
+            out_channels, out_channels, kernel_size, padding=padding, dilation=dilation
+        )
         self.dropout = nn.Dropout(dropout)
-        self.residual = nn.Identity() if in_channels == out_channels else nn.Conv1d(in_channels, out_channels, 1)
+        self.residual = (
+            nn.Identity()
+            if in_channels == out_channels
+            else nn.Conv1d(in_channels, out_channels, 1)
+        )
         self.padding = padding
 
     def _causal(self, layer: nn.Conv1d, x: Tensor) -> Tensor:
         output = layer(x)
-        return output[:, :, :-self.padding] if self.padding else output
+        return output[:, :, : -self.padding] if self.padding else output
 
     def forward(self, x: Tensor) -> Tensor:
         residual = self.residual(x)
@@ -189,7 +200,9 @@ def build_native_model(
         return TCNForecastNet(n_features, horizon, hidden_size, dropout)
     if name in {"seq2seq_attention", "seq2seq"}:
         return Seq2SeqAttentionForecastNet(n_features, horizon, hidden_size, dropout)
-    raise KeyError("unknown native architecture; choose mlp, rnn, lstm, gru, tcn, or seq2seq_attention")
+    raise KeyError(
+        "unknown native architecture; choose mlp, rnn, lstm, gru, tcn, or seq2seq_attention"
+    )
 
 
 @dataclass
@@ -392,7 +405,13 @@ class DeepEnsembleForecaster:
         self.n_members = int(n_members)
         self.members_: list[WindowedTorchForecaster] = []
 
-    def fit(self, X_train: np.ndarray, y_train: np.ndarray, X_val: np.ndarray | None = None, y_val: np.ndarray | None = None) -> DeepEnsembleForecaster:
+    def fit(
+        self,
+        X_train: np.ndarray,
+        y_train: np.ndarray,
+        X_val: np.ndarray | None = None,
+        y_val: np.ndarray | None = None,
+    ) -> DeepEnsembleForecaster:
         self.members_ = []
         for index in range(self.n_members):
             member = self.factory(index)

@@ -21,6 +21,7 @@ DML solves this with the "partialling out" trick:
   Step 2: Regress Y (outcome) on X (controls) → get residuals Ỹ
   Step 3: Regress Ỹ on Ẽ → estimate is causal under ML regularity conditions
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -39,9 +40,10 @@ log = get_logger(__name__)
 @dataclass
 class CausalEffect:
     """Estimated causal effect with uncertainty."""
+
     treatment: str
     outcome: str
-    effect: float              # Average treatment effect (ATE)
+    effect: float  # Average treatment effect (ATE)
     std_error: float
     ci_lower: float
     ci_upper: float
@@ -126,9 +128,7 @@ class DoubleMLEstimator:
 
             # Step 1: Partial out treatment
             if treatment_type == "binary":
-                m_model = LGBMClassifier(
-                    n_estimators=200, random_state=42, verbose=-1
-                )
+                m_model = LGBMClassifier(n_estimators=200, random_state=42, verbose=-1)
                 m_model.fit(X_train, T_train.astype(int))
                 T_hat = m_model.predict_proba(X_val)[:, 1]
             else:
@@ -146,6 +146,7 @@ class DoubleMLEstimator:
 
         # Step 3: Final OLS on residuals — this is the causal estimate
         import statsmodels.api as sm
+
         T_res_const = sm.add_constant(T_residuals)
         ols_result = sm.OLS(Y_residuals, T_res_const).fit(
             cov_type="HC3"  # Robust standard errors
@@ -184,9 +185,15 @@ class DoubleMLEstimator:
 
     def _null_effect(self, treatment: str, outcome: str, n: int) -> CausalEffect:
         return CausalEffect(
-            treatment=treatment, outcome=outcome,
-            effect=0.0, std_error=0.0, ci_lower=0.0, ci_upper=0.0,
-            p_value=1.0, n_obs=n, method="double_ml_failed",
+            treatment=treatment,
+            outcome=outcome,
+            effect=0.0,
+            std_error=0.0,
+            ci_lower=0.0,
+            ci_upper=0.0,
+            p_value=1.0,
+            n_obs=n,
+            method="double_ml_failed",
             is_significant=False,
         )
 
@@ -204,8 +211,8 @@ class DiDEstimator:
     def estimate(
         self,
         df: pd.DataFrame,
-        treatment_col: str,      # 1 = treated store/product, 0 = control
-        post_col: str,           # 1 = post-event period, 0 = pre-event
+        treatment_col: str,  # 1 = treated store/product, 0 = control
+        post_col: str,  # 1 = post-event period, 0 = pre-event
         outcome_col: str,
         entity_col: str = "store_id",
         time_col: str = "date",
@@ -237,7 +244,11 @@ class DiDEstimator:
 
             effect = float(model.params.get("treated_post", 0))
             se = float(model.bse.get("treated_post", 0))
-            ci = model.conf_int().loc["treated_post"] if "treated_post" in model.conf_int().index else [0, 0]
+            ci = (
+                model.conf_int().loc["treated_post"]
+                if "treated_post" in model.conf_int().index
+                else [0, 0]
+            )
             p_value = float(model.pvalues.get("treated_post", 1.0))
 
         except Exception as e:
@@ -259,9 +270,16 @@ class DiDEstimator:
 
     def _null_effect(self, treatment: str, outcome: str, n: int) -> CausalEffect:
         return CausalEffect(
-            treatment=treatment, outcome=outcome,
-            effect=0.0, std_error=0.0, ci_lower=0.0, ci_upper=0.0,
-            p_value=1.0, n_obs=n, method="did_failed", is_significant=False,
+            treatment=treatment,
+            outcome=outcome,
+            effect=0.0,
+            std_error=0.0,
+            ci_lower=0.0,
+            ci_upper=0.0,
+            p_value=1.0,
+            n_obs=n,
+            method="did_failed",
+            is_significant=False,
         )
 
 
@@ -281,10 +299,18 @@ class CausalAnalysisPipeline:
         Run all causal analyses. Returns dict of {question: CausalEffect}.
         """
         control_cols = [
-            c for c in [
-                "lag_7", "rolling_mean_28", "day_of_week", "month",
-                "is_holiday", "snap_flag", "store_id_enc", "dept_id_enc",
-            ] if c in df.columns
+            c
+            for c in [
+                "lag_7",
+                "rolling_mean_28",
+                "day_of_week",
+                "month",
+                "is_holiday",
+                "snap_flag",
+                "store_id_enc",
+                "dept_id_enc",
+            ]
+            if c in df.columns
         ]
 
         results = {}

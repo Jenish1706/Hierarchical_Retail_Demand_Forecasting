@@ -28,6 +28,7 @@ Petropoulos & Kourentzes (2015), "Forecast combinations for intermittent
     demand", JORS 66(6):914-924 -- evidence that per-segment method selection
     beats a single method across a heterogeneous catalogue.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
@@ -286,14 +287,14 @@ class SegmentRouter:
         agg["pct_of_series"] = 100.0 * agg["n_series"] / agg["n_series"].sum()
         # Volume share matters as much as series count: the sparse quadrants
         # are often a large share of the catalogue but a small share of units.
-        agg["pct_of_volume"] = (
-            100.0 * agg["total_mean_demand"] / agg["total_mean_demand"].sum()
-        )
+        agg["pct_of_volume"] = 100.0 * agg["total_mean_demand"] / agg["total_mean_demand"].sum()
         return agg.sort_values("n_series", ascending=False)
 
     def routing_table(self) -> pd.DataFrame:
         """Per-series routing decisions, for audit and for joining to results."""
-        return pd.DataFrame([vars(d) | {"pattern": d.pattern.value} for d in self.decisions_.values()])
+        return pd.DataFrame(
+            [vars(d) | {"pattern": d.pattern.value} for d in self.decisions_.values()]
+        )
 
     # -- the honesty check ---------------------------------------------------
 
@@ -323,9 +324,7 @@ class SegmentRouter:
 
         common = sorted(set(actuals) & set(global_forecasts) & set(self.decisions_))
         if not common:
-            raise ValueError(
-                "no overlap between actuals, global_forecasts and routed series"
-            )
+            raise ValueError("no overlap between actuals, global_forecasts and routed series")
 
         h = min(len(np.asarray(actuals[sid]).ravel()) for sid in common)
         routed = self.predict(h, global_forecasts=global_forecasts)
@@ -380,9 +379,11 @@ class SegmentRouter:
                 {
                     "n_series": len(g),
                     "wape_routed": 100.0 * g["abs_err_routed"].sum() / g["actual_sum"].sum()
-                    if g["actual_sum"].sum() > 0 else np.nan,
+                    if g["actual_sum"].sum() > 0
+                    else np.nan,
                     "wape_global": 100.0 * g["abs_err_global"].sum() / g["actual_sum"].sum()
-                    if g["actual_sum"].sum() > 0 else np.nan,
+                    if g["actual_sum"].sum() > 0
+                    else np.nan,
                 }
             ),
             include_groups=False,

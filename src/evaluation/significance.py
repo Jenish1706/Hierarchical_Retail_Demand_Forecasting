@@ -42,6 +42,7 @@ Koning et al. (2005), "The M3 competition: Statistical tests of the results",
     IJF 21(3):397-409.  [MCB plots, as used in the M5 paper]
 Benjamini & Hochberg (1995), JRSS-B 57(1):289-300.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -64,6 +65,7 @@ _EPS = 1e-12
 # Diebold-Mariano
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class DMResult:
     """Outcome of one Diebold-Mariano test."""
@@ -75,7 +77,7 @@ class DMResult:
     mean_loss_diff: float
     horizon: int
     n_obs: int
-    better: str          # model_a, model_b, or "indistinguishable"
+    better: str  # model_a, model_b, or "indistinguishable"
     alpha: float = 0.05
 
     @property
@@ -141,20 +143,27 @@ def diebold_mariano(
     errors_b = np.asarray(errors_b, dtype=float).ravel()
 
     if errors_a.shape != errors_b.shape:
-        raise ValueError(
-            f"error arrays must align: {errors_a.shape} vs {errors_b.shape}"
-        )
+        raise ValueError(f"error arrays must align: {errors_a.shape} vs {errors_b.shape}")
 
     mask = np.isfinite(errors_a) & np.isfinite(errors_b)
     errors_a, errors_b = errors_a[mask], errors_b[mask]
     n = errors_a.size
 
     if n < 3:
-        return DMResult(model_a, model_b, float("nan"), float("nan"),
-                        float("nan"), horizon, n, "indistinguishable", alpha)
+        return DMResult(
+            model_a,
+            model_b,
+            float("nan"),
+            float("nan"),
+            float("nan"),
+            horizon,
+            n,
+            "indistinguishable",
+            alpha,
+        )
 
     if loss == "squared":
-        d = errors_a ** 2 - errors_b ** 2
+        d = errors_a**2 - errors_b**2
     else:
         d = np.abs(errors_a) - np.abs(errors_b)
 
@@ -162,7 +171,7 @@ def diebold_mariano(
 
     # Long-run variance with autocovariances up to lag h-1.
     d_centred = d - d_bar
-    gamma0 = float(np.mean(d_centred ** 2))
+    gamma0 = float(np.mean(d_centred**2))
     lrv = gamma0
     for k in range(1, min(horizon, n)):
         gamma_k = float(np.mean(d_centred[k:] * d_centred[:-k]))
@@ -174,8 +183,17 @@ def diebold_mariano(
     if lrv <= _EPS:
         lrv = gamma0
     if lrv <= _EPS:
-        return DMResult(model_a, model_b, float("nan"), float("nan"),
-                        d_bar, horizon, n, "indistinguishable", alpha)
+        return DMResult(
+            model_a,
+            model_b,
+            float("nan"),
+            float("nan"),
+            d_bar,
+            horizon,
+            n,
+            "indistinguishable",
+            alpha,
+        )
 
     dm = d_bar / np.sqrt(lrv / n)
 
@@ -195,10 +213,15 @@ def diebold_mariano(
         better = "indistinguishable"
 
     return DMResult(
-        model_a=model_a, model_b=model_b,
-        dm_statistic=float(dm), p_value=p_value,
-        mean_loss_diff=d_bar, horizon=horizon, n_obs=n,
-        better=better, alpha=alpha,
+        model_a=model_a,
+        model_b=model_b,
+        dm_statistic=float(dm),
+        p_value=p_value,
+        mean_loss_diff=d_bar,
+        horizon=horizon,
+        n_obs=n,
+        better=better,
+        alpha=alpha,
     )
 
 
@@ -220,8 +243,9 @@ def pairwise_dm(
     """
     names = sorted(errors)
     results = [
-        diebold_mariano(errors[a], errors[b], horizon=horizon, loss=loss,
-                        model_a=a, model_b=b, alpha=alpha)
+        diebold_mariano(
+            errors[a], errors[b], horizon=horizon, loss=loss, model_a=a, model_b=b, alpha=alpha
+        )
         for a, b in combinations(names, 2)
     ]
 
@@ -291,6 +315,7 @@ def adjust_pvalues(
 # Friedman + Nemenyi (the CD diagram, Fig 4)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class FriedmanResult:
     """Omnibus test across models and series."""
@@ -349,12 +374,19 @@ def friedman_test(scores: pd.DataFrame, alpha: float = 0.05) -> FriedmanResult:
     ranks = clean.rank(axis=1, ascending=True).mean(axis=0).sort_values()
 
     result = FriedmanResult(
-        statistic=float(statistic), p_value=float(p_value),
-        n_models=n_models, n_series=n_series,
-        average_ranks=ranks, alpha=alpha,
+        statistic=float(statistic),
+        p_value=float(p_value),
+        n_models=n_models,
+        n_series=n_series,
+        average_ranks=ranks,
+        alpha=alpha,
     )
-    log.info("friedman_test", statistic=round(float(statistic), 3),
-             p_value=float(p_value), significant=result.significant)
+    log.info(
+        "friedman_test",
+        statistic=round(float(statistic), 3),
+        p_value=float(p_value),
+        significant=result.significant,
+    )
     return result
 
 
@@ -362,14 +394,46 @@ def friedman_test(scores: pd.DataFrame, alpha: float = 0.05) -> FriedmanResult:
 # k = 2..20 models (Demsar 2006, Table 5). Tabulated because scipy has no
 # direct inverse for the studentised range with infinite degrees of freedom.
 _NEMENYI_Q05: dict[int, float] = {
-    2: 1.960, 3: 2.343, 4: 2.569, 5: 2.728, 6: 2.850, 7: 2.949, 8: 3.031,
-    9: 3.102, 10: 3.164, 11: 3.219, 12: 3.268, 13: 3.313, 14: 3.354,
-    15: 3.391, 16: 3.426, 17: 3.458, 18: 3.489, 19: 3.517, 20: 3.544,
+    2: 1.960,
+    3: 2.343,
+    4: 2.569,
+    5: 2.728,
+    6: 2.850,
+    7: 2.949,
+    8: 3.031,
+    9: 3.102,
+    10: 3.164,
+    11: 3.219,
+    12: 3.268,
+    13: 3.313,
+    14: 3.354,
+    15: 3.391,
+    16: 3.426,
+    17: 3.458,
+    18: 3.489,
+    19: 3.517,
+    20: 3.544,
 }
 _NEMENYI_Q10: dict[int, float] = {
-    2: 1.645, 3: 2.052, 4: 2.291, 5: 2.459, 6: 2.589, 7: 2.693, 8: 2.780,
-    9: 2.855, 10: 2.920, 11: 2.978, 12: 3.030, 13: 3.077, 14: 3.120,
-    15: 3.159, 16: 3.196, 17: 3.230, 18: 3.261, 19: 3.291, 20: 3.319,
+    2: 1.645,
+    3: 2.052,
+    4: 2.291,
+    5: 2.459,
+    6: 2.589,
+    7: 2.693,
+    8: 2.780,
+    9: 2.855,
+    10: 2.920,
+    11: 2.978,
+    12: 3.030,
+    13: 3.077,
+    14: 3.120,
+    15: 3.159,
+    16: 3.196,
+    17: 3.230,
+    18: 3.261,
+    19: 3.291,
+    20: 3.319,
 }
 
 
@@ -435,8 +499,13 @@ def nemenyi_test(scores: pd.DataFrame, alpha: float = 0.05) -> dict[str, Any]:
         if len(group) > 1 and not any(set(group) <= set(existing) for existing in cliques):
             cliques.append(group)
 
-    log.info("nemenyi_test", n_models=n_models, n_series=n_series,
-             critical_difference=round(cd, 4), n_cliques=len(cliques))
+    log.info(
+        "nemenyi_test",
+        n_models=n_models,
+        n_series=n_series,
+        critical_difference=round(cd, 4),
+        n_cliques=len(cliques),
+    )
 
     return {
         "average_ranks": avg_ranks,
@@ -453,6 +522,7 @@ def nemenyi_test(scores: pd.DataFrame, alpha: float = 0.05) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Multiple Comparisons with the Best (Fig 5)
 # ---------------------------------------------------------------------------
+
 
 def mcb_test(scores: pd.DataFrame, alpha: float = 0.05) -> pd.DataFrame:
     """
@@ -495,6 +565,7 @@ def mcb_test(scores: pd.DataFrame, alpha: float = 0.05) -> pd.DataFrame:
 # Convenience: build the per-series score matrix the tests consume
 # ---------------------------------------------------------------------------
 
+
 def per_series_scores(
     predictions: pd.DataFrame,
     metric: str = "wape",
@@ -529,7 +600,8 @@ def per_series_scores(
             scale = float(g[scale_col].iloc[0]) if scale_col in g.columns else np.nan
             value = (
                 float(np.sqrt(np.mean((yt - yp) ** 2) / scale))
-                if np.isfinite(scale) and scale > _EPS else np.nan
+                if np.isfinite(scale) and scale > _EPS
+                else np.nan
             )
         else:
             raise ValueError(f"unsupported metric {metric!r}")
@@ -575,7 +647,7 @@ def full_significance_report(
     errors: dict[str, np.ndarray] = {}
     for model, g in predictions.groupby("model", observed=True):
         g = g.sort_values(["series_id", "date"])
-        errors[str(model)] = (g["y_true"].to_numpy(float) - g["y_pred"].to_numpy(float))
+        errors[str(model)] = g["y_true"].to_numpy(float) - g["y_pred"].to_numpy(float)
     out["diebold_mariano"] = pairwise_dm(errors, horizon=horizon, alpha=alpha)
 
     return out

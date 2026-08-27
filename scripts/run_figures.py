@@ -15,6 +15,7 @@ Usage:
     python scripts/run_figures.py
     python scripts/run_figures.py --results-dir reports/tier1
 """
+
 from __future__ import annotations
 
 import argparse
@@ -52,8 +53,11 @@ log = get_logger("figures")
 
 def main() -> int:
     p = argparse.ArgumentParser(description="Generate Pillar 5 figures")
-    p.add_argument("--results-dir", default="reports/backtest_main",
-                   help="directory containing predictions.parquet")
+    p.add_argument(
+        "--results-dir",
+        default="reports/backtest_main",
+        help="directory containing predictions.parquet",
+    )
     p.add_argument("--out-dir", default="reports/results")
     p.add_argument("--metric", default="wape")
     p.add_argument("--horizon", type=int, default=28)
@@ -74,8 +78,12 @@ def main() -> int:
         return 1
 
     preds = pd.read_parquet(preds_path).dropna(subset=["y_true", "y_pred"])
-    log.info("loaded_predictions", rows=len(preds),
-             models=preds["model"].nunique(), series=preds["series_id"].nunique())
+    log.info(
+        "loaded_predictions",
+        rows=len(preds),
+        models=preds["model"].nunique(),
+        series=preds["series_id"].nunique(),
+    )
 
     # --- pooled leaderboard ---
     rows = []
@@ -95,13 +103,12 @@ def main() -> int:
             ok = np.isfinite(scales) & (scales > 0)
             if ok.any():
                 row["rmsse"] = float(np.sqrt(np.mean((yt[ok] - yp[ok]) ** 2 / scales[ok])))
-                row["mase"] = float(
-                    np.mean(np.abs(yt[ok] - yp[ok]) / np.sqrt(scales[ok]))
-                )
+                row["mase"] = float(np.mean(np.abs(yt[ok] - yp[ok]) / np.sqrt(scales[ok])))
         rows.append(row)
     leaderboard = pd.DataFrame(rows).sort_values("wape").reset_index(drop=True)
-    leaderboard.to_csv(out_dir.parent / "results" / "leaderboard.csv", index=False) \
-        if out_dir.name == "results" else None
+    leaderboard.to_csv(
+        out_dir.parent / "results" / "leaderboard.csv", index=False
+    ) if out_dir.name == "results" else None
 
     written: list[Path] = []
     written.append(plot_leaderboard(leaderboard, out_dir, metric=args.metric))
@@ -112,9 +119,7 @@ def main() -> int:
     complete = matrix.dropna(axis=0, how="any")
     log.info("per_series_matrix", series=len(complete), models=complete.shape[1])
 
-    written.append(
-        plot_error_distribution(complete, out_dir, metric_label=args.metric.upper())
-    )
+    written.append(plot_error_distribution(complete, out_dir, metric_label=args.metric.upper()))
 
     friedman = friedman_test(complete, alpha=args.alpha)
     if not friedman.significant:
@@ -148,9 +153,7 @@ def main() -> int:
     cls_path = settings.base_dir / "reports" / "eda" / "series_classification.parquet"
     if cls_path.exists():
         try:
-            written.append(
-                plot_model_by_demand_class(preds, pd.read_parquet(cls_path), out_dir)
-            )
+            written.append(plot_model_by_demand_class(preds, pd.read_parquet(cls_path), out_dir))
         except (ValueError, KeyError) as exc:
             log.warning("fig06_skipped", reason=str(exc))
     else:

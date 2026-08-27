@@ -43,6 +43,7 @@ Hyndman & Koehler (2006), "Another look at measures of forecast accuracy",
 Gneiting & Raftery (2007), "Strictly proper scoring rules, prediction, and
     estimation", JASA 102(477):359-378.  [pinball loss]
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -60,6 +61,7 @@ _EPS = 1e-12
 # ---------------------------------------------------------------------------
 # Point-forecast metrics
 # ---------------------------------------------------------------------------
+
 
 def wape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
@@ -135,6 +137,7 @@ def mape_nonzero(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 # Scaled error -- the official M5 metric
 # ---------------------------------------------------------------------------
 
+
 def naive_scale(y_insample: np.ndarray, seasonality: int = 1) -> float:
     """
     Denominator of the scaled error: in-sample MSE of a seasonal naive forecast.
@@ -152,7 +155,7 @@ def naive_scale(y_insample: np.ndarray, seasonality: int = 1) -> float:
         return float("nan")
 
     diffs = y[seasonality:] - y[:-seasonality]
-    return float(np.mean(diffs ** 2))
+    return float(np.mean(diffs**2))
 
 
 def mase(
@@ -226,6 +229,7 @@ def rmsse(
 # Probabilistic metrics
 # ---------------------------------------------------------------------------
 
+
 def pinball_loss(y_true: np.ndarray, y_pred_q: np.ndarray, q: float) -> float:
     """
     Pinball (quantile) loss at level q -- the proper scoring rule for quantiles.
@@ -279,6 +283,7 @@ def interval_width(lower: np.ndarray, upper: np.ndarray) -> float:
 # Aggregate reporting
 # ---------------------------------------------------------------------------
 
+
 def compute_metrics(
     y_true: np.ndarray,
     y_pred: np.ndarray,
@@ -309,9 +314,7 @@ def compute_metrics(
     y_pred = np.asarray(y_pred, dtype=float)
 
     if y_true.shape != y_pred.shape:
-        raise ValueError(
-            f"shape mismatch: y_true {y_true.shape} vs y_pred {y_pred.shape}"
-        )
+        raise ValueError(f"shape mismatch: y_true {y_true.shape} vs y_pred {y_pred.shape}")
 
     if clip_negative:
         y_pred = np.clip(y_pred, 0.0, None)
@@ -352,9 +355,7 @@ def compute_quantile_metrics(
     for q, preds in sorted(quantile_preds.items()):
         out[f"pinball_q{int(round(q * 100)):02d}"] = pinball_loss(y_true, preds, q)
 
-    out["pinball_mean"] = float(
-        np.mean([v for k, v in out.items() if k.startswith("pinball_q")])
-    )
+    out["pinball_mean"] = float(np.mean([v for k, v in out.items() if k.startswith("pinball_q")]))
 
     # Central intervals, when both tails were forecast.
     for lo_q, hi_q, label in ((0.10, 0.90, "80"), (0.05, 0.95, "90")):
@@ -372,6 +373,8 @@ def metrics_by_group(
     y_true_col: str = "y_true",
     y_pred_col: str = "y_pred",
     scale_col: str | None = None,
+    weight_col: str | None = None,
+    series_id_col: str = "series_id",
 ) -> pd.DataFrame:
     """
     Per-segment accuracy table -- the shape wanted for a backtest report.
@@ -399,16 +402,35 @@ def metrics_by_group(
 
         row.update(compute_metrics(yt, yp))
 
-        if scale_col is not None and scale_col in g.columns:
-            # Aggregate RMSSE the way M5 does: mean over series of the
-            # per-series scaled error, not a pooled ratio. Pooling would let
-            # high-volume series dominate a metric whose entire purpose is
-            # scale-invariance.
-            scales = g[scale_col].to_numpy(dtype=float)
-            valid = np.isfinite(scales) & (scales > _EPS)
-            if valid.any():
-                sq_err = (yt[valid] - yp[valid]) ** 2
-                row["rmsse"] = float(np.sqrt(np.mean(sq_err / scales[valid])))
+        if scale_col is not None and scale_col in g.columns and series_id_col in g.columns:
+            # Aggregate RMSSE per series, then take the mean (or weighted mean) across series.
+            series_rmsse = []
+            series_weights = []
+
+            # Using numpy operations is faster, but for exactness we group by series
+            for sid, s_group in g.groupby(series_id_col):
+                s_yt = s_group[y_true_col].to_numpy(dtype=float)
+                s_yp = np.clip(s_group[y_pred_col].to_numpy(dtype=float), 0.0, None)
+                s_scale = s_group[scale_col].iloc[0]
+
+                if np.isfinite(s_scale) and s_scale > _EPS:
+                    mse_forecast = float(np.mean((s_yt - s_yp) ** 2))
+                    series_rmsse.append(np.sqrt(mse_forecast / s_scale))
+                    if weight_col is not None and weight_col in s_group.columns:
+                        series_weights.append(s_group[weight_col].iloc[0])
+                    else:
+                        series_weights.append(1.0)
+
+            if series_rmsse:
+                series_rmsse = np.array(series_rmsse)
+                series_weights = np.array(series_weights)
+
+                w_sum = series_weights.sum()
+                if w_sum > 0:
+                    series_weights = series_weights / w_sum
+                    row["rmsse"] = float(np.sum(series_rmsse * series_weights))
+                else:
+                    row["rmsse"] = float(np.mean(series_rmsse))
 
         records.append(row)
 

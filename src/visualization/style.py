@@ -6,6 +6,7 @@ read as one document rather than twenty. Tier colouring in particular is
 load-bearing: the central question of this study is which model FAMILY wins,
 so family must be visible at a glance in every figure that lists models.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -14,7 +15,7 @@ from typing import Any
 
 import matplotlib
 
-matplotlib.use("Agg")                       # headless; no display required
+matplotlib.use("Agg")  # headless; no display required
 
 import matplotlib.pyplot as plt  # noqa: E402
 import seaborn as sns  # noqa: E402
@@ -27,13 +28,13 @@ import seaborn as sns  # noqa: E402
 # so a red/green confusion does not collapse two tiers into one.
 # ---------------------------------------------------------------------------
 TIER_COLORS: dict[str, str] = {
-    "naive": "#9aa0a6",           # grey -- the reference floor
-    "statistical": "#2a7fb8",     # blue
-    "intermittent": "#7a5ea8",    # purple
-    "classical_ml": "#e07b39",    # orange
-    "probabilistic": "#3f9e8c",   # teal
-    "deep_learning": "#c1444a",   # red
-    "ensemble": "#4c9a52",        # green
+    "naive": "#9aa0a6",  # grey -- the reference floor
+    "statistical": "#2a7fb8",  # blue
+    "intermittent": "#7a5ea8",  # purple
+    "classical_ml": "#e07b39",  # orange
+    "probabilistic": "#3f9e8c",  # teal
+    "deep_learning": "#c1444a",  # red
+    "ensemble": "#4c9a52",  # green
     "other": "#666666",
 }
 
@@ -145,8 +146,9 @@ def tier_legend_handles(tiers: Iterable[str] | None = None) -> list[Any]:
     ]
 
 
-def save_figure(fig: plt.Figure, out_dir: Path | str, name: str,
-                caption: str | None = None) -> Path:
+def save_figure(
+    fig: plt.Figure, out_dir: Path | str, name: str, caption: str | None = None
+) -> Path:
     """
     Write a figure to `out_dir/name.png`, plus its caption as a sidecar `.md`.
 
@@ -162,7 +164,5 @@ def save_figure(fig: plt.Figure, out_dir: Path | str, name: str,
     plt.close(fig)
 
     if caption:
-        (out_dir / f"{name}.md").write_text(
-            f"# {name}\n\n{caption.strip()}\n", encoding="utf-8"
-        )
+        (out_dir / f"{name}.md").write_text(f"# {name}\n\n{caption.strip()}\n", encoding="utf-8")
     return path

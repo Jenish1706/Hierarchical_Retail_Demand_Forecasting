@@ -53,6 +53,7 @@ list, and it is the reason tree ensembles won M5 in the first place: the
 feature engineering carries the time-series structure, and the trees carry
 the non-linear interactions between it and the calendar.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -294,7 +295,7 @@ class FeaturePipeline:
         """
         dt = df["date"].dt
 
-        df["dow"] = dt.dayofweek.astype("int8")            # 0 = Monday
+        df["dow"] = dt.dayofweek.astype("int8")  # 0 = Monday
         df["day_of_month"] = dt.day.astype("int8")
         df["week_of_year"] = dt.isocalendar().week.astype("int8")
         df["month_num"] = dt.month.astype("int8")
@@ -330,7 +331,11 @@ class FeaturePipeline:
         for col in ("event_type_1", "event_type_2"):
             if col in df.columns:
                 df[f"{col}_code"] = (
-                    df[col].astype("object").fillna("none").astype("category").cat.codes.astype("int8")
+                    df[col]
+                    .astype("object")
+                    .fillna("none")
+                    .astype("category")
+                    .cat.codes.astype("int8")
                 )
         return df
 
@@ -358,30 +363,43 @@ class FeaturePipeline:
         [t-w, t-1] and can never include y_t. See the module docstring.
         """
         g = df.groupby(SERIES_KEYS, observed=True)["sales"]
-        shifted = g.shift(self.horizon)           # <-- the leakage guard
+        shifted = g.shift(self.horizon)  # <-- the leakage guard
         grouped = shifted.groupby([df[k] for k in SERIES_KEYS], observed=True)
 
         for w in self.roll_windows:
             # min_periods=1 so early rows get a value from whatever history
             # exists rather than NaN. Trees handle the resulting noisier
             # early estimates better than they handle a wall of missing data.
-            df[f"roll_mean_{w}"] = grouped.rolling(w, min_periods=1).mean().reset_index(level=SERIES_KEYS, drop=True).astype("float32")
-            df[f"roll_std_{w}"] = grouped.rolling(w, min_periods=2).std().reset_index(level=SERIES_KEYS, drop=True).astype("float32")
-            df[f"roll_max_{w}"] = grouped.rolling(w, min_periods=1).max().reset_index(level=SERIES_KEYS, drop=True).astype("float32")
+            df[f"roll_mean_{w}"] = (
+                grouped.rolling(w, min_periods=1)
+                .mean()
+                .reset_index(level=SERIES_KEYS, drop=True)
+                .astype("float32")
+            )
+            df[f"roll_std_{w}"] = (
+                grouped.rolling(w, min_periods=2)
+                .std()
+                .reset_index(level=SERIES_KEYS, drop=True)
+                .astype("float32")
+            )
+            df[f"roll_max_{w}"] = (
+                grouped.rolling(w, min_periods=1)
+                .max()
+                .reset_index(level=SERIES_KEYS, drop=True)
+                .astype("float32")
+            )
 
         # Momentum: recent level against a longer baseline. Expressed as a
         # ratio so it is comparable across series of different volume.
-        df["trend_7_28"] = (
-            df["roll_mean_7"] / df["roll_mean_28"].replace(0, np.nan)
-        ).astype("float32")
-        df["trend_28_90"] = (
-            df["roll_mean_28"] / df["roll_mean_90"].replace(0, np.nan)
-        ).astype("float32")
+        df["trend_7_28"] = (df["roll_mean_7"] / df["roll_mean_28"].replace(0, np.nan)).astype(
+            "float32"
+        )
+        df["trend_28_90"] = (df["roll_mean_28"] / df["roll_mean_90"].replace(0, np.nan)).astype(
+            "float32"
+        )
 
         # Coefficient of variation: how erratic this series has been lately.
-        df["cv_28"] = (
-            df["roll_std_28"] / df["roll_mean_28"].replace(0, np.nan)
-        ).astype("float32")
+        df["cv_28"] = (df["roll_std_28"] / df["roll_mean_28"].replace(0, np.nan)).astype("float32")
         return df
 
     # -- intermittency --------------------------------------------------------
@@ -413,7 +431,9 @@ class FeaturePipeline:
         # that have never sold: an unbounded counter would give the model a
         # near-unique integer per row, which it can memorise.
         sold = (df["sales"] > 0).astype("int8")
-        sold_shift = sold.groupby([df[k] for k in SERIES_KEYS], observed=True).shift(self.horizon).fillna(0)
+        sold_shift = (
+            sold.groupby([df[k] for k in SERIES_KEYS], observed=True).shift(self.horizon).fillna(0)
+        )
 
         def _days_since(flags: pd.Series) -> pd.Series:
             out = np.empty(len(flags), dtype="float32")
@@ -465,9 +485,9 @@ class FeaturePipeline:
             .mean()
             .reset_index(level=SERIES_KEYS, drop=True)
         )
-        df["price_ratio_to_28d_mean"] = (
-            df["sell_price"] / roll_28.replace(0, np.nan)
-        ).astype("float32")
+        df["price_ratio_to_28d_mean"] = (df["sell_price"] / roll_28.replace(0, np.nan)).astype(
+            "float32"
+        )
 
         # Explicit discount flag at a 2% threshold -- below that is rounding,
         # not a promotion.
@@ -476,7 +496,9 @@ class FeaturePipeline:
         # Price relative to the same item's price in other stores that week.
         # With only two covered stores this is thin, but it is the only
         # cross-sectional price signal the data supports.
-        item_week_mean = df.groupby(["item_id", "wm_yr_wk"], observed=True)["sell_price"].transform("mean")
+        item_week_mean = df.groupby(["item_id", "wm_yr_wk"], observed=True)["sell_price"].transform(
+            "mean"
+        )
         df["price_rel_to_item_mean"] = (
             df["sell_price"] / item_week_mean.replace(0, np.nan)
         ).astype("float32")
@@ -496,8 +518,7 @@ class FeaturePipeline:
         the whole point is that leakage is invisible by inspection.
         """
         candidates = [
-            c for c in ("roll_mean_7", "roll_mean_28", "lag_1", "zero_rate_28")
-            if c in df.columns
+            c for c in ("roll_mean_7", "roll_mean_28", "lag_1", "zero_rate_28") if c in df.columns
         ]
         if not candidates or len(df) < 50:
             return
@@ -506,7 +527,9 @@ class FeaturePipeline:
         perturbed = df.copy()
         perturbed.loc[probe, "sales"] = perturbed.loc[probe, "sales"] + 1000
 
-        rebuilt = perturbed.sort_values(SERIES_KEYS + ["date"], kind="mergesort").reset_index(drop=True)
+        rebuilt = perturbed.sort_values(SERIES_KEYS + ["date"], kind="mergesort").reset_index(
+            drop=True
+        )
         g = rebuilt.groupby(SERIES_KEYS, observed=True)["sales"]
         shifted = g.shift(self.horizon)
         grouped = shifted.groupby([rebuilt[k] for k in SERIES_KEYS], observed=True)
@@ -516,16 +539,18 @@ class FeaturePipeline:
             check["lag_1"] = g.shift(self.horizon)
         if "roll_mean_7" in candidates:
             check["roll_mean_7"] = (
-                grouped.rolling(7, min_periods=1).mean()
-                .reset_index(level=SERIES_KEYS, drop=True)
+                grouped.rolling(7, min_periods=1).mean().reset_index(level=SERIES_KEYS, drop=True)
             )
 
         for name, series in check.items():
-            original = df.sort_values(SERIES_KEYS + ["date"], kind="mergesort").reset_index(drop=True)[name]
+            original = df.sort_values(SERIES_KEYS + ["date"], kind="mergesort").reset_index(
+                drop=True
+            )[name]
             same_row_changed = (
-                (~np.isclose(series.to_numpy(dtype=float), original.to_numpy(dtype=float), equal_nan=True))
-                & rebuilt.index.isin(range(len(rebuilt)))
-            )
+                ~np.isclose(
+                    series.to_numpy(dtype=float), original.to_numpy(dtype=float), equal_nan=True
+                )
+            ) & rebuilt.index.isin(range(len(rebuilt)))
             # Rows AFTER a perturbed row are expected to change -- that is the
             # feature correctly propagating history. What must not happen is
             # a change with no perturbed row at or before it in that series.
@@ -550,26 +575,45 @@ class FeaturePipeline:
         the truncated workbook did not cover.
         """
         exclude = {
-            "sales", "date", "id", "d", "wm_yr_wk", "feature_version",
-            "item_id", "store_id", "dept_id", "cat_id", "state_id",
-            "weekday", "event_name_1", "event_name_2", "event_type_1", "event_type_2",
-            "snap_CA", "snap_TX", "snap_WI",   # collapsed into snap_flag
-            "sell_price",                      # exposed as `price`
+            "sales",
+            "date",
+            "id",
+            "d",
+            "wm_yr_wk",
+            "feature_version",
+            "item_id",
+            "store_id",
+            "dept_id",
+            "cat_id",
+            "state_id",
+            "weekday",
+            "event_name_1",
+            "event_name_2",
+            "event_type_1",
+            "event_type_2",
+            "snap_CA",
+            "snap_TX",
+            "snap_WI",  # collapsed into snap_flag
+            "sell_price",  # exposed as `price`
             # Calendar duplicates of engineered columns. `wday` is 1-7 where
             # `dow` is 0-6; `month`/`year` are identical to `month_num`/
             # `year_num`. Keeping both halves gain importance between
             # perfectly-correlated pairs and makes the SHAP plots harder to
             # read for no modelling benefit.
-            "wday", "month", "year",
+            "wday",
+            "month",
+            "year",
         }
         price_cols = {
-            "price", "price_change", "price_change_pct", "price_ratio_to_28d_mean",
-            "is_discounted", "price_rel_to_item_mean", "has_price_data",
+            "price",
+            "price_change",
+            "price_change_pct",
+            "price_ratio_to_28d_mean",
+            "is_discounted",
+            "price_rel_to_item_mean",
+            "has_price_data",
         }
         if drop_price:
             exclude |= price_cols
 
-        return [
-            c for c in df.columns
-            if c not in exclude and pd.api.types.is_numeric_dtype(df[c])
-        ]
+        return [c for c in df.columns if c not in exclude and pd.api.types.is_numeric_dtype(df[c])]

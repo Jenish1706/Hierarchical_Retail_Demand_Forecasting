@@ -23,6 +23,7 @@ Koning, Franses, Hibon & Stekler (2005), "The M3 competition: Statistical
 Makridakis, Spiliotis & Assimakopoulos (2022), IJF 38(4):1346-1364 -- reports
     the same WRMSSE/MCB rank divergence within the M5 competition itself.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -49,6 +50,7 @@ log = get_logger(__name__)
 # Fig 1 -- leaderboard
 # ---------------------------------------------------------------------------
 
+
 def plot_leaderboard(
     scores: pd.DataFrame,
     out_dir: Path | str,
@@ -71,17 +73,28 @@ def plot_leaderboard(
     fig, ax = plt.subplots(figsize=(9, max(4, 0.34 * len(df))))
     colors = [color_for(m) for m in df[model_col]]
     bars = ax.barh(df[model_col].astype(str), df[metric], color=colors, height=0.72)
-    ax.invert_yaxis()                        # best model at the top
+    ax.invert_yaxis()  # best model at the top
 
     span = float(df[metric].max() - df[metric].min()) or 1.0
     for bar, value in zip(bars, df[metric]):
-        ax.text(bar.get_width() + span * 0.012, bar.get_y() + bar.get_height() / 2,
-                f"{value:.2f}", va="center", fontsize=8.5)
+        ax.text(
+            bar.get_width() + span * 0.012,
+            bar.get_y() + bar.get_height() / 2,
+            f"{value:.2f}",
+            va="center",
+            fontsize=8.5,
+        )
 
     ref = df[df[model_col].astype(str) == reference_model]
     if len(ref):
-        ax.axvline(float(ref[metric].iloc[0]), color="#c1444a", ls="--", lw=1.4,
-                   label=f"{reference_model} baseline", zorder=0)
+        ax.axvline(
+            float(ref[metric].iloc[0]),
+            color="#c1444a",
+            ls="--",
+            lw=1.4,
+            label=f"{reference_model} baseline",
+            zorder=0,
+        )
 
     present = [t for t in TIER_COLORS if any(tier_of(m) == t for m in df[model_col])]
     handles = tier_legend_handles(present)
@@ -94,7 +107,9 @@ def plot_leaderboard(
     ax.margins(x=0.12)
 
     return save_figure(
-        fig, out_dir, name,
+        fig,
+        out_dir,
+        name,
         caption=(
             f"Models ranked by {metric.upper()}, coloured by tier. The dashed line "
             f"marks {reference_model}: RMSSE is defined relative to a naive "
@@ -108,6 +123,7 @@ def plot_leaderboard(
 # ---------------------------------------------------------------------------
 # Fig 2 -- multi-metric comparison
 # ---------------------------------------------------------------------------
+
 
 def plot_multi_metric(
     scores: pd.DataFrame,
@@ -142,8 +158,9 @@ def plot_multi_metric(
 
     fig, ax = plt.subplots(figsize=(max(9, 0.62 * len(df)), 5))
     for i, m in enumerate(available):
-        ax.bar(x + i * width - 0.4 + width / 2, df[f"{m}_rel"], width=width,
-               label=m.upper(), alpha=0.9)
+        ax.bar(
+            x + i * width - 0.4 + width / 2, df[f"{m}_rel"], width=width, label=m.upper(), alpha=0.9
+        )
 
     ax.axhline(1.0, color="#c1444a", ls="--", lw=1.2, label="best on metric")
     ax.set_xticks(x)
@@ -153,7 +170,9 @@ def plot_multi_metric(
     ax.legend(fontsize=8, ncol=len(available) + 1)
 
     return save_figure(
-        fig, out_dir, name,
+        fig,
+        out_dir,
+        name,
         caption=(
             "Each metric normalised to its own best model, so 1.0 is the best "
             "score on that metric. Where a model's bars differ in height across "
@@ -167,6 +186,7 @@ def plot_multi_metric(
 # ---------------------------------------------------------------------------
 # Fig 3 -- per-series error distribution
 # ---------------------------------------------------------------------------
+
 
 def plot_error_distribution(
     per_series: pd.DataFrame,
@@ -196,8 +216,13 @@ def plot_error_distribution(
     data = [per_series[m].dropna().to_numpy() for m in order]
 
     fig, ax = plt.subplots(figsize=(max(9, 0.62 * len(order)), 5.5))
-    bp = ax.boxplot(data, patch_artist=True, showfliers=False, widths=0.62,
-                    medianprops={"color": "black", "linewidth": 1.4})
+    bp = ax.boxplot(
+        data,
+        patch_artist=True,
+        showfliers=False,
+        widths=0.62,
+        medianprops={"color": "black", "linewidth": 1.4},
+    )
     for patch, model in zip(bp["boxes"], order):
         patch.set_facecolor(color_for(model))
         patch.set_alpha(0.78)
@@ -205,8 +230,16 @@ def plot_error_distribution(
     # Mean marker: with a right-skewed distribution the mean sits well above
     # the median, and the gap is exactly the tail risk being described.
     means = [np.nanmean(d) for d in data]
-    ax.scatter(range(1, len(order) + 1), means, marker="D", s=26,
-               color="white", edgecolor="black", zorder=5, label="mean")
+    ax.scatter(
+        range(1, len(order) + 1),
+        means,
+        marker="D",
+        s=26,
+        color="white",
+        edgecolor="black",
+        zorder=5,
+        label="mean",
+    )
 
     ax.set_xticklabels(order, rotation=42, ha="right")
     ax.set_ylabel(f"Per-series {metric_label}")
@@ -217,10 +250,14 @@ def plot_error_distribution(
 
     clip_note = (
         f" Y-axis clipped at {max_value:.0f}; per-series {metric_label} is "
-        f"unbounded above for near-zero series." if max_value else ""
+        f"unbounded above for near-zero series."
+        if max_value
+        else ""
     )
     return save_figure(
-        fig, out_dir, name,
+        fig,
+        out_dir,
+        name,
         caption=(
             f"Distribution of {metric_label} across individual series, not the "
             f"pooled score. Boxes show quartiles, diamonds the mean. A large "
@@ -234,6 +271,7 @@ def plot_error_distribution(
 # ---------------------------------------------------------------------------
 # Fig 4 -- Critical Difference diagram
 # ---------------------------------------------------------------------------
+
 
 def plot_critical_difference(
     average_ranks: pd.Series,
@@ -275,10 +313,10 @@ def plot_critical_difference(
     # makes them collide with a neighbouring subplot in the paired figure.
     rank_lo, rank_hi = float(values.min()), float(values.max())
     rank_span = (rank_hi - rank_lo) or critical_difference or 1.0
-    gutter = rank_span * 0.85                     # room for the longest label
+    gutter = rank_span * 0.85  # room for the longest label
     lo, hi = rank_lo - gutter, rank_hi + gutter
 
-    n_left = int(np.ceil(len(names) / 2))         # left half gets the better ranks
+    n_left = int(np.ceil(len(names) / 2))  # left half gets the better ranks
     rows = max(n_left, len(names) - n_left)
 
     ax.set_xlim(lo, hi)
@@ -312,17 +350,30 @@ def plot_critical_difference(
         ax.hlines(y, val, edge, color=color_for(nm), lw=1.5)
         ax.text(
             edge + (-gutter * 0.04 if left else gutter * 0.04),
-            y, f"{nm} ({val:.2f})",
-            ha="right" if left else "left", va="center", fontsize=8.5,
+            y,
+            f"{nm} ({val:.2f})",
+            ha="right" if left else "left",
+            va="center",
+            fontsize=8.5,
         )
 
     # CD ruler, above the rank axis.
-    ax.hlines(axis_y + 0.72, rank_lo, rank_lo + critical_difference,
-              color="black", lw=2.2)
-    ax.vlines([rank_lo, rank_lo + critical_difference],
-              axis_y + 0.63, axis_y + 0.81, color="black", lw=2.2)
-    ax.text(rank_lo + critical_difference / 2, axis_y + 0.92,
-            f"CD = {critical_difference:.3f}", ha="left", fontsize=9, weight="bold")
+    ax.hlines(axis_y + 0.72, rank_lo, rank_lo + critical_difference, color="black", lw=2.2)
+    ax.vlines(
+        [rank_lo, rank_lo + critical_difference],
+        axis_y + 0.63,
+        axis_y + 0.81,
+        color="black",
+        lw=2.2,
+    )
+    ax.text(
+        rank_lo + critical_difference / 2,
+        axis_y + 0.92,
+        f"CD = {critical_difference:.3f}",
+        ha="left",
+        fontsize=9,
+        weight="bold",
+    )
 
     # Clique bars, stacked just below the rank axis so they read as one group.
     for depth, clique in enumerate(cliques or []):
@@ -333,8 +384,14 @@ def plot_critical_difference(
         y = axis_y - 0.24 - depth * 0.17
         ax.hlines(y, min(vals), max(vals), color="black", lw=3.6, alpha=0.8)
 
-    ax.text((rank_lo + rank_hi) / 2, axis_y + 0.52, "Average rank  (lower is better)",
-            ha="center", fontsize=9, color="#444")
+    ax.text(
+        (rank_lo + rank_hi) / 2,
+        axis_y + 0.52,
+        "Average rank  (lower is better)",
+        ha="center",
+        fontsize=9,
+        color="#444",
+    )
     ax.set_title("Fig 4 — Critical Difference diagram (Nemenyi)", pad=18)
 
     if not standalone:
@@ -342,7 +399,9 @@ def plot_critical_difference(
 
     n_note = f" N = {n_series:,} series." if n_series else ""
     return save_figure(
-        fig, out_dir, name,
+        fig,
+        out_dir,
+        name,
         caption=(
             f"Average rank per model; models joined by a heavy horizontal bar are "
             f"statistically indistinguishable at alpha=0.05 (Nemenyi post-hoc, "
@@ -358,6 +417,7 @@ def plot_critical_difference(
 # ---------------------------------------------------------------------------
 # Fig 5 -- Multiple Comparisons with the Best
 # ---------------------------------------------------------------------------
+
 
 def plot_mcb(
     mcb: pd.DataFrame,
@@ -387,14 +447,26 @@ def plot_mcb(
     for i, row in df.iterrows():
         indistinguishable = bool(row["indistinguishable_from_best"])
         color = color_for(str(row["model"]))
-        ax.hlines(i, row["ci_lower"], row["ci_upper"], color=color, lw=2.6,
-                  alpha=1.0 if indistinguishable else 0.45)
-        ax.plot(row["average_rank"], i, "o", color=color, markersize=7,
-                markeredgecolor="black" if row["is_best"] else "none",
-                markeredgewidth=1.2, zorder=5)
+        ax.hlines(
+            i,
+            row["ci_lower"],
+            row["ci_upper"],
+            color=color,
+            lw=2.6,
+            alpha=1.0 if indistinguishable else 0.45,
+        )
+        ax.plot(
+            row["average_rank"],
+            i,
+            "o",
+            color=color,
+            markersize=7,
+            markeredgecolor="black" if row["is_best"] else "none",
+            markeredgewidth=1.2,
+            zorder=5,
+        )
 
-    ax.axvline(best_upper, color="#c1444a", ls="--", lw=1.3,
-               label="upper bound of best model")
+    ax.axvline(best_upper, color="#c1444a", ls="--", lw=1.3, label="upper bound of best model")
 
     ax.set_yticks(y)
     ax.set_yticklabels(
@@ -411,7 +483,9 @@ def plot_mcb(
 
     n_tied = int(df["indistinguishable_from_best"].sum()) - 1
     return save_figure(
-        fig, out_dir, name,
+        fig,
+        out_dir,
+        name,
         caption=(
             f"Average rank with a CD/2 interval per model. Models whose interval "
             f"crosses the dashed line are not significantly worse than the best "
@@ -426,6 +500,7 @@ def plot_mcb(
 # ---------------------------------------------------------------------------
 # Figs 4 + 5 side by side -- the headline figure
 # ---------------------------------------------------------------------------
+
 
 def plot_significance_pair(
     average_ranks: pd.Series,
@@ -455,11 +530,14 @@ def plot_significance_pair(
     """
     apply_style()
     fig, axes = plt.subplots(
-        1, 2, figsize=(19, max(5.5, 0.46 * len(average_ranks) + 2.4)),
+        1,
+        2,
+        figsize=(19, max(5.5, 0.46 * len(average_ranks) + 2.4)),
         gridspec_kw={"width_ratios": [1.25, 1.0]},
     )
-    plot_critical_difference(average_ranks, critical_difference, out_dir,
-                             cliques=cliques, ax=axes[0])
+    plot_critical_difference(
+        average_ranks, critical_difference, out_dir, cliques=cliques, ax=axes[0]
+    )
     plot_mcb(mcb, out_dir, ax=axes[1])
 
     disagreement = ""
@@ -472,12 +550,15 @@ def plot_significance_pair(
         fig.suptitle(
             f"Rank-based significance — pooled leader: {pooled_leader}   |   "
             f"rank leader: {rank_leader}",
-            fontsize=12.5, y=1.005,
+            fontsize=12.5,
+            y=1.005,
         )
 
     n_note = f" N = {n_series:,} series." if n_series else ""
     return save_figure(
-        fig, out_dir, name,
+        fig,
+        out_dir,
+        name,
         caption=(
             f"Left: Nemenyi critical-difference diagram. Right: Multiple "
             f"Comparisons with the Best. Both are rank-based and equal-weight "

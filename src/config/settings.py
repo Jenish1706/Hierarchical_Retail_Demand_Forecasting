@@ -25,6 +25,7 @@ Reference: Makridakis, Spiliotis & Assimakopoulos (2022), "M5 accuracy
 competition: Results, findings and conclusions", International Journal of
 Forecasting 38(4):1346-1364.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -53,9 +54,9 @@ class M5Facts:
     """
 
     # --- Series cardinality ------------------------------------------------
-    N_ITEMS: Final[int] = 3_049          # unique item_id values
-    N_STORES: Final[int] = 10            # CA_1..CA_4, TX_1..TX_3, WI_1..WI_3
-    N_SERIES: Final[int] = 30_490        # == N_ITEMS * N_STORES (bottom level)
+    N_ITEMS: Final[int] = 3_049  # unique item_id values
+    N_STORES: Final[int] = 10  # CA_1..CA_4, TX_1..TX_3, WI_1..WI_3
+    N_SERIES: Final[int] = 30_490  # == N_ITEMS * N_STORES (bottom level)
     N_STATES: Final[int] = 3
     N_CATEGORIES: Final[int] = 3
     N_DEPARTMENTS: Final[int] = 7
@@ -66,14 +67,14 @@ class M5Facts:
     # is 2016-04-24. 2016-06-19 is the last CALENDAR row (1,969), which extends
     # 56 days past the sales data precisely so the 28-day forecast window has
     # its events and SNAP flags available in advance.
-    N_DAYS: Final[int] = 1_913           # d_1 .. d_1913 in sales_train_validation
+    N_DAYS: Final[int] = 1_913  # d_1 .. d_1913 in sales_train_validation
     START_DATE: Final[date] = date(2011, 1, 29)
-    END_DATE: Final[date] = date(2016, 4, 24)      # last day WITH sales actuals
+    END_DATE: Final[date] = date(2016, 4, 24)  # last day WITH sales actuals
     N_CALENDAR_ROWS: Final[int] = 1_969
-    CALENDAR_END_DATE: Final[date] = date(2016, 6, 19)   # last calendar row
+    CALENDAR_END_DATE: Final[date] = date(2016, 6, 19)  # last calendar row
 
     # --- Forecasting task --------------------------------------------------
-    HORIZON_DAYS: Final[int] = 28        # F1..F28 in the submission template
+    HORIZON_DAYS: Final[int] = 28  # F1..F28 in the submission template
 
     # --- Event structure ---------------------------------------------------
     # Verified against the supplied workbook, because the project brief had
@@ -81,10 +82,13 @@ class M5Facts:
     # (plus 4 more that only ever appear in event_name_2, all of which also
     # occur in column 1), spread over 162 dated event days. "161 events" was a
     # count of event DAYS, not names, and off by one.
-    N_EVENT_NAMES: Final[int] = 30       # distinct event_name_1 values
-    N_EVENT_DAYS: Final[int] = 162       # calendar rows with a non-null event
+    N_EVENT_NAMES: Final[int] = 30  # distinct event_name_1 values
+    N_EVENT_DAYS: Final[int] = 162  # calendar rows with a non-null event
     EVENT_TYPES: Final[tuple[str, ...]] = (
-        "Sporting", "Cultural", "National", "Religious",
+        "Sporting",
+        "Cultural",
+        "National",
+        "Religious",
     )
 
     # --- SNAP ---------------------------------------------------------------
@@ -98,27 +102,38 @@ class M5Facts:
     # --- Categorical domains -----------------------------------------------
     STATES: Final[tuple[str, ...]] = ("CA", "TX", "WI")
     STORES: Final[tuple[str, ...]] = (
-        "CA_1", "CA_2", "CA_3", "CA_4",
-        "TX_1", "TX_2", "TX_3",
-        "WI_1", "WI_2", "WI_3",
+        "CA_1",
+        "CA_2",
+        "CA_3",
+        "CA_4",
+        "TX_1",
+        "TX_2",
+        "TX_3",
+        "WI_1",
+        "WI_2",
+        "WI_3",
     )
     CATEGORIES: Final[tuple[str, ...]] = ("HOBBIES", "HOUSEHOLD", "FOODS")
     DEPARTMENTS: Final[tuple[str, ...]] = (
-        "HOBBIES_1", "HOBBIES_2",
-        "HOUSEHOLD_1", "HOUSEHOLD_2",
-        "FOODS_1", "FOODS_2", "FOODS_3",
+        "HOBBIES_1",
+        "HOBBIES_2",
+        "HOUSEHOLD_1",
+        "HOUSEHOLD_2",
+        "FOODS_1",
+        "FOODS_2",
+        "FOODS_3",
     )
 
     # --- Hierarchy ---------------------------------------------------------
     # Six aggregation levels used by the MinT reconciler. Ordered bottom-up so
     # index 0 is always the disaggregate level the models are fitted at.
     HIERARCHY_LEVELS: Final[tuple[str, ...]] = (
-        "item_store",   # 30,490 series -- the level models train at
-        "dept_store",   #     70 series (7 depts x 10 stores)
-        "cat_store",    #     30 series (3 cats  x 10 stores)
-        "store",        #     10 series
-        "state",        #      3 series
-        "total",        #      1 series
+        "item_store",  # 30,490 series -- the level models train at
+        "dept_store",  #     70 series (7 depts x 10 stores)
+        "cat_store",  #     30 series (3 cats  x 10 stores)
+        "store",  #     10 series
+        "state",  #      3 series
+        "total",  #      1 series
     )
 
     # --- Units -------------------------------------------------------------
@@ -209,9 +224,7 @@ class M5Facts:
         violations: list[str] = []
         for key, want in expected.items():
             if key in observed and observed[key] != want:
-                violations.append(
-                    f"{key}: expected {want:,} (M5 fact), observed {observed[key]:,}"
-                )
+                violations.append(f"{key}: expected {want:,} (M5 fact), observed {observed[key]:,}")
         return violations
 
 
@@ -256,16 +269,12 @@ class DatabaseSettings(BaseSettings):
 
     @property
     def dsn(self) -> str:
-        return (
-            f"postgresql://{self.user}:{self.password}"
-            f"@{self.host}:{self.port}/{self.name}"
-        )
+        return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
 
     @property
     def async_dsn(self) -> str:
         return (
-            f"postgresql+asyncpg://{self.user}:{self.password}"
-            f"@{self.host}:{self.port}/{self.name}"
+            f"postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
         )
 
 
@@ -309,8 +318,8 @@ class ModelSettings(BaseSettings):
     promotion_min_improvement_pct: float = Field(default=1.0)
 
     # Retraining triggers.
-    wape_threshold: float = Field(default=15.0)   # percent
-    rmsse_threshold: float = Field(default=1.0)   # >1 means worse than naive
+    wape_threshold: float = Field(default=15.0)  # percent
+    rmsse_threshold: float = Field(default=1.0)  # >1 means worse than naive
     bias_threshold: float = Field(default=0.10)
 
 

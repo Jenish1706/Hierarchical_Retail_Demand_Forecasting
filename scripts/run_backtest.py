@@ -4,6 +4,7 @@ CLI entry point for the walk-forward backtest.
 The engine itself lives in `src/evaluation/backtest.py` (spec Part 9); this
 file is the thin `scripts/` wrapper DVC and Airflow invoke.
 """
+
 from __future__ import annotations
 
 import sys

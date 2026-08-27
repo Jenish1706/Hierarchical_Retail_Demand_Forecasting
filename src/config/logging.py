@@ -2,6 +2,7 @@
 Production-grade structured logging using structlog + loguru.
 Provides JSON logs for production and colorized logs for development.
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,9 +33,7 @@ def set_pipeline_name(name: str) -> None:
     _pipeline_name.set(name)
 
 
-def add_correlation_id(
-    logger: Any, method: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
+def add_correlation_id(logger: Any, method: str, event_dict: dict[str, Any]) -> dict[str, Any]:
     """Structlog processor to inject correlation ID."""
     event_dict["correlation_id"] = get_correlation_id()
     pipeline = _pipeline_name.get()
@@ -43,9 +42,7 @@ def add_correlation_id(
     return event_dict
 
 
-def safe_add_logger_name(
-    logger: Any, method: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
+def safe_add_logger_name(logger: Any, method: str, event_dict: dict[str, Any]) -> dict[str, Any]:
     """Safely inject logger name if logger object has .name attribute."""
     if hasattr(logger, "name"):
         event_dict["logger"] = logger.name
@@ -100,9 +97,7 @@ def configure_logging(
 
     structlog.configure(
         processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(
-            getattr(logging, log_level.upper())
-        ),
+        wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, log_level.upper())),
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(),
         cache_logger_on_first_use=True,

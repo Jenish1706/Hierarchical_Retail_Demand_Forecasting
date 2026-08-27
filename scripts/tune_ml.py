@@ -3,6 +3,7 @@ Hyperparameter optimization for Classical ML (Tier 2) & Probabilistic (Tier 3) o
 Target Models: LightGBM Regressor and HurdleForecaster.
 Framework: LightGBM via DemandTrainer.
 """
+
 import json
 import sys
 from pathlib import Path
@@ -29,8 +30,8 @@ def main():
     print("\n--- Tuning LightGBM Regressor ---")
     cfg_lgb = TrainingConfig(
         models=("lightgbm",),
-        tune_trials=50,       # Phase A requirement: 50 trials
-        outer_splits=2,       # Phase B requirement: Fix TimeSeriesSplit >= 2
+        tune_trials=50,  # Phase A requirement: 50 trials
+        outer_splits=2,  # Phase B requirement: Fix TimeSeriesSplit >= 2
         build_stack=False,
         build_blend=False,
     )
@@ -41,12 +42,14 @@ def main():
     print("LightGBM HPO Leaderboard:")
     print(lgb_leaderboard[["model", "cv_wape", "cv_rmsse"]])
 
+    from src.models.probabilistic.hurdle import HurdleForecaster
+
     # 2. Tune HurdleForecaster
     print("\n--- Tuning HurdleForecaster ---")
     cfg_hurdle = TrainingConfig(
-        models=("hurdle",),
-        tune_trials=50,       # Phase A requirement: 50 trials
-        outer_splits=2,       # Phase B requirement: Fix TimeSeriesSplit >= 2
+        models=(HurdleForecaster(),),
+        tune_trials=50,  # Phase A requirement: 50 trials
+        outer_splits=2,  # Phase B requirement: Fix TimeSeriesSplit >= 2
         build_stack=False,
         build_blend=False,
     )
@@ -60,7 +63,7 @@ def main():
     # Save the best parameters
     best_params = {
         "lightgbm": trainer_lgb.results_["lightgbm"].best_params,
-        "hurdle": trainer_hurdle.results_["hurdle"].best_params,
+        "HurdleForecaster": trainer_hurdle.results_["HurdleForecaster"].best_params,
     }
 
     out_path = Path("reports/best_ml_configs.json")
@@ -69,6 +72,7 @@ def main():
         json.dump(best_params, f, indent=4)
 
     print(f"\nBest configurations saved to {out_path}")
+
 
 if __name__ == "__main__":
     main()

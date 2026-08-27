@@ -6,6 +6,7 @@ requires a configurable relative improvement over the incumbent.  Statistical
 significance belongs in the results analysis; the operational gate protects
 against churn caused by small nested-CV differences.
 """
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -83,8 +84,10 @@ class PromotionGate:
             return True, improvement, "beat_incumbent"
         if force:
             return True, improvement, "forced"
-        return False, improvement, (
-            f"improvement {improvement:.2f}% below required {min_improvement_pct:.2f}%"
+        return (
+            False,
+            improvement,
+            (f"improvement {improvement:.2f}% below required {min_improvement_pct:.2f}%"),
         )
 
     def promote(self, candidate: PromotionCandidate, force: bool = False) -> PromotionDecision:
@@ -105,7 +108,9 @@ class PromotionGate:
                 self.model_name, version.version, "cv_wape", f"{candidate.cv_wape:.6f}"
             )
             incumbent = self._current_production_version(client)
-            incumbent_wape = self._version_wape(client, incumbent) if incumbent is not None else None
+            incumbent_wape = (
+                self._version_wape(client, incumbent) if incumbent is not None else None
+            )
             if incumbent is not None and incumbent_wape is None:
                 return self._transition(
                     client,

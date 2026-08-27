@@ -5,6 +5,7 @@ for a forecasting experiment.  A local checkout should still be able to run a
 backtest when no tracking server is available; in that case this module falls
 back to a local SQLite store and records the effective URI in the log.
 """
+
 from __future__ import annotations
 
 import socket

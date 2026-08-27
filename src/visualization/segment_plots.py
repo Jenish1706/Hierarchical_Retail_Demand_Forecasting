@@ -12,6 +12,7 @@ ADIDA on the strength of a literature rule; this heatmap is the direct test of
 whether that rule holds on M5. If a global learner wins inside the sparse
 quadrants, the routing strategy is wrong and the figure says so.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -80,15 +81,18 @@ def _annotated_heatmap(
                 continue
             is_best = best_row is not None and best_row[j] == i
             ax.text(
-                j, i, f"{v:.1f}",
-                ha="center", va="center", fontsize=8.5,
+                j,
+                i,
+                f"{v:.1f}",
+                ha="center",
+                va="center",
+                fontsize=8.5,
                 weight="bold" if is_best else "normal",
                 color="black",
             )
             if is_best:
                 ax.add_patch(
-                    plt.Rectangle((j - 0.5, i - 0.5), 1, 1, fill=False,
-                                  edgecolor="black", lw=2.0)
+                    plt.Rectangle((j - 0.5, i - 0.5), 1, 1, fill=False, edgecolor="black", lw=2.0)
                 )
 
     cbar = ax.figure.colorbar(im, ax=ax, fraction=0.032, pad=0.02)
@@ -99,6 +103,7 @@ def _annotated_heatmap(
 # ---------------------------------------------------------------------------
 # Fig 6 -- model x demand class
 # ---------------------------------------------------------------------------
+
 
 def plot_model_by_demand_class(
     predictions: pd.DataFrame,
@@ -115,9 +120,7 @@ def plot_model_by_demand_class(
     """
     apply_style()
 
-    df = predictions.merge(
-        classification[["series_id", "pattern"]], on="series_id", how="inner"
-    )
+    df = predictions.merge(classification[["series_id", "pattern"]], on="series_id", how="inner")
     if df.empty:
         raise ValueError("no overlap between predictions and the SBT classification")
 
@@ -134,15 +137,14 @@ def plot_model_by_demand_class(
 
     counts = (
         classification[classification["series_id"].isin(df["series_id"].unique())]
-        .groupby("pattern", observed=True).size()
+        .groupby("pattern", observed=True)
+        .size()
     )
 
     fig, ax = plt.subplots(figsize=(1.9 * len(present) + 5.5, 0.42 * len(matrix) + 3))
     _annotated_heatmap(matrix, ax, "Relative WAPE within class\n(green = best)")
 
-    ax.set_xticklabels(
-        [f"{c}\n(n={counts.get(c, 0):,})" for c in present], rotation=0, fontsize=9
-    )
+    ax.set_xticklabels([f"{c}\n(n={counts.get(c, 0):,})" for c in present], rotation=0, fontsize=9)
     ax.set_title("Fig 6 — Model accuracy by demand class (WAPE)")
     ax.set_xlabel("")
 
@@ -151,12 +153,16 @@ def plot_model_by_demand_class(
     sparse = [c for c in ("INTERMITTENT", "LUMPY") if c in winners]
     routing_note = ""
     if sparse:
-        routing_note = " Winners in the sparse quadrants: " + ", ".join(
-            f"{c} -> {winners[c]}" for c in sparse
-        ) + "."
+        routing_note = (
+            " Winners in the sparse quadrants: "
+            + ", ".join(f"{c} -> {winners[c]}" for c in sparse)
+            + "."
+        )
 
     return save_figure(
-        fig, out_dir, name,
+        fig,
+        out_dir,
+        name,
         caption=(
             f"WAPE per model within each Syntetos-Boylan-Teunter demand class. "
             f"Colour is normalised WITHIN each column, because absolute WAPE "
@@ -175,6 +181,7 @@ def plot_model_by_demand_class(
 # Fig 7 -- model x hierarchy level
 # ---------------------------------------------------------------------------
 
+
 def plot_model_by_level(
     by_level: pd.DataFrame,
     out_dir: Path | str,
@@ -191,8 +198,7 @@ def plot_model_by_level(
     should use.
     """
     apply_style()
-    matrix = by_level.pivot_table(index="model", columns="level", values=metric,
-                                  observed=True)
+    matrix = by_level.pivot_table(index="model", columns="level", values=metric, observed=True)
 
     order = [lvl for lvl in M5.HIERARCHY_LEVELS if lvl in matrix.columns]
     matrix = matrix[order]
@@ -215,7 +221,9 @@ def plot_model_by_level(
             )
 
     return save_figure(
-        fig, out_dir, name,
+        fig,
+        out_dir,
+        name,
         caption=(
             f"{metric.upper()} per model at each of the six aggregation levels, "
             f"forecasts summed bottom-up. Colour normalised within each column so "
@@ -229,6 +237,7 @@ def plot_model_by_level(
 # ---------------------------------------------------------------------------
 # Fig 8 -- model x category
 # ---------------------------------------------------------------------------
+
 
 def plot_model_by_category(
     predictions: pd.DataFrame,
@@ -263,7 +272,9 @@ def plot_model_by_category(
     ax.legend(fontsize=8, title="Category")
 
     return save_figure(
-        fig, out_dir, name,
+        fig,
+        out_dir,
+        name,
         caption=(
             "WAPE per model within each product category. HOBBIES is the sparsest "
             "category and the hardest for every model; FOODS is the densest and "
@@ -276,6 +287,7 @@ def plot_model_by_category(
 # ---------------------------------------------------------------------------
 # Fig 11 -- horizon degradation
 # ---------------------------------------------------------------------------
+
 
 def plot_horizon_degradation(
     predictions: pd.DataFrame,
@@ -303,9 +315,9 @@ def plot_horizon_degradation(
         # Derive day-within-window from the date rank inside each (model,
         # origin, series) block.
         group_cols = [c for c in ("model", "origin", "series_id") if c in df.columns]
-        df["horizon_day"] = df.groupby(group_cols, observed=True)["date"].rank(
-            method="dense"
-        ).astype(int)
+        df["horizon_day"] = (
+            df.groupby(group_cols, observed=True)["date"].rank(method="dense").astype(int)
+        )
 
     rows = [
         {"model": str(model), "horizon_day": int(day), "wape": _wape(g)}
@@ -315,14 +327,22 @@ def plot_horizon_degradation(
 
     keep = (
         curves.groupby("model")["wape"].mean().sort_values().head(top_n).index
-        if top_n else curves["model"].unique()
+        if top_n
+        else curves["model"].unique()
     )
 
     fig, ax = plt.subplots(figsize=(10, 5.5))
     for model in keep:
         sub = curves[curves["model"] == model].sort_values("horizon_day")
-        ax.plot(sub["horizon_day"], sub["wape"], marker="o", markersize=3.2,
-                lw=1.7, label=str(model), color=color_for(str(model)))
+        ax.plot(
+            sub["horizon_day"],
+            sub["wape"],
+            marker="o",
+            markersize=3.2,
+            lw=1.7,
+            label=str(model),
+            color=color_for(str(model)),
+        )
 
     ax.set_xlabel("Forecast day ahead")
     ax.set_ylabel("WAPE")
@@ -334,9 +354,7 @@ def plot_horizon_degradation(
     for model in keep:
         sub = curves[curves["model"] == model].sort_values("horizon_day")
         if len(sub) > 2:
-            slopes[str(model)] = float(
-                np.polyfit(sub["horizon_day"], sub["wape"], 1)[0]
-            )
+            slopes[str(model)] = float(np.polyfit(sub["horizon_day"], sub["wape"], 1)[0])
     flattest = min(slopes, key=slopes.get) if slopes else None
     steepest = max(slopes, key=slopes.get) if slopes else None
 
@@ -348,7 +366,9 @@ def plot_horizon_degradation(
         )
 
     return save_figure(
-        fig, out_dir, name,
+        fig,
+        out_dir,
+        name,
         caption=(
             f"WAPE at each day of the forecast horizon, top {len(keep)} models by "
             f"mean accuracy.{note} Methods that emit a constant demand rate "

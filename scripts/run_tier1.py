@@ -31,6 +31,7 @@ Usage:
     python scripts/run_tier1.py --full --n-origins 5
     python scripts/run_tier1.py --with-arima --sample-series 500
 """
+
 from __future__ import annotations
 
 import argparse
@@ -91,7 +92,9 @@ def score_at_level(
         df = predictions.copy()
         if scales:
             df["scale"] = df["series_id"].map(scales)
-        return metrics_by_group(df, ["model"], scale_col="scale" if scales else None)
+        metrics = metrics_by_group(df, ["model"], scale_col="scale" if scales else None)
+        metrics["level"] = "item_store"
+        return metrics
 
     agg = aggregate_bottom_up(predictions, meta, level)
     keys = [k for k in LEVEL_KEYS[level] if k in agg.columns]
@@ -136,8 +139,9 @@ def main() -> int:
     p.add_argument("--horizon", type=int, default=M5.HORIZON_DAYS)
     p.add_argument("--history-days", type=int, default=900)
     p.add_argument("--models", nargs="*", default=None)
-    p.add_argument("--with-arima", action="store_true",
-                   help="include AutoARIMA (slow; see module docstring)")
+    p.add_argument(
+        "--with-arima", action="store_true", help="include AutoARIMA (slow; see module docstring)"
+    )
     p.add_argument("--n-jobs", type=int, default=1)
     p.add_argument("--out-dir", default=None)
     p.add_argument("--no-mlflow", action="store_true")
@@ -165,16 +169,22 @@ def main() -> int:
 
     meta = (
         panel.groupby("series_id", observed=True)
-        .agg(item_id=("item_id", "first"), store_id=("store_id", "first"),
-             dept_id=("dept_id", "first"), cat_id=("cat_id", "first"),
-             state_id=("state_id", "first"))
+        .agg(
+            item_id=("item_id", "first"),
+            store_id=("store_id", "first"),
+            dept_id=("dept_id", "first"),
+            cat_id=("cat_id", "first"),
+            state_id=("state_id", "first"),
+        )
         .reset_index()
     )
     n_series = len(meta)
 
     origins = rolling_origins(
-        n_origins=args.n_origins, horizon=args.horizon,
-        last_date=panel["date"].max(), first_date=panel["date"].min(),
+        n_origins=args.n_origins,
+        horizon=args.horizon,
+        last_date=panel["date"].max(),
+        first_date=panel["date"].min(),
     )
 
     # --- run every origin ---
@@ -187,8 +197,7 @@ def main() -> int:
         train, test = origin.split_frame(panel)
         assert_no_temporal_leakage(train, test)
 
-        log.info("tier1_origin", detail=origin.describe(),
-                 n_train=len(train), n_test=len(test))
+        log.info("tier1_origin", detail=origin.describe(), n_train=len(train), n_test=len(test))
 
         # RMSSE scale from the TRAINING window, per M5 rules. Recomputed each
         # origin because the training window differs.
@@ -226,8 +235,11 @@ def main() -> int:
     # --- score through the harness, at every level ---
     overall = metrics_by_group(preds, ["model"], scale_col="scale")
     by_origin = metrics_by_group(preds, ["model", "origin"], scale_col="scale")
-    by_category = metrics_by_group(preds, ["model", "cat_id"], scale_col="scale") \
-        if "cat_id" in preds.columns else pd.DataFrame()
+    by_category = (
+        metrics_by_group(preds, ["model", "cat_id"], scale_col="scale")
+        if "cat_id" in preds.columns
+        else pd.DataFrame()
+    )
 
     # Attach segment metadata for the category breakdown.
     if by_category.empty:
@@ -243,7 +255,9 @@ def main() -> int:
 
     mean_timings = (
         timings.groupby(["model", "group"], observed=True)["fit_predict_seconds"]
-        .mean().reset_index().rename(columns={"fit_predict_seconds": "mean_seconds"})
+        .mean()
+        .reset_index()
+        .rename(columns={"fit_predict_seconds": "mean_seconds"})
     )
     overall = overall.merge(mean_timings, on="model", how="left")
 
@@ -288,26 +302,35 @@ def main() -> int:
             "worse figure here is expected, not a defect."
         ),
         "arima_note": (
-            "AutoARIMA included" if args.with_arima else
-            "AutoARIMA excluded at level 12: order selection across 95%-zero "
+            "AutoARIMA included"
+            if args.with_arima
+            else "AutoARIMA excluded at level 12: order selection across 95%-zero "
             "series is expensive and yields degenerate orders. Run with "
             "--with-arima, or at aggregated levels where series are continuous."
         ),
         "mlflow_logged": mlflow_logged,
     }
-    (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, default=str), encoding="utf-8")
+    (out_dir / "manifest.json").write_text(
+        json.dumps(manifest, indent=2, default=str), encoding="utf-8"
+    )
 
     # --- console report ---
     pd.set_option("display.width", 200)
     print("\n" + "=" * 88)
     print("TIER 1 -- STATISTICAL MODELS")
     print("=" * 88)
-    print(f"  series: {n_series:,}   origins: {args.n_origins}   horizon: {args.horizon}d   "
-          f"models: {len(overall)}   elapsed: {manifest['elapsed_seconds']}s")
+    print(
+        f"  series: {n_series:,}   origins: {args.n_origins}   horizon: {args.horizon}d   "
+        f"models: {len(overall)}   elapsed: {manifest['elapsed_seconds']}s"
+    )
     if failures:
         print(f"  FAILED: {failures}")
 
-    cols = [c for c in ("model", "wape", "rmsse", "mase", "mae", "bias", "mean_seconds") if c in overall.columns]
+    cols = [
+        c
+        for c in ("model", "wape", "rmsse", "mase", "mae", "bias", "mean_seconds")
+        if c in overall.columns
+    ]
     print("\n--- OVERALL, item-store level (all origins pooled) " + "-" * 36)
     print(overall[cols].round(3).to_string(index=False))
 
@@ -357,14 +380,16 @@ def _log_mlflow(overall: pd.DataFrame, by_level: pd.DataFrame, args, n_series: i
         for _, row in overall.iterrows():
             model = str(row["model"])
             with mlflow.start_run(run_name=f"tier1_{model}"):
-                mlflow.set_tags({
-                    "tier": "1_statistical",
-                    "model": model,
-                    "library": "statsforecast",
-                    "n_series": str(n_series),
-                    "n_origins": str(args.n_origins),
-                    "horizon": str(args.horizon),
-                })
+                mlflow.set_tags(
+                    {
+                        "tier": "1_statistical",
+                        "model": model,
+                        "library": "statsforecast",
+                        "n_series": str(n_series),
+                        "n_origins": str(args.n_origins),
+                        "horizon": str(args.horizon),
+                    }
+                )
                 metrics = {
                     f"item_store_{k}": float(row[k])
                     for k in ("wape", "rmsse", "mase", "mae", "bias")

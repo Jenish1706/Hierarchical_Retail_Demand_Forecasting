@@ -44,6 +44,7 @@ Makridakis et al. (2022), IJF 38(4):1346-1364 -- gradient boosting dominance
     on M5; the reason no neural model appears here.
 Bergstra et al. (2011) -- TPE, the sampler Optuna uses by default.
 """
+
 from __future__ import annotations
 
 import json
@@ -77,7 +78,7 @@ try:
     import mlflow
 
     _HAS_MLFLOW = True
-except ImportError:                                        # pragma: no cover
+except ImportError:  # pragma: no cover
     mlflow, _HAS_MLFLOW = None, False
 
 try:
@@ -85,19 +86,19 @@ try:
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     _HAS_OPTUNA = True
-except ImportError:                                        # pragma: no cover
+except ImportError:  # pragma: no cover
     optuna, _HAS_OPTUNA = None, False
 
 from lightgbm import LGBMRegressor
 
 try:
     from xgboost import XGBRegressor
-except ImportError:                                        # pragma: no cover
+except ImportError:  # pragma: no cover
     XGBRegressor = None
 
 try:
     from catboost import CatBoostRegressor
-except ImportError:                                        # pragma: no cover
+except ImportError:  # pragma: no cover
     CatBoostRegressor = None
 
 from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor
@@ -105,6 +106,7 @@ from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor
 # ===========================================================================
 # Model registry
 # ===========================================================================
+
 
 def _lgbm_tweedie(**overrides: Any) -> LGBMRegressor:
     """
@@ -151,18 +153,32 @@ MODEL_REGISTRY: dict[str, Callable[..., Any]] = {
         [("scaler", StandardScaler()), ("model", Ridge(alpha=1.0, random_state=42))]
     ),
     "random_forest": lambda: RandomForestRegressor(
-        n_estimators=200, max_depth=12, min_samples_leaf=10,
-        n_jobs=-1, random_state=42,
+        n_estimators=200,
+        max_depth=12,
+        min_samples_leaf=10,
+        n_jobs=-1,
+        random_state=42,
     ),
     "extra_trees": lambda: ExtraTreesRegressor(
-        n_estimators=300, max_depth=12, min_samples_leaf=10,
-        n_jobs=-1, random_state=42,
+        n_estimators=300,
+        max_depth=12,
+        min_samples_leaf=10,
+        n_jobs=-1,
+        random_state=42,
     ),
     "lightgbm": lambda: LGBMRegressor(
-        n_estimators=500, learning_rate=0.05, num_leaves=63,
-        min_child_samples=20, subsample=0.8, subsample_freq=1,
-        colsample_bytree=0.8, reg_alpha=0.1, reg_lambda=1.0,
-        n_jobs=-1, random_state=42, verbose=-1,
+        n_estimators=500,
+        learning_rate=0.05,
+        num_leaves=63,
+        min_child_samples=20,
+        subsample=0.8,
+        subsample_freq=1,
+        colsample_bytree=0.8,
+        reg_alpha=0.1,
+        reg_lambda=1.0,
+        n_jobs=-1,
+        random_state=42,
+        verbose=-1,
     ),
     # The zero-inflation-aware variant. Kept as a separate entry rather than
     # replacing the L2 version so the accuracy table shows what the objective
@@ -172,22 +188,35 @@ MODEL_REGISTRY: dict[str, Callable[..., Any]] = {
 
 if XGBRegressor is not None:
     MODEL_REGISTRY["xgboost"] = lambda: XGBRegressor(
-        n_estimators=500, max_depth=6, learning_rate=0.05,
-        subsample=0.8, colsample_bytree=0.8, min_child_weight=5,
-        reg_alpha=0.1, reg_lambda=1.0, n_jobs=-1, random_state=42,
+        n_estimators=500,
+        max_depth=6,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        min_child_weight=5,
+        reg_alpha=0.1,
+        reg_lambda=1.0,
+        n_jobs=-1,
+        random_state=42,
         tree_method="hist",
     )
 
 if CatBoostRegressor is not None:
     MODEL_REGISTRY["catboost"] = lambda: CatBoostRegressor(
-        iterations=500, depth=7, learning_rate=0.05,
-        l2_leaf_reg=3.0, random_seed=42, verbose=0, allow_writing_files=False,
+        iterations=500,
+        depth=7,
+        learning_rate=0.05,
+        l2_leaf_reg=3.0,
+        random_seed=42,
+        verbose=0,
+        allow_writing_files=False,
     )
 
 
 # ===========================================================================
 # Hyperparameter search spaces
 # ===========================================================================
+
 
 def _lgbm_space(trial: optuna.Trial) -> dict[str, Any]:
     return {
@@ -305,6 +334,7 @@ class StackEnsemble(_BaseEnsemble):
 # Configuration and results
 # ===========================================================================
 
+
 @dataclass
 class TrainingConfig:
     """Configuration for one training run."""
@@ -321,7 +351,7 @@ class TrainingConfig:
     tune_trials: int = 30
     tune_models: tuple[str, ...] = ("lightgbm", "lightgbm_tweedie")
 
-    models: tuple[str, ...] | None = None      # None -> whole registry
+    models: tuple[Any, ...] | None = None  # None -> whole registry
     feature_cols: list[str] | None = None
 
     # Ensembling
@@ -336,11 +366,15 @@ class TrainingConfig:
     experiment_name: str = "m5_demand_forecasting"
     register_champion: bool = True
 
-    def resolved_models(self) -> list[str]:
-        names = list(self.models) if self.models else list(MODEL_REGISTRY)
-        unknown = [n for n in names if n not in MODEL_REGISTRY]
-        if unknown:
-            raise KeyError(f"unknown models {unknown}; available: {sorted(MODEL_REGISTRY)}")
+    def resolved_models(self) -> list[Any]:
+        if not self.models:
+            return list(MODEL_REGISTRY)
+        names = []
+        for n in self.models:
+            if isinstance(n, str):
+                if n not in MODEL_REGISTRY:
+                    raise KeyError(f"unknown models {n}; available: {sorted(MODEL_REGISTRY)}")
+            names.append(n)
         return names
 
 
@@ -375,6 +409,7 @@ class ModelResult:
 # ===========================================================================
 # Trainer
 # ===========================================================================
+
 
 class DemandTrainer:
     """
@@ -437,14 +472,24 @@ class DemandTrainer:
             # already emits encoded versions; passing the raw IDs as well
             # would let the model memorise series identity.
             exclude = {
-                cfg.target_col, cfg.date_col, "id", "d", "wm_yr_wk",
-                "item_id", "store_id", "dept_id", "cat_id", "state_id",
-                "feature_version", "event_name_1", "event_name_2",
-                "event_type_1", "event_type_2",
+                cfg.target_col,
+                cfg.date_col,
+                "id",
+                "d",
+                "wm_yr_wk",
+                "item_id",
+                "store_id",
+                "dept_id",
+                "cat_id",
+                "state_id",
+                "feature_version",
+                "event_name_1",
+                "event_name_2",
+                "event_type_1",
+                "event_type_2",
             }
             feature_cols = [
-                c for c in df.columns
-                if c not in exclude and pd.api.types.is_numeric_dtype(df[c])
+                c for c in df.columns if c not in exclude and pd.api.types.is_numeric_dtype(df[c])
             ]
 
         if not feature_cols:
@@ -495,7 +540,9 @@ class DemandTrainer:
         model.fit(X, y)
         return model
 
-    def _score(self, model: Any, X: pd.DataFrame, y: pd.Series, y_in: np.ndarray) -> dict[str, float]:
+    def _score(
+        self, model: Any, X: pd.DataFrame, y: pd.Series, y_in: np.ndarray
+    ) -> dict[str, float]:
         preds = np.clip(model.predict(X), 0.0, None)
         return compute_metrics(y.to_numpy(), preds, y_insample=y_in)
 
@@ -535,9 +582,7 @@ class DemandTrainer:
                     w_outer_train[tr_idx],
                 )
                 preds = np.clip(model.predict(X_outer_train.iloc[va_idx]), 0.0, None)
-                score = compute_metrics(
-                    y_outer_train.iloc[va_idx].to_numpy(), preds
-                )["wape"]
+                score = compute_metrics(y_outer_train.iloc[va_idx].to_numpy(), preds)["wape"]
                 # A NaN WAPE means the inner validation window had no sales.
                 # Treat it as uninformative rather than as a perfect score.
                 fold_scores.append(score if np.isfinite(score) else 1e6)
@@ -592,7 +637,11 @@ class DemandTrainer:
             fold_params.append(params)
 
             # --- refit on all outer-train rows with the winning params ---
-            model = _rebuild(model_name, params) if params else MODEL_REGISTRY[model_name]()
+            model = (
+                _rebuild(model_name, params)
+                if params
+                else (MODEL_REGISTRY[model_name]() if isinstance(model_name, str) else model_name)
+            )
             self._fit(model, X_tr, y_tr, w_tr)
 
             # --- score once on the untouched outer-test fold ---
@@ -665,7 +714,11 @@ class DemandTrainer:
         for name in base_names:
             params = self.results_[name].best_params
             for tr_idx, va_idx in splits:
-                model = _rebuild(name, params) if params else MODEL_REGISTRY[name]()
+                model = (
+                    _rebuild(name, params)
+                    if params
+                    else (MODEL_REGISTRY[name]() if isinstance(name, str) else name)
+                )
                 self._fit(model, X.iloc[tr_idx], y.iloc[tr_idx], w[tr_idx])
                 oof.iloc[va_idx, oof.columns.get_loc(name)] = np.clip(
                     model.predict(X.iloc[va_idx]), 0.0, None
@@ -707,10 +760,14 @@ class DemandTrainer:
             )
             out["ensemble_stack"] = ModelResult(
                 model_name="ensemble_stack",
-                cv_wape=m["wape"], cv_rmsse=m["rmsse"],
-                cv_mae=m["mae"], cv_bias=m["bias"],
-                best_params={"base_models": base_names,
-                             "coef": dict(zip(base_names, np.round(meta.coef_, 4).tolist()))},
+                cv_wape=m["wape"],
+                cv_rmsse=m["rmsse"],
+                cv_mae=m["mae"],
+                cv_bias=m["bias"],
+                best_params={
+                    "base_models": base_names,
+                    "coef": dict(zip(base_names, np.round(meta.coef_, 4).tolist())),
+                },
             )
 
         # --- weighted blend: SLSQP over the simplex ---
@@ -745,10 +802,13 @@ class DemandTrainer:
             )
             out["ensemble_blend"] = ModelResult(
                 model_name="ensemble_blend",
-                cv_wape=m["wape"], cv_rmsse=m["rmsse"],
-                cv_mae=m["mae"], cv_bias=m["bias"],
-                best_params={"weights": {k: round(float(v), 4)
-                                         for k, v in zip(base_names, weights)}},
+                cv_wape=m["wape"],
+                cv_rmsse=m["rmsse"],
+                cv_mae=m["mae"],
+                cv_bias=m["bias"],
+                best_params={
+                    "weights": {k: round(float(v), 4) for k, v in zip(base_names, weights)}
+                },
             )
             self._log.info(
                 "blend_weights",
@@ -771,18 +831,27 @@ class DemandTrainer:
         self.fitted_models_.clear()
 
         for name in self.config.resolved_models():
-            self._log.info("training_model", model=name)
+            model_name = (
+                name
+                if isinstance(name, str)
+                else getattr(name, "__name__", name.__class__.__name__)
+            )
+            self._log.info("training_model", model=model_name)
             result = self._nested_cv(name, X, y, w)
 
             # Final refit on ALL data with the selected hyperparameters. This
             # is the artefact that gets served; its performance estimate comes
             # from the outer CV above, not from this fit.
-            final = _rebuild(name, result.best_params) if result.best_params else MODEL_REGISTRY[name]()
+            final = (
+                _rebuild(name, result.best_params)
+                if result.best_params
+                else (MODEL_REGISTRY[name]() if isinstance(name, str) else name)
+            )
             self._fit(final, X, y, w)
-            self.fitted_models_[name] = final
+            self.fitted_models_[model_name] = final
 
             result.run_id = self._log_to_mlflow(name, result, final, X)
-            self.results_[name] = result
+            self.results_[model_name] = result
 
             self._log.info(
                 "model_complete",
@@ -796,7 +865,7 @@ class DemandTrainer:
         # without that the promotion gate cannot register an ensemble champion.
         for name, result in self._build_ensembles(X, y, w).items():
             result.run_id = self._log_to_mlflow(name, result, self.fitted_models_.get(name), X)
-            self.results_[name] = result
+            self.results_[model_name] = result
 
         self.leaderboard_ = (
             pd.DataFrame([r.to_row() for r in self.results_.values()])
@@ -822,10 +891,7 @@ class DemandTrainer:
         RMSSE comes into its own in the per-series backtest, where each series
         carries its own scale.
         """
-        valid = {
-            k: v for k, v in self.results_.items()
-            if np.isfinite(v.cv_wape) and v.cv_wape > 0
-        }
+        valid = {k: v for k, v in self.results_.items() if np.isfinite(v.cv_wape) and v.cv_wape > 0}
         if not valid:
             raise RuntimeError("no model produced a finite CV WAPE")
         return min(valid, key=lambda k: valid[k].cv_wape)
@@ -876,7 +942,7 @@ class DemandTrainer:
                     self._log_model_artifact(name, model, X)
 
                 return run.info.run_id
-        except Exception as exc:                            # pragma: no cover
+        except Exception as exc:  # pragma: no cover
             self._log.warning("mlflow_logging_failed", model=name, error=str(exc))
             return None
 

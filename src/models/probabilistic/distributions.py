@@ -6,6 +6,7 @@ on an observed series.  Tweedie is reported with a mean deviance diagnostic,
 not placed in the AIC ranking, because its power parameter is fixed rather than
 jointly maximum-likelihood fitted in this lightweight screen.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -35,13 +36,20 @@ def _validate_counts(y: np.ndarray | pd.Series) -> np.ndarray:
     values = np.asarray(y, dtype=float).reshape(-1)
     if values.size == 0:
         raise ValueError("cannot fit a distribution to an empty series")
-    if not np.isfinite(values).all() or (values < 0).any() or not np.allclose(values, np.rint(values)):
+    if (
+        not np.isfinite(values).all()
+        or (values < 0).any()
+        or not np.allclose(values, np.rint(values))
+    ):
         raise ValueError("distribution fitting expects finite non-negative integer unit counts")
     return values.astype(int)
 
 
 def _aic_bic(log_likelihood: float, n_parameters: int, n: int) -> tuple[float, float]:
-    return -2.0 * log_likelihood + 2.0 * n_parameters, -2.0 * log_likelihood + n_parameters * np.log(n)
+    return (
+        -2.0 * log_likelihood + 2.0 * n_parameters,
+        -2.0 * log_likelihood + n_parameters * np.log(n),
+    )
 
 
 def _fit_zip(y: np.ndarray) -> tuple[float, float, float]:
@@ -52,7 +60,11 @@ def _fit_zip(y: np.ndarray) -> tuple[float, float, float]:
     def negative_log_likelihood(theta: np.ndarray) -> float:
         pi, rate = expit(theta[0]), np.exp(theta[1])
         zero_prob = pi + (1.0 - pi) * np.exp(-rate)
-        logp = np.where(y == 0, np.log(np.clip(zero_prob, 1e-300, None)), np.log1p(-pi) + poisson.logpmf(y, rate))
+        logp = np.where(
+            y == 0,
+            np.log(np.clip(zero_prob, 1e-300, None)),
+            np.log1p(-pi) + poisson.logpmf(y, rate),
+        )
         return float(-np.sum(logp))
 
     result = minimize(negative_log_likelihood, initial, method="L-BFGS-B")
@@ -105,7 +117,9 @@ def _fit_zinb(y: np.ndarray) -> tuple[float, float, float, float]:
     return float(pi), float(mu), float(alpha), float(-result.fun)
 
 
-def fit_count_distributions(y: np.ndarray | pd.Series, tweedie_power: float = 1.5) -> DistributionComparison:
+def fit_count_distributions(
+    y: np.ndarray | pd.Series, tweedie_power: float = 1.5
+) -> DistributionComparison:
     """Fit candidate count distributions and select only among comparable AICs.
 
     Negative-binomial uses the NB2 variance law ``Var(Y)=mu+alpha*mu^2``.  A
@@ -120,31 +134,86 @@ def fit_count_distributions(y: np.ndarray | pd.Series, tweedie_power: float = 1.
     zero_fraction = float(np.mean(values == 0))
     if mean == 0.0:
         table = pd.DataFrame(
-            [{"distribution": "degenerate_zero", "log_likelihood": 0.0, "aic": 0.0, "bic": 0.0, "selection_eligible": True}]
+            [
+                {
+                    "distribution": "degenerate_zero",
+                    "log_likelihood": 0.0,
+                    "aic": 0.0,
+                    "bic": 0.0,
+                    "selection_eligible": True,
+                }
+            ]
         )
         return DistributionComparison(table, "degenerate_zero", n, zero_fraction, mean, variance)
 
     rows: list[dict[str, Any]] = []
     poisson_ll = float(np.sum(poisson.logpmf(values, mean)))
     aic, bic = _aic_bic(poisson_ll, 1, n)
-    rows.append({"distribution": "poisson", "log_likelihood": poisson_ll, "aic": aic, "bic": bic, "selection_eligible": True, "mean": mean})
+    rows.append(
+        {
+            "distribution": "poisson",
+            "log_likelihood": poisson_ll,
+            "aic": aic,
+            "bic": bic,
+            "selection_eligible": True,
+            "mean": mean,
+        }
+    )
 
     nb_mean, nb_alpha, nb_ll = _fit_nb(values)
     aic, bic = _aic_bic(nb_ll, 2, n)
-    rows.append({"distribution": "negative_binomial", "log_likelihood": nb_ll, "aic": aic, "bic": bic, "selection_eligible": True, "mean": nb_mean, "dispersion": nb_alpha})
+    rows.append(
+        {
+            "distribution": "negative_binomial",
+            "log_likelihood": nb_ll,
+            "aic": aic,
+            "bic": bic,
+            "selection_eligible": True,
+            "mean": nb_mean,
+            "dispersion": nb_alpha,
+        }
+    )
 
     zip_pi, zip_rate, zip_ll = _fit_zip(values)
     aic, bic = _aic_bic(zip_ll, 2, n)
-    rows.append({"distribution": "zero_inflated_poisson", "log_likelihood": zip_ll, "aic": aic, "bic": bic, "selection_eligible": True, "mean": zip_rate, "zero_inflation": zip_pi})
+    rows.append(
+        {
+            "distribution": "zero_inflated_poisson",
+            "log_likelihood": zip_ll,
+            "aic": aic,
+            "bic": bic,
+            "selection_eligible": True,
+            "mean": zip_rate,
+            "zero_inflation": zip_pi,
+        }
+    )
 
     zinb_pi, zinb_mean, zinb_alpha, zinb_ll = _fit_zinb(values)
     aic, bic = _aic_bic(zinb_ll, 3, n)
-    rows.append({"distribution": "zero_inflated_negative_binomial", "log_likelihood": zinb_ll, "aic": aic, "bic": bic, "selection_eligible": True, "mean": zinb_mean, "dispersion": zinb_alpha, "zero_inflation": zinb_pi})
+    rows.append(
+        {
+            "distribution": "zero_inflated_negative_binomial",
+            "log_likelihood": zinb_ll,
+            "aic": aic,
+            "bic": bic,
+            "selection_eligible": True,
+            "mean": zinb_mean,
+            "dispersion": zinb_alpha,
+            "zero_inflation": zinb_pi,
+        }
+    )
 
     if not 1.0 < tweedie_power < 2.0:
         raise ValueError("Tweedie power must lie in (1, 2) for compound Poisson-Gamma demand")
     tweedie_deviance = mean_tweedie_deviance(values, np.full(n, mean), power=tweedie_power)
-    rows.append({"distribution": "tweedie", "mean_tweedie_deviance": tweedie_deviance, "power": tweedie_power, "selection_eligible": False})
+    rows.append(
+        {
+            "distribution": "tweedie",
+            "mean_tweedie_deviance": tweedie_deviance,
+            "power": tweedie_power,
+            "selection_eligible": False,
+        }
+    )
 
     table = pd.DataFrame(rows).sort_values("aic", na_position="last").reset_index(drop=True)
     eligible = table[table["selection_eligible"]]
@@ -155,7 +224,9 @@ def fit_count_distributions(y: np.ndarray | pd.Series, tweedie_power: float = 1.
 class NGBoostPoissonForecaster:
     """Conditional Poisson distributional baseline; compare it, do not presume it wins."""
 
-    def __init__(self, n_estimators: int = 300, learning_rate: float = 0.03, random_state: int = 42) -> None:
+    def __init__(
+        self, n_estimators: int = 300, learning_rate: float = 0.03, random_state: int = 42
+    ) -> None:
         self.n_estimators = int(n_estimators)
         self.learning_rate = float(learning_rate)
         self.random_state = int(random_state)
@@ -186,7 +257,9 @@ class NGBoostPoissonForecaster:
         levels = [float(q) for q in quantiles]
         if any(not 0.0 < q < 1.0 for q in levels):
             raise ValueError("quantiles must lie in (0, 1)")
-        features = X.reindex(columns=self.feature_names_).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        features = (
+            X.reindex(columns=self.feature_names_).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        )
         distribution = self.model_.pred_dist(features)
         raw = {q: np.clip(np.asarray(distribution.ppf(q), dtype=float), 0.0, None) for q in levels}
         matrix = np.sort(np.column_stack([raw[q] for q in sorted(raw)]), axis=1)

@@ -14,6 +14,7 @@ time series violate that assumption. EnbPI is included because it is designed
 for sequential dependence, but it is not presented as a magic finite-sample
 guarantee for M5.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
@@ -185,7 +186,9 @@ class QuantileForecaster:
             {
                 "quantile": list(predictions),
                 "nominal_coverage": list(predictions),
-                "empirical_coverage": [float(np.mean(actual <= pred)) for pred in predictions.values()],
+                "empirical_coverage": [
+                    float(np.mean(actual <= pred)) for pred in predictions.values()
+                ],
             }
         ).assign(
             calibration_error=lambda frame: (
@@ -216,8 +219,7 @@ class LinearQuantileForecaster:
         self.feature_names_ = X_clean.columns.tolist()
         design = sm.add_constant(X_clean, has_constant="add")
         self.models = {
-            q: sm.QuantReg(target, design).fit(q=q, max_iter=self.max_iter)
-            for q in self.quantiles
+            q: sm.QuantReg(target, design).fit(q=q, max_iter=self.max_iter) for q in self.quantiles
         }
         return self
 
@@ -269,7 +271,9 @@ class SplitConformalPredictor:
     def predict_interval(self, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         if self.margin_ is None:
             raise RuntimeError("call fit before predict_interval")
-        point = np.clip(np.asarray(self.base_model.predict(_feature_frame(X)), dtype=float), 0.0, None)
+        point = np.clip(
+            np.asarray(self.base_model.predict(_feature_frame(X)), dtype=float), 0.0, None
+        )
         return point, np.clip(point - self.margin_, 0.0, None), point + self.margin_
 
 
@@ -305,7 +309,10 @@ class ConformalizedQuantileRegressor:
         X_calib: pd.DataFrame,
         y_calib: pd.Series | np.ndarray,
     ) -> ConformalizedQuantileRegressor:
-        if self.lower_quantile not in self.quantile_model.quantiles or self.upper_quantile not in self.quantile_model.quantiles:
+        if (
+            self.lower_quantile not in self.quantile_model.quantiles
+            or self.upper_quantile not in self.quantile_model.quantiles
+        ):
             raise ValueError("quantile model must include CQR lower and upper quantiles")
         self.quantile_model.fit(X_train, y_train)
         pred = self.quantile_model.predict(X_calib)
@@ -323,7 +330,9 @@ class ConformalizedQuantileRegressor:
         if self.margin_ is None:
             raise RuntimeError("call fit before predict_interval")
         predictions = self.quantile_model.predict(X)
-        point = predictions.get(0.50, (predictions[self.lower_quantile] + predictions[self.upper_quantile]) / 2)
+        point = predictions.get(
+            0.50, (predictions[self.lower_quantile] + predictions[self.upper_quantile]) / 2
+        )
         lower = np.clip(predictions[self.lower_quantile] - self.margin_, 0.0, None)
         upper = predictions[self.upper_quantile] + self.margin_
         return np.asarray(point), lower, upper
@@ -332,7 +341,9 @@ class ConformalizedQuantileRegressor:
 class EnbPIPredictor:
     """MAPIE EnbPI adapter for sequentially dependent regression residuals."""
 
-    def __init__(self, base_model: Any, alpha: float = 0.10, cv: int = 5, random_state: int = 42) -> None:
+    def __init__(
+        self, base_model: Any, alpha: float = 0.10, cv: int = 5, random_state: int = 42
+    ) -> None:
         if not 0.0 < alpha < 1.0:
             raise ValueError("alpha must lie strictly between 0 and 1")
         self.base_model = base_model
@@ -378,7 +389,9 @@ class EnbPIPredictor:
 class BootstrapEnsembleForecaster:
     """Bootstrap base-model ensemble; prediction spread is an empirical interval."""
 
-    def __init__(self, base_model_factory: Callable[[], Any], n_bootstraps: int = 50, random_state: int = 42) -> None:
+    def __init__(
+        self, base_model_factory: Callable[[], Any], n_bootstraps: int = 50, random_state: int = 42
+    ) -> None:
         if n_bootstraps < 2:
             raise ValueError("n_bootstraps must be at least 2")
         self.base_model_factory = base_model_factory
@@ -405,9 +418,16 @@ class BootstrapEnsembleForecaster:
             raise RuntimeError("call fit before predict_distribution")
         X_clean = _feature_frame(X)
         samples = np.stack(
-            [np.clip(np.asarray(model.predict(X_clean), dtype=float), 0.0, None) for model in self.models_]
+            [
+                np.clip(np.asarray(model.predict(X_clean), dtype=float), 0.0, None)
+                for model in self.models_
+            ]
         )
-        return samples.mean(axis=0), np.quantile(samples, 0.10, axis=0), np.quantile(samples, 0.90, axis=0)
+        return (
+            samples.mean(axis=0),
+            np.quantile(samples, 0.10, axis=0),
+            np.quantile(samples, 0.90, axis=0),
+        )
 
 
 class ProbabilisticForecastingPipeline:

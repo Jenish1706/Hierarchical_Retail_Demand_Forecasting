@@ -34,6 +34,7 @@ The supplied workbook's price sheet was truncated at Excel's row limit, so
 than leaving callers to infer coverage from nulls -- a null price means "this
 store was cut from the file", not "this item was not for sale".
 """
+
 from __future__ import annotations
 
 import uuid
@@ -112,9 +113,9 @@ class M5Loader:
         # Single flag for "any named event on this day". Both event slots are
         # checked because a handful of dates carry two (e.g. Easter falling on
         # the same day as Orthodox Easter).
-        cal["is_event_day"] = (
-            cal["event_name_1"].notna() | cal["event_name_2"].notna()
-        ).astype("int8")
+        cal["is_event_day"] = (cal["event_name_1"].notna() | cal["event_name_2"].notna()).astype(
+            "int8"
+        )
 
         for col in ("snap_CA", "snap_TX", "snap_WI"):
             cal[col] = pd.to_numeric(cal[col], errors="coerce").fillna(0).astype("int8")
@@ -240,9 +241,19 @@ class M5Loader:
 
             if with_calendar:
                 cal_cols = [
-                    "d", "weekday", "wday", "month", "year",
-                    "event_name_1", "event_type_1", "event_name_2", "event_type_2",
-                    "is_event_day", "snap_CA", "snap_TX", "snap_WI",
+                    "d",
+                    "weekday",
+                    "wday",
+                    "month",
+                    "year",
+                    "event_name_1",
+                    "event_type_1",
+                    "event_name_2",
+                    "event_type_2",
+                    "is_event_day",
+                    "snap_CA",
+                    "snap_TX",
+                    "snap_WI",
                 ]
                 cal_cols = [c for c in cal_cols if c in cal.columns]
                 df = df.merge(cal[cal_cols], on="d", how="left")
@@ -269,7 +280,8 @@ class M5Loader:
                 date_max=str(df["date"].max().date()),
                 price_coverage_pct=(
                     round(100.0 * df["sell_price"].notna().mean(), 1)
-                    if "sell_price" in df.columns else None
+                    if "sell_price" in df.columns
+                    else None
                 ),
                 memory_mb=round(df.memory_usage(deep=True).sum() / 1e6, 1),
             )
@@ -343,9 +355,18 @@ class M5Loader:
 
     @staticmethod
     def _downcast_categoricals(df: pd.DataFrame) -> pd.DataFrame:
-        for col in ("item_id", "dept_id", "cat_id", "store_id", "state_id",
-                    "weekday", "event_name_1", "event_type_1",
-                    "event_name_2", "event_type_2"):
+        for col in (
+            "item_id",
+            "dept_id",
+            "cat_id",
+            "store_id",
+            "state_id",
+            "weekday",
+            "event_name_1",
+            "event_type_1",
+            "event_name_2",
+            "event_type_2",
+        ):
             if col in df.columns:
                 df[col] = df[col].astype("category")
         return df
@@ -364,9 +385,7 @@ class M5Loader:
         tree models consume.
         """
         df = self.load_panel(with_prices=False, with_calendar=False, **panel_kwargs)
-        df["series_id"] = (
-            df["item_id"].astype(str) + "_" + df["store_id"].astype(str)
-        )
+        df["series_id"] = df["item_id"].astype(str) + "_" + df["store_id"].astype(str)
 
         series: dict[str, np.ndarray] = {
             sid: g.sort_values("date")["sales"].to_numpy(dtype=float)

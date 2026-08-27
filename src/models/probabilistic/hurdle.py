@@ -52,6 +52,7 @@ References
 Mullahy (1986), "Specification and testing of some modified count data models",
     Journal of Econometrics 33(3):341-365.  [the hurdle model]
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -199,11 +200,13 @@ class HurdleForecaster:
         prob_positive = self.gate.predict_proba(X_clean)[:, 1]
         cond_pred = np.clip(self.regressor.predict(X_clean), 0.0, None)
         combined = np.clip(prob_positive * cond_pred, 0.0, None)
-        return pd.DataFrame({
-            "prob_positive": prob_positive,
-            "cond_positive_pred": cond_pred,
-            "hurdle_pred": combined,
-        })
+        return pd.DataFrame(
+            {
+                "prob_positive": prob_positive,
+                "cond_positive_pred": cond_pred,
+                "hurdle_pred": combined,
+            }
+        )
 
     def gate_feature_importance(self) -> pd.Series:
         """Feature importance from the zero/non-zero gate model."""

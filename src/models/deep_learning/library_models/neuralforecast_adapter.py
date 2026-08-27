@@ -6,6 +6,7 @@ does not choose a winner or tune each model to a different budget; callers
 pass the shared horizon, input window, and maximum training steps from the
 experiment configuration.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -52,7 +53,9 @@ class NeuralForecastAdapter:
     ) -> None:
         normalized = name.lower()
         if normalized not in SUPPORTED_NEURALFORECAST_MODELS:
-            raise KeyError(f"unknown library model {name!r}; choose {sorted(SUPPORTED_NEURALFORECAST_MODELS)}")
+            raise KeyError(
+                f"unknown library model {name!r}; choose {sorted(SUPPORTED_NEURALFORECAST_MODELS)}"
+            )
         self.spec = LibraryModelSpec(
             name=normalized,
             horizon=int(horizon),
@@ -115,7 +118,9 @@ class NeuralForecastAdapter:
         if self.output_column_ not in raw.columns:
             candidates = [c for c in raw.columns if c not in {"unique_id", "ds"}]
             if len(candidates) != 1:
-                raise RuntimeError(f"cannot identify model prediction column from {list(raw.columns)}")
+                raise RuntimeError(
+                    f"cannot identify model prediction column from {list(raw.columns)}"
+                )
             self.output_column_ = candidates[0]
         return raw[["unique_id", "ds", self.output_column_]].rename(
             columns={self.output_column_: "y_pred"}

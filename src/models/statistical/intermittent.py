@@ -48,6 +48,7 @@ Nikolopoulos, Syntetos, Boylan, Petropoulos & Assimakopoulos (2011), "An
     aggregate-disaggregate intermittent demand approach (ADIDA)", JORS
     62(3):544-554.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -66,18 +67,18 @@ _EPS = 1e-12
 # invalidates the citation, so they are module-level constants rather than
 # configuration.
 # ---------------------------------------------------------------------------
-ADI_CUTOFF = 1.32     # average inter-demand interval, in periods
-CV2_CUTOFF = 0.49     # squared coefficient of variation of non-zero sizes
+ADI_CUTOFF = 1.32  # average inter-demand interval, in periods
+CV2_CUTOFF = 0.49  # squared coefficient of variation of non-zero sizes
 
 
 class DemandPattern(str, Enum):  # noqa: UP042
     """The four SBT quadrants, plus a guard for series with no demand at all."""
 
-    SMOOTH = "SMOOTH"                # frequent, stable    -> global ML
-    ERRATIC = "ERRATIC"              # frequent, variable  -> global ML
-    INTERMITTENT = "INTERMITTENT"    # sparse,   stable    -> Croston-SBA
-    LUMPY = "LUMPY"                  # sparse,   variable  -> ADIDA
-    NO_DEMAND = "NO_DEMAND"          # zero throughout the training window
+    SMOOTH = "SMOOTH"  # frequent, stable    -> global ML
+    ERRATIC = "ERRATIC"  # frequent, variable  -> global ML
+    INTERMITTENT = "INTERMITTENT"  # sparse,   stable    -> Croston-SBA
+    LUMPY = "LUMPY"  # sparse,   variable  -> ADIDA
+    NO_DEMAND = "NO_DEMAND"  # zero throughout the training window
 
 
 @dataclass(frozen=True)
@@ -85,12 +86,12 @@ class DemandClassification:
     """Result of classifying one series, with the statistics behind it."""
 
     pattern: DemandPattern
-    adi: float                # average inter-demand interval
-    cv2: float                # squared CV of non-zero demand sizes
+    adi: float  # average inter-demand interval
+    cv2: float  # squared CV of non-zero demand sizes
     n_periods: int
     n_nonzero: int
     zero_fraction: float
-    mean_demand: float        # over all periods, including zeros
+    mean_demand: float  # over all periods, including zeros
 
     @property
     def is_intermittent(self) -> bool:
@@ -197,9 +198,9 @@ class CrostonForecaster:
         self.variant = variant
         self.name = "croston" if variant == "croston" else "croston_sba"
 
-        self.z_: float | None = None       # smoothed demand size
-        self.p_: float | None = None       # smoothed inter-demand interval
-        self.rate_: float | None = None    # bias-corrected per-period rate
+        self.z_: float | None = None  # smoothed demand size
+        self.p_: float | None = None  # smoothed inter-demand interval
+        self.rate_: float | None = None  # bias-corrected per-period rate
         self._fitted = False
 
     @property
@@ -235,7 +236,7 @@ class CrostonForecaster:
             p = self.alpha * gap + (1.0 - self.alpha) * p
 
         self.z_ = z
-        self.p_ = max(p, 1.0)   # an interval below one period is not meaningful
+        self.p_ = max(p, 1.0)  # an interval below one period is not meaningful
         self.rate_ = self._correction * self.z_ / self.p_
         self._fitted = True
         return self
@@ -294,7 +295,7 @@ class ADIDAForecaster:
 
         self.aggregation_level = aggregation_level
         self.alpha = alpha
-        self.k_: int | None = None            # bucket size actually used
+        self.k_: int | None = None  # bucket size actually used
         self.bucket_forecast_: float | None = None
         self.rate_: float | None = None
         self._fitted = False
@@ -305,7 +306,7 @@ class ADIDAForecaster:
         n_buckets = y.size // k
         if n_buckets == 0:
             return np.array([y.sum()], dtype=float)
-        trimmed = y[-(n_buckets * k):]        # drop the oldest ragged remainder
+        trimmed = y[-(n_buckets * k) :]  # drop the oldest ragged remainder
         return trimmed.reshape(n_buckets, k).sum(axis=1).astype(float)
 
     def fit(self, y: np.ndarray) -> ADIDAForecaster:
@@ -328,7 +329,7 @@ class ADIDAForecaster:
             level = self.alpha * float(value) + (1.0 - self.alpha) * level
 
         self.bucket_forecast_ = level
-        self.rate_ = max(level / self.k_, 0.0)   # equal-weight disaggregation
+        self.rate_ = max(level / self.k_, 0.0)  # equal-weight disaggregation
         self._fitted = True
         return self
 

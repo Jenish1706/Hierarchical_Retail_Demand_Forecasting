@@ -3,6 +3,7 @@ Hyperparameter optimization for Deep Learning models on M5.
 Target Models: DLinear, PatchTST, N-HiTS.
 Framework: neuralforecast with ray/optuna.
 """
+
 import sys
 from pathlib import Path
 
@@ -23,7 +24,9 @@ def main():
     print("Loading data...")
     loader = M5Loader()
     # Load sample to find top 300 volume item-store series
-    panel = loader.load_panel(sample_series=3000, random_state=42, with_prices=False, with_calendar=False)
+    panel = loader.load_panel(
+        sample_series=3000, random_state=42, with_prices=False, with_calendar=False
+    )
     panel["unique_id"] = panel["item_id"].astype(str) + "_" + panel["store_id"].astype(str)
 
     # Calculate volumes and filter
@@ -65,10 +68,10 @@ def main():
     models = [
         AutoDLinear(h=horizon, config=dlinear_config, num_samples=10),
         AutoPatchTST(h=horizon, config=patchtst_config, num_samples=10),
-        AutoNHITS(h=horizon, config=nhits_config, num_samples=10)
+        AutoNHITS(h=horizon, config=nhits_config, num_samples=10),
     ]
 
-    nf = NeuralForecast(models=models, freq='D')
+    nf = NeuralForecast(models=models, freq="D")
 
     print(f"Starting HPO on {len(top_300)} series...")
     # fit performs the HPO when using Auto-models
@@ -91,6 +94,7 @@ def main():
         yaml.dump(best_configs, f)
 
     print(f"Configurations saved to {out_path}")
+
 
 if __name__ == "__main__":
     main()

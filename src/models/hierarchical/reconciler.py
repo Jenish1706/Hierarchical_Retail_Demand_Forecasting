@@ -21,6 +21,7 @@ Reconciliation methods:
 Research reference: Hyndman et al. (2011) "Optimal combination forecasts
 for hierarchical time series"
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -43,6 +44,7 @@ ReconciliationMethod = Literal["bottom_up", "top_down", "ols", "mint_shrink"]
 @dataclass
 class HierarchyNode:
     """One node in the M5 hierarchy."""
+
     level: str
     entity_id: str
     parent_id: str | None
@@ -56,9 +58,7 @@ class M5HierarchyBuilder:
     Constructs the M5 hierarchy from item-level sales data.
     """
 
-    def build(
-        self, df: pd.DataFrame
-    ) -> dict[str, dict[str, list[str]]]:
+    def build(self, df: pd.DataFrame) -> dict[str, dict[str, list[str]]]:
         """
         Returns hierarchy: {level: {entity_id: [child_ids]}}
         """
@@ -71,7 +71,11 @@ class M5HierarchyBuilder:
             "item_store": {},
         }
 
-        for _, row in df[["item_id", "dept_id", "cat_id", "store_id", "state_id"]].drop_duplicates().iterrows():
+        for _, row in (
+            df[["item_id", "dept_id", "cat_id", "store_id", "state_id"]]
+            .drop_duplicates()
+            .iterrows()
+        ):
             state = row["state_id"]
             store = row["store_id"]
             cat = f"{row['cat_id']}"
@@ -156,79 +160,87 @@ class HierarchicalForecaster:
 
         return df_reconciled
 
-    def _aggregate_hierarchy(
-        self, df_item: pd.DataFrame
-    ) -> pd.DataFrame:
+    def _aggregate_hierarchy(self, df_item: pd.DataFrame) -> pd.DataFrame:
         """Aggregate item-level forecasts to all hierarchy levels."""
         rows = []
 
         # Item-store level (bottom)
         for _, row in df_item.iterrows():
-            rows.append({
-                "level": "item_store",
-                "entity_id": f"{row['item_id']}_{row['store_id']}",
-                "base_forecast": row["base_forecast"],
-                "item_id": row.get("item_id"),
-                "store_id": row.get("store_id"),
-                "dept_id": row.get("dept_id"),
-                "cat_id": row.get("cat_id"),
-                "state_id": row.get("state_id"),
-            })
+            rows.append(
+                {
+                    "level": "item_store",
+                    "entity_id": f"{row['item_id']}_{row['store_id']}",
+                    "base_forecast": row["base_forecast"],
+                    "item_id": row.get("item_id"),
+                    "store_id": row.get("store_id"),
+                    "dept_id": row.get("dept_id"),
+                    "cat_id": row.get("cat_id"),
+                    "state_id": row.get("state_id"),
+                }
+            )
 
         # Dept level
         dept_agg = df_item.groupby(["dept_id", "store_id"])["base_forecast"].sum().reset_index()
         for _, row in dept_agg.iterrows():
-            rows.append({
-                "level": "dept",
-                "entity_id": f"{row['dept_id']}_{row['store_id']}",
-                "base_forecast": row["base_forecast"],
-                "dept_id": row["dept_id"],
-                "store_id": row["store_id"],
-            })
+            rows.append(
+                {
+                    "level": "dept",
+                    "entity_id": f"{row['dept_id']}_{row['store_id']}",
+                    "base_forecast": row["base_forecast"],
+                    "dept_id": row["dept_id"],
+                    "store_id": row["store_id"],
+                }
+            )
 
         # Cat level
         cat_agg = df_item.groupby(["cat_id", "store_id"])["base_forecast"].sum().reset_index()
         for _, row in cat_agg.iterrows():
-            rows.append({
-                "level": "cat",
-                "entity_id": f"{row['cat_id']}_{row['store_id']}",
-                "base_forecast": row["base_forecast"],
-                "cat_id": row["cat_id"],
-                "store_id": row["store_id"],
-            })
+            rows.append(
+                {
+                    "level": "cat",
+                    "entity_id": f"{row['cat_id']}_{row['store_id']}",
+                    "base_forecast": row["base_forecast"],
+                    "cat_id": row["cat_id"],
+                    "store_id": row["store_id"],
+                }
+            )
 
         # Store level
         store_agg = df_item.groupby("store_id")["base_forecast"].sum().reset_index()
         for _, row in store_agg.iterrows():
-            rows.append({
-                "level": "store",
-                "entity_id": row["store_id"],
-                "base_forecast": row["base_forecast"],
-                "store_id": row["store_id"],
-            })
+            rows.append(
+                {
+                    "level": "store",
+                    "entity_id": row["store_id"],
+                    "base_forecast": row["base_forecast"],
+                    "store_id": row["store_id"],
+                }
+            )
 
         # State level
         state_agg = df_item.groupby("state_id")["base_forecast"].sum().reset_index()
         for _, row in state_agg.iterrows():
-            rows.append({
-                "level": "state",
-                "entity_id": row["state_id"],
-                "base_forecast": row["base_forecast"],
-                "state_id": row["state_id"],
-            })
+            rows.append(
+                {
+                    "level": "state",
+                    "entity_id": row["state_id"],
+                    "base_forecast": row["base_forecast"],
+                    "state_id": row["state_id"],
+                }
+            )
 
         # Total level
-        rows.append({
-            "level": "total",
-            "entity_id": "total",
-            "base_forecast": df_item["base_forecast"].sum(),
-        })
+        rows.append(
+            {
+                "level": "total",
+                "entity_id": "total",
+                "base_forecast": df_item["base_forecast"].sum(),
+            }
+        )
 
         return pd.DataFrame(rows)
 
-    def _reconcile_bottom_up(
-        self, df_all: pd.DataFrame, df_item: pd.DataFrame
-    ) -> pd.DataFrame:
+    def _reconcile_bottom_up(self, df_all: pd.DataFrame, df_item: pd.DataFrame) -> pd.DataFrame:
         """
         Bottom-up reconciliation: upper levels = sum of bottom level.
         Already done in _aggregate_hierarchy; just rename columns.
@@ -237,9 +249,7 @@ class HierarchicalForecaster:
         df_all["reconciliation_method"] = "bottom_up"
         return df_all
 
-    def _reconcile_top_down(
-        self, df_all: pd.DataFrame, df_item: pd.DataFrame
-    ) -> pd.DataFrame:
+    def _reconcile_top_down(self, df_all: pd.DataFrame, df_item: pd.DataFrame) -> pd.DataFrame:
         """
         Top-down: disaggregate total forecast using historical proportions.
         Useful when top-level forecast is more accurate.
@@ -263,18 +273,18 @@ class HierarchicalForecaster:
         df_reag["reconciliation_method"] = "top_down"
         return df_reag
 
-    def _reconcile_mint(
-        self, df_all: pd.DataFrame, df_item: pd.DataFrame
-    ) -> pd.DataFrame:
+    def _reconcile_mint(self, df_all: pd.DataFrame, df_item: pd.DataFrame) -> pd.DataFrame:
         """
         MinT (Minimum Trace) reconciliation via OLS.
         Optimal reconciliation that minimizes total forecast error variance.
         P = S(S'S)^-1 S' where S is the summing matrix.
         """
         # Build summing matrix S: rows = all levels, cols = bottom level
-        item_ids = df_item["entity_id"].tolist() if "entity_id" in df_item.columns else [
-            f"{r['item_id']}_{r['store_id']}" for _, r in df_item.iterrows()
-        ]
+        item_ids = (
+            df_item["entity_id"].tolist()
+            if "entity_id" in df_item.columns
+            else [f"{r['item_id']}_{r['store_id']}" for _, r in df_item.iterrows()]
+        )
         n_bottom = len(item_ids)
         n_all = len(df_all)
 
@@ -337,7 +347,8 @@ class HierarchicalForecaster:
                 if len(merged) > 0:
                     wape = (
                         np.abs(merged["actual"] - merged["forecast_reconciled"]).sum()
-                        / merged["actual"].sum() * 100
+                        / merged["actual"].sum()
+                        * 100
                     )
                     mae = mean_absolute_error(merged["actual"], merged["forecast_reconciled"])
                     results.append({"level": level, "wape": wape, "mae": mae, "n": len(merged)})

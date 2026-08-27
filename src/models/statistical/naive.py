@@ -28,6 +28,7 @@ References
 Hyndman & Athanasopoulos (2021), "Forecasting: Principles and Practice", 3rd
     ed., ch. 5.2 -- simple forecasting methods.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -196,7 +197,7 @@ class SimpleExponentialSmoothing(BaselineForecaster):
         level = y[0]
         sse = 0.0
         for value in y[1:]:
-            sse += (value - level) ** 2      # forecast for t is l_{t-1}
+            sse += (value - level) ** 2  # forecast for t is l_{t-1}
             level = alpha * value + (1.0 - alpha) * level
         return sse
 
@@ -247,7 +248,5 @@ BASELINE_REGISTRY: dict[str, type[BaselineForecaster]] = {
 def build_baseline(name: str, **kwargs) -> BaselineForecaster:
     """Instantiate a baseline by registry name."""
     if name not in BASELINE_REGISTRY:
-        raise KeyError(
-            f"unknown baseline {name!r}; available: {sorted(BASELINE_REGISTRY)}"
-        )
+        raise KeyError(f"unknown baseline {name!r}; available: {sorted(BASELINE_REGISTRY)}")
     return BASELINE_REGISTRY[name](**kwargs)

@@ -28,6 +28,7 @@ Tashman (2000), "Out-of-sample tests of forecasting accuracy: an analysis and
 Bergmeir & Benitez (2012), "On the use of cross-validation for time series
     predictor evaluation", Information Sciences 191:192-213.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -67,7 +68,9 @@ class Split:
             f"({self.horizon}d)"
         )
 
-    def split_frame(self, df: pd.DataFrame, date_col: str = "date") -> tuple[pd.DataFrame, pd.DataFrame]:
+    def split_frame(
+        self, df: pd.DataFrame, date_col: str = "date"
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Apply this split to a long panel, returning (train, test)."""
         dates = pd.to_datetime(df[date_col])
         train = df[(dates >= self.train_start) & (dates <= self.train_end)]
@@ -176,8 +179,7 @@ def rolling_origins(
 
         if train_end <= train_start:
             raise ValueError(
-                f"origin {i} leaves no training data: need more history before "
-                f"{train_start.date()}"
+                f"origin {i} leaves no training data: need more history before {train_start.date()}"
             )
 
         splits.append(
@@ -190,7 +192,7 @@ def rolling_origins(
             )
         )
 
-    splits = list(reversed(splits))          # chronological order
+    splits = list(reversed(splits))  # chronological order
     for s in splits:
         log.info("rolling_origin", detail=s.describe())
     return splits

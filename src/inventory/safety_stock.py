@@ -1,0 +1,323 @@
+"""Safety stock and reorder point calculation.
+
+Why this exists
+---------------
+The forecasting platform answers "what will demand be?"  This module answers
+the next question: "how much buffer inventory do we need to protect against
+forecast error at a given service level?"
+
+Two complementary approaches
+-----------------------------
+1. **Classical (forecast-error based):**
+       SS = z_alpha × sigma_e × sqrt(L)
+   Uses the standard deviation of backtest residuals as the demand uncertainty
+   estimate.  This is the textbook formula from Silver, Pyke & Thomas (2017),
+   appropriate when the forecast error distribution is approximately normal.
+
+2. **Quantile-based:**
+       SS = Q_alpha(demand_L) - mu_hat_L
+   Uses the upper quantile from the QuantileForecaster at the target service
+   level, summed over the lead-time window.  This is distribution-free and
+   leverages the existing probabilistic forecasting tier.
+
+Both approaches compute the reorder point:
+    ROP = mean_demand × L + SS
+
+The user can compare both and choose the one that better matches the actual
+demand distribution.  For zero-inflated M5 series where normality fails, the
+quantile approach is likely more accurate.
+
+Data requirements
+-----------------
+- **Classical:** point forecasts and actuals from backtest (to compute residuals)
+- **Quantile:** output of QuantileForecaster.predict() containing per-quantile
+  forecasts
+- **Both:** the demand panel for mean daily demand computation
+
+The lead time is configurable (default 7 days, matching M5's dominant weekly
+seasonality) and can be set per department for heterogeneous supply chains.
+
+References
+----------
+Silver, Pyke & Thomas (2017), "Inventory and Production Management in Supply
+    Chains", 4th ed., CRC Press -- Chapter 7: safety stock determination.
+Chopra & Meindl (2016), "Supply Chain Management", 6th ed., Pearson --
+    Chapter 12: managing uncertainty in a supply chain.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import numpy as np
+import pandas as pd
+from scipy import stats as sp_stats
+
+from src.config.logging import get_logger
+
+log = get_logger(__name__)
+
+DEFAULT_SERVICE_LEVELS: tuple[float, ...] = (0.90, 0.95, 0.98)
+DEFAULT_LEAD_TIME_DAYS: int = 7
+
+_EPS = 1e-12
+
+
+def _z_score(service_level: float) -> float:
+    """Inverse normal CDF for the target service level (cycle service level).
+
+    z(0.90) = 1.282, z(0.95) = 1.645, z(0.98) = 2.054, z(0.99) = 2.326.
+    """
+    if not 0.0 < service_level < 1.0:
+        raise ValueError(f"Service level must be in (0, 1), got {service_level}")
+    return float(sp_stats.norm.ppf(service_level))
+
+
+class SafetyStockCalculator:
+    """Compute safety stock and reorder points at multiple service levels.
+
+    Usage
+    -----
+    >>> calc = SafetyStockCalculator(lead_time_days=7)
+    >>> ss_df = calc.from_forecast_errors(forecasts_df, actuals_df, panel_df)
+    >>> ss_df[ss_df["service_level"] == 0.95]
+
+    Parameters
+    ----------
+    lead_time_days : int or dict[str, int]
+        Replenishment lead time in days.  If a dict, keys are department IDs
+        (e.g., ``{"FOODS_1": 5, "HOBBIES_1": 10}``).  Missing departments
+        fall back to ``default_lead_time`` (default 7).
+    service_levels : tuple[float, ...]
+        Target cycle service levels to evaluate.
+    default_lead_time : int
+        Fallback lead time when ``lead_time_days`` is a dict and a department
+        is not found.
+    """
+
+    def __init__(
+        self,
+        lead_time_days: int | dict[str, int] = DEFAULT_LEAD_TIME_DAYS,
+        service_levels: tuple[float, ...] = DEFAULT_SERVICE_LEVELS,
+        default_lead_time: int = DEFAULT_LEAD_TIME_DAYS,
+    ) -> None:
+        self.lead_time_days = lead_time_days
+        self.service_levels = tuple(sorted(service_levels))
+        self.default_lead_time = int(default_lead_time)
+
+        for sl in self.service_levels:
+            if not 0.0 < sl < 1.0:
+                raise ValueError(f"Service levels must be in (0, 1), got {sl}")
+
+    def _get_lead_time(self, dept_id: str | None = None) -> int:
+        """Resolve lead time for a department."""
+        if isinstance(self.lead_time_days, dict):
+            return self.lead_time_days.get(dept_id, self.default_lead_time)
+        return int(self.lead_time_days)
+
+    # ------------------------------------------------------------------
+    # Approach 1: Classical -- from backtest forecast errors
+    # ------------------------------------------------------------------
+
+    def from_forecast_errors(
+        self,
+        forecasts: pd.DataFrame,
+        actuals: pd.DataFrame,
+        panel: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """Compute safety stock using forecast error standard deviation.
+
+        Formula: SS = z(alpha) × sigma_e × sqrt(L)
+
+        Parameters
+        ----------
+        forecasts : pd.DataFrame
+            Must contain ``item_id``, ``store_id``, ``date``, ``forecast``.
+        actuals : pd.DataFrame
+            Must contain ``item_id``, ``store_id``, ``date``, ``sales``.
+        panel : pd.DataFrame
+            Full panel for mean daily demand computation.
+
+        Returns
+        -------
+        pd.DataFrame
+            One row per (item_id, store_id, service_level) with columns:
+            ``safety_stock_units``, ``reorder_point``, ``avg_daily_demand``,
+            ``forecast_error_std``, ``lead_time_days``, ``z_score``.
+        """
+        # Merge forecasts with actuals to get residuals
+        merged = forecasts.merge(
+            actuals[["item_id", "store_id", "date", "sales"]],
+            on=["item_id", "store_id", "date"],
+            how="inner",
+        )
+        merged["residual"] = merged["sales"] - merged["forecast"]
+
+        # Forecast error std per series
+        error_stats = (
+            merged.groupby(["item_id", "store_id"], observed=True)["residual"]
+            .agg(forecast_error_std="std", n_obs="count")
+            .reset_index()
+        )
+        error_stats["forecast_error_std"] = error_stats["forecast_error_std"].fillna(0.0)
+
+        # Mean daily demand from the full panel
+        demand_stats = (
+            panel.groupby(["item_id", "store_id"], observed=True)["sales"]
+            .mean()
+            .reset_index()
+            .rename(columns={"sales": "avg_daily_demand"})
+        )
+
+        # Add dept_id for lead-time lookup
+        if "dept_id" in panel.columns:
+            dept_map = (
+                panel[["item_id", "store_id", "dept_id"]]
+                .drop_duplicates()
+            )
+            demand_stats = demand_stats.merge(dept_map, on=["item_id", "store_id"], how="left")
+
+        base = error_stats.merge(demand_stats, on=["item_id", "store_id"], how="inner")
+
+        # Expand across service levels
+        rows = []
+        for _, row in base.iterrows():
+            dept = row.get("dept_id")
+            lt = self._get_lead_time(dept)
+            for sl in self.service_levels:
+                z = _z_score(sl)
+                sigma_e = row["forecast_error_std"]
+                ss = z * sigma_e * np.sqrt(lt)
+                rop = row["avg_daily_demand"] * lt + ss
+                rows.append({
+                    "item_id": row["item_id"],
+                    "store_id": row["store_id"],
+                    "dept_id": dept,
+                    "service_level": sl,
+                    "z_score": round(z, 4),
+                    "lead_time_days": lt,
+                    "avg_daily_demand": round(float(row["avg_daily_demand"]), 4),
+                    "forecast_error_std": round(float(sigma_e), 4),
+                    "safety_stock_units": round(float(max(ss, 0.0)), 2),
+                    "reorder_point": round(float(max(rop, 0.0)), 2),
+                })
+
+        result = pd.DataFrame(rows)
+        self._log_summary(result, method="forecast_error")
+        return result
+
+    # ------------------------------------------------------------------
+    # Approach 2: Quantile-based -- from probabilistic forecasts
+    # ------------------------------------------------------------------
+
+    def from_quantiles(
+        self,
+        quantile_forecasts: pd.DataFrame,
+        panel: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """Compute safety stock from quantile forecast spread.
+
+        Formula: SS = Q(alpha, lead_time) - mean_demand × L
+
+        The quantile forecast at the target service level gives the demand
+        level that will not be exceeded with probability ``alpha``.  Safety
+        stock is the difference between that level and the expected demand
+        over the lead time.
+
+        Parameters
+        ----------
+        quantile_forecasts : pd.DataFrame
+            Must contain ``item_id``, ``store_id``, ``forecast_point``, and
+            quantile columns named ``q0.9``, ``q0.95``, ``q0.98``, etc.
+        panel : pd.DataFrame
+            Full panel for mean daily demand computation.
+
+        Returns
+        -------
+        pd.DataFrame
+            Same schema as :meth:`from_forecast_errors`.
+        """
+        # Mean daily demand
+        demand_stats = (
+            panel.groupby(["item_id", "store_id"], observed=True)["sales"]
+            .mean()
+            .reset_index()
+            .rename(columns={"sales": "avg_daily_demand"})
+        )
+
+        if "dept_id" in panel.columns:
+            dept_map = panel[["item_id", "store_id", "dept_id"]].drop_duplicates()
+            demand_stats = demand_stats.merge(dept_map, on=["item_id", "store_id"], how="left")
+
+        # Aggregate quantile forecasts per series (mean across forecast dates)
+        qf_agg = quantile_forecasts.groupby(["item_id", "store_id"], observed=True).mean(numeric_only=True).reset_index()
+
+        base = qf_agg.merge(demand_stats, on=["item_id", "store_id"], how="inner")
+
+        rows = []
+        for _, row in base.iterrows():
+            dept = row.get("dept_id")
+            lt = self._get_lead_time(dept)
+            mean_demand_lt = row["avg_daily_demand"] * lt
+
+            for sl in self.service_levels:
+                # Find the quantile column closest to the service level
+                q_col = f"q{sl}"
+                if q_col not in row.index:
+                    # Try alternative naming: q0.9, q0.95, etc.
+                    q_col_alt = f"q{sl:g}"
+                    if q_col_alt in row.index:
+                        q_col = q_col_alt
+                    else:
+                        log.warning(
+                            "quantile_missing",
+                            service_level=sl,
+                            available=[c for c in row.index if c.startswith("q")],
+                        )
+                        continue
+
+                q_demand_lt = float(row[q_col]) * lt
+                ss = max(q_demand_lt - mean_demand_lt, 0.0)
+                rop = mean_demand_lt + ss
+
+                rows.append({
+                    "item_id": row["item_id"],
+                    "store_id": row["store_id"],
+                    "dept_id": dept,
+                    "service_level": sl,
+                    "z_score": np.nan,  # not applicable for quantile method
+                    "lead_time_days": lt,
+                    "avg_daily_demand": round(float(row["avg_daily_demand"]), 4),
+                    "forecast_error_std": np.nan,  # not applicable
+                    "safety_stock_units": round(float(ss), 2),
+                    "reorder_point": round(float(rop), 2),
+                })
+
+        result = pd.DataFrame(rows)
+        self._log_summary(result, method="quantile")
+        return result
+
+    # ------------------------------------------------------------------
+    # Logging
+    # ------------------------------------------------------------------
+
+    def _log_summary(self, df: pd.DataFrame, method: str) -> None:
+        """Log a summary of safety stock calculations."""
+        if len(df) == 0:
+            log.warning("safety_stock_empty", method=method)
+            return
+
+        for sl in self.service_levels:
+            sl_df = df[df["service_level"] == sl]
+            if len(sl_df) == 0:
+                continue
+            log.info(
+                "safety_stock_computed",
+                method=method,
+                service_level=sl,
+                n_series=len(sl_df),
+                ss_median=round(float(sl_df["safety_stock_units"].median()), 2),
+                ss_mean=round(float(sl_df["safety_stock_units"].mean()), 2),
+                ss_max=round(float(sl_df["safety_stock_units"].max()), 2),
+                rop_median=round(float(sl_df["reorder_point"].median()), 2),
+            )

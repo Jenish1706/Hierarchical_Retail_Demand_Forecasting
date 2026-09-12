@@ -1,0 +1,318 @@
+"""Working capital impact analysis and differentiated inventory policy.
+
+The business question
+---------------------
+"How much working capital can be released without materially increasing
+stockout risk?"
+
+The answer is not a single number -- it depends on *which* SKUs you reduce.
+Cutting safety stock on AX items (high-value, stable) saves a lot of money
+but risks losing your most profitable products.  Cutting CZ items
+(low-value, erratic) saves little per SKU but is low-risk and there are
+many of them.
+
+This module aggregates safety-stock and service-level results into portfolio-
+level KPIs and produces a differentiated policy recommendation:
+
+    AX → 98% service level  (protect revenue, demand is predictable)
+    AY → 95% service level  (moderate buffer)
+    AZ → 95% service level  (high-value but erratic → watch closely)
+    BX → 95% service level  (moderate value, predictable)
+    BY → 95% service level  (baseline)
+    BZ → 90% service level  (moderate value, unpredictable → reduce buffer)
+    CX → 90% service level  (low value, can afford lower fill rate)
+    CY → 90% service level  (low value, variable)
+    CZ → 90% service level  (low value, erratic → minimal buffer)
+
+The recommendation is transparent: it shows exactly how much capital is
+released by each downgrade and how much additional stockout risk is accepted.
+
+KPIs computed
+-------------
+- Inventory Turnover = Annual demand / Average inventory
+- Days of Inventory (DOI) = 365 / Turnover
+- Sell-Through Rate = Demand / (Demand + Average inventory)  [proxy]
+- Working Capital Tied = Average inventory × unit cost
+- Capital Release = WC(current_policy) - WC(recommended_policy)
+
+References
+----------
+Ramanathan, R. (2006), "ABC inventory classification with multiple-criteria
+    using weighted linear optimization", Computers & OR 33(3):695-700.
+Scholz-Reiter et al. (2012), "An integrated model for inventory and
+    lead-time management", IJPE 134(1):1-10.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+from src.config.logging import get_logger
+
+log = get_logger(__name__)
+
+# Differentiated service-level policy: abc_xyz_class -> recommended SL.
+# These are starting recommendations, not commandments.  The marginal
+# analysis from ServiceLevelAnalyzer lets the user override any cell.
+DEFAULT_POLICY: dict[str, float] = {
+    "AX": 0.98,
+    "AY": 0.95,
+    "AZ": 0.95,
+    "BX": 0.95,
+    "BY": 0.95,
+    "BZ": 0.90,
+    "CX": 0.90,
+    "CY": 0.90,
+    "CZ": 0.90,
+    # Fallbacks for unknown / partial classifications
+    "?X": 0.95,
+    "?Y": 0.90,
+    "?Z": 0.90,
+}
+
+
+class WorkingCapitalAnalyzer:
+    """Translate inventory scenarios into working-capital and turnover KPIs.
+
+    Usage
+    -----
+    >>> wca = WorkingCapitalAnalyzer()
+    >>> kpis = wca.compute_kpis(scenarios_df)
+    >>> recs = wca.recommend_policy(kpis, current_sl=0.95)
+
+    Parameters
+    ----------
+    cost_margin_assumptions : dict[str, float] | None
+        Gross margin by category (same as ServiceLevelAnalyzer).
+    policy : dict[str, float] | None
+        ABC/XYZ class -> recommended service level.  Defaults to
+        ``DEFAULT_POLICY``.
+    """
+
+    def __init__(
+        self,
+        cost_margin_assumptions: dict[str, float] | None = None,
+        policy: dict[str, float] | None = None,
+    ) -> None:
+        self.cost_margins = cost_margin_assumptions or {
+            "FOODS": 0.60,
+            "HOUSEHOLD": 0.50,
+            "HOBBIES": 0.45,
+        }
+        self.policy = policy or DEFAULT_POLICY
+
+    def compute_kpis(self, scenarios_df: pd.DataFrame) -> pd.DataFrame:
+        """Compute inventory performance KPIs per SKU and service level.
+
+        Parameters
+        ----------
+        scenarios_df : pd.DataFrame
+            Output of ServiceLevelAnalyzer.analyze().
+
+        Returns
+        -------
+        pd.DataFrame
+            Extended with ``inventory_turnover``, ``days_of_inventory``,
+            ``sell_through_rate``, ``working_capital_tied``.
+        """
+        df = scenarios_df.copy()
+
+        # Annual demand
+        df["annual_demand"] = df["avg_daily_demand"] * 365.0
+
+        # Inventory turnover
+        df["inventory_turnover"] = np.where(
+            df["avg_inventory_units"] > 0,
+            df["annual_demand"] / df["avg_inventory_units"],
+            np.nan,
+        )
+
+        # Days of inventory
+        df["days_of_inventory"] = np.where(
+            df["inventory_turnover"] > 0,
+            365.0 / df["inventory_turnover"],
+            np.nan,
+        )
+
+        # Sell-through rate (proxy: demand / (demand + avg inventory))
+        denom = df["annual_demand"] + df["avg_inventory_units"]
+        df["sell_through_rate"] = np.where(
+            denom > 0,
+            df["annual_demand"] / denom,
+            np.nan,
+        )
+
+        # Working capital tied = avg inventory × unit cost
+        df["working_capital_tied"] = np.where(
+            pd.notna(df["unit_cost"]),
+            df["avg_inventory_units"] * df["unit_cost"],
+            np.nan,
+        )
+
+        # Round for readability
+        for col in ["inventory_turnover", "days_of_inventory", "sell_through_rate",
+                     "working_capital_tied", "annual_demand"]:
+            df[col] = df[col].round(2)
+
+        log.info("kpis_computed", n_rows=len(df))
+        return df
+
+    def recommend_policy(
+        self,
+        kpis_df: pd.DataFrame,
+        current_sl: float = 0.95,
+    ) -> pd.DataFrame:
+        """Generate differentiated policy recommendations per SKU.
+
+        Compares a uniform ``current_sl`` policy against the segment-specific
+        recommended policy.  Shows how much capital is released (or consumed)
+        per SKU by switching.
+
+        Parameters
+        ----------
+        kpis_df : pd.DataFrame
+            Output of :meth:`compute_kpis`.
+        current_sl : float
+            The existing blanket service level to compare against.
+
+        Returns
+        -------
+        pd.DataFrame
+            One row per (item_id, store_id) with:
+            ``current_sl``, ``recommended_sl``, ``current_wc``,
+            ``recommended_wc``, ``capital_released``, ``stockout_risk_delta``.
+        """
+        # Get the current-policy rows
+        current = kpis_df[kpis_df["service_level"] == current_sl].copy()
+        if len(current) == 0:
+            log.warning(
+                "current_sl_not_found",
+                current_sl=current_sl,
+                available=sorted(kpis_df["service_level"].unique().tolist()),
+            )
+            return pd.DataFrame()
+
+        rows = []
+        for _, row in current.iterrows():
+            abc_xyz = str(row.get("abc_xyz_class", "??"))
+            rec_sl = self.policy.get(abc_xyz, current_sl)
+
+            # Find the recommended-SL row for this SKU
+            rec_row = kpis_df[
+                (kpis_df["item_id"] == row["item_id"])
+                & (kpis_df["store_id"] == row["store_id"])
+                & (kpis_df["service_level"] == rec_sl)
+            ]
+
+            if len(rec_row) == 0:
+                # Recommended SL not computed; keep current
+                rec_wc = row["working_capital_tied"]
+                rec_ss = row["safety_stock_units"]
+                rec_stockout = row.get("stockout_cost_annual", np.nan)
+            else:
+                rec_row = rec_row.iloc[0]
+                rec_wc = rec_row["working_capital_tied"]
+                rec_ss = rec_row["safety_stock_units"]
+                rec_stockout = rec_row.get("stockout_cost_annual", np.nan)
+
+            current_wc = row["working_capital_tied"]
+            current_stockout = row.get("stockout_cost_annual", np.nan)
+
+            capital_released = (
+                (current_wc - rec_wc)
+                if pd.notna(current_wc) and pd.notna(rec_wc)
+                else np.nan
+            )
+
+            stockout_risk_delta = (
+                (rec_stockout - current_stockout)
+                if pd.notna(rec_stockout) and pd.notna(current_stockout)
+                else np.nan
+            )
+
+            rows.append({
+                "item_id": row["item_id"],
+                "store_id": row["store_id"],
+                "abc_xyz_class": abc_xyz,
+                "current_service_level": current_sl,
+                "recommended_service_level": rec_sl,
+                "policy_change": "downgrade" if rec_sl < current_sl else (
+                    "upgrade" if rec_sl > current_sl else "maintain"
+                ),
+                "current_safety_stock": round(float(row["safety_stock_units"]), 2),
+                "recommended_safety_stock": round(float(rec_ss), 2),
+                "current_working_capital": round(float(current_wc), 2) if pd.notna(current_wc) else np.nan,
+                "recommended_working_capital": round(float(rec_wc), 2) if pd.notna(rec_wc) else np.nan,
+                "capital_released": round(float(capital_released), 2) if pd.notna(capital_released) else np.nan,
+                "stockout_risk_delta": round(float(stockout_risk_delta), 2) if pd.notna(stockout_risk_delta) else np.nan,
+                "inventory_turnover": round(float(row.get("inventory_turnover", np.nan)), 2) if pd.notna(row.get("inventory_turnover")) else np.nan,
+                "days_of_inventory": round(float(row.get("days_of_inventory", np.nan)), 2) if pd.notna(row.get("days_of_inventory")) else np.nan,
+            })
+
+        result = pd.DataFrame(rows)
+        self._log_summary(result)
+        return result
+
+    def portfolio_summary(self, recommendations_df: pd.DataFrame) -> pd.DataFrame:
+        """Aggregate recommendations to portfolio level by ABC/XYZ segment.
+
+        This is the executive summary: total capital released, total extra
+        risk accepted, per segment.
+        """
+        if len(recommendations_df) == 0:
+            return pd.DataFrame()
+
+        summary = (
+            recommendations_df.groupby("abc_xyz_class", observed=True)
+            .agg(
+                n_skus=("item_id", "count"),
+                current_wc_total=("current_working_capital", "sum"),
+                recommended_wc_total=("recommended_working_capital", "sum"),
+                capital_released_total=("capital_released", "sum"),
+                stockout_risk_delta_total=("stockout_risk_delta", "sum"),
+                avg_turnover=("inventory_turnover", "mean"),
+                avg_doi=("days_of_inventory", "mean"),
+                upgrades=("policy_change", lambda x: (x == "upgrade").sum()),
+                downgrades=("policy_change", lambda x: (x == "downgrade").sum()),
+                maintained=("policy_change", lambda x: (x == "maintain").sum()),
+            )
+            .reset_index()
+        )
+
+        # Round
+        for col in ["current_wc_total", "recommended_wc_total",
+                     "capital_released_total", "stockout_risk_delta_total",
+                     "avg_turnover", "avg_doi"]:
+            if col in summary.columns:
+                summary[col] = summary[col].round(2)
+
+        log.info(
+            "portfolio_summary",
+            total_capital_released=round(float(summary["capital_released_total"].sum()), 2),
+            total_downgrades=int(summary["downgrades"].sum()),
+            total_upgrades=int(summary["upgrades"].sum()),
+        )
+        return summary
+
+    def _log_summary(self, df: pd.DataFrame) -> None:
+        """Log policy recommendation summary."""
+        if len(df) == 0:
+            log.warning("recommendations_empty")
+            return
+
+        n_upgrade = (df["policy_change"] == "upgrade").sum()
+        n_downgrade = (df["policy_change"] == "downgrade").sum()
+        n_maintain = (df["policy_change"] == "maintain").sum()
+        total_released = df["capital_released"].sum()
+
+        log.info(
+            "policy_recommended",
+            n_skus=len(df),
+            upgrades=int(n_upgrade),
+            downgrades=int(n_downgrade),
+            maintained=int(n_maintain),
+            total_capital_released=round(float(total_released), 2) if pd.notna(total_released) else "N/A",
+        )

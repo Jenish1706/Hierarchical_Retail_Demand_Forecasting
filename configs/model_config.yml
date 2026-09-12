@@ -177,3 +177,39 @@ mlflow:
   # A challenger must beat the incumbent by this relative margin on the primary
   # metric before promotion, so Production does not churn on fold-to-fold noise.
   promotion_min_improvement_pct: 2.0
+
+# ---------------------------------------------------------------------------
+# Inventory optimisation -- stockout risk vs working capital
+# ---------------------------------------------------------------------------
+# This section configures the inventory layer that sits downstream of the
+# forecasting platform.  It converts demand forecasts into replenishment
+# decisions with explicit cost/risk trade-offs.
+#
+# Price constraint: sell_price covers CA_1 and CA_2 only (15.3% of the full
+# M5 price table).  ABC classification and working-capital calculations are
+# therefore scoped to those two stores; XYZ and safety-stock work on all 10.
+inventory:
+  lead_time_days: 7              # weekly replenishment; matches dominant seasonality
+  service_levels: [0.90, 0.95, 0.98]
+
+  # Annual holding cost as a fraction of unit cost.  Covers warehousing,
+  # capital cost, obsolescence and insurance.  Industry standard range is
+  # 20-30% (Chopra & Meindl, Ch. 12).
+  holding_cost_rate: 0.25
+
+  # Cumulative revenue cutoffs for A (top 80%) and A+B (top 95%).
+  abc_thresholds: [0.80, 0.95]
+
+  # Coefficient of variation cutoffs for X (stable) and Y (variable).
+  xyz_thresholds: [0.50, 1.00]
+
+  # CV is computed over this trailing window from the last date in the panel.
+  cv_window_days: 90
+
+  # Gross margin by category, used to back-calculate unit cost from sell
+  # price.  These are ASSUMPTIONS, not observed data -- M5 has no COGS.
+  # Documented explicitly so every downstream calculation is auditable.
+  cost_margin_assumptions:
+    FOODS: 0.60
+    HOUSEHOLD: 0.50
+    HOBBIES: 0.45

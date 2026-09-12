@@ -1,10 +1,11 @@
 # M5 Retail Demand & Inventory Intelligence Platform
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-87%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-91%20passed-brightgreen.svg)]()
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![DVC Pipeline](https://img.shields.io/badge/pipeline-DVC%20v3-orange.svg)](https://dvc.org)
 [![Data Engine: Polars](https://img.shields.io/badge/engine-Polars%20lazy%20streaming-blueviolet.svg)](https://pola.rs)
+[![Streamlit Dashboard](https://img.shields.io/badge/dashboard-Streamlit-FF4B4B.svg)](streamlit_app.py)
 
 A production-grade, end-to-end demand intelligence and operations analytics platform built on **58.3 million transactions** of daily Walmart retail sales (30,490 SKUs across 10 stores over 5 years).
 
@@ -172,6 +173,7 @@ Analysis across 30,490 catalog SKUs (evaluated on price-verified CA stores):
 │   └── optimize_reports.py          # Enforces 7-bit ASCII & creates Snappy Parquet companions
 ├── src/
 │   ├── config/                      # Dataclasses & global paths
+│   ├── dashboard/                   # Streamlit interactive views & cached data loaders
 │   ├── data/                        # Melt loader & Pandera validator
 │   ├── features/                    # Polars lazy engine, base lags/rolling, advanced encodings
 │   ├── models/
@@ -189,7 +191,8 @@ Analysis across 30,490 catalog SKUs (evaluated on price-verified CA stores):
 │   ├── evaluation/                  # Point, probabilistic, WRMSSE, splits & significance
 │   ├── visualization/               # Publication-grade plotting styles & dashboards
 │   └── mlops/                       # Drift detection & experiment tracking
-└── tests/                           # 87 automated unit, integration, and E2E tests
+├── streamlit_app.py                 # Interactive Streamlit dashboard entry point
+└── tests/                           # 91 automated unit, integration, and E2E tests
 ```
 
 ---
@@ -249,6 +252,14 @@ python scripts/run_inventory_analysis.py --stores CA_1 CA_2
 python scripts/optimize_reports.py
 ```
 
+### 4. Launch the Interactive Streamlit Dashboard
+
+Run the executive dashboard locally to explore forecasts, statistical tests, and simulate inventory policies:
+
+```bash
+streamlit run streamlit_app.py
+```
+
 ---
 
 ## Testing & Code Quality
@@ -256,7 +267,7 @@ python scripts/optimize_reports.py
 The repository enforces strict testing, type-safety, and linting standards:
 
 ```bash
-# Run the complete test suite (87 tests passing)
+# Run the complete test suite (91 tests passing)
 pytest tests/ -v
 
 # Run lint and code hygiene checks

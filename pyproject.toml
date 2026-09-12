@@ -76,10 +76,12 @@ dependencies = [
     # MLOps
     "mlflow>=2.9.0",
 
-    # Pillar 5 -- results analysis
+    # Pillar 5 -- results analysis & dashboard
     "matplotlib>=3.8.0",
     "seaborn>=0.13.0",
     "shap>=0.44.0",
+    "plotly>=5.18.0",
+    "streamlit>=1.30.0",
 
     # Utilities
     "loguru>=0.7.2",

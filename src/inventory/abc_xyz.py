@@ -54,7 +54,6 @@ Syntetos, Boylan & Croston (2005), JORS 56(5):495-503 -- SBT quadrants.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 import numpy as np
 import pandas as pd

@@ -8,7 +8,6 @@ read as part of the same document as the forecasting leaderboard figures.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import matplotlib
 
@@ -260,7 +259,7 @@ def plot_working_capital_waterfall(
     )
 
     # Value labels
-    for i, (seg, val) in enumerate(zip(segments, releases)):
+    for i, (_seg, val) in enumerate(zip(segments, releases)):
         y_pos = starts[i] + val / 2
         ax.text(i, y_pos, f"${val:,.0f}", ha="center", va="center", fontsize=8, fontweight="bold")
     ax.text(

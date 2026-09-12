@@ -15,6 +15,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import pandas as pd
+
 # Ensure project root is on sys.path for absolute imports.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -60,6 +62,18 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _save_table(df: pd.DataFrame, file_path: Path) -> None:
+    """Save DataFrame as clean ASCII CSV and compressed Parquet."""
+    file_path = Path(file_path)
+    csv_path = file_path.with_suffix(".csv")
+    parquet_path = file_path.with_suffix(".parquet")
+    df.to_csv(csv_path, index=False, encoding="ascii", lineterminator="\n")
+    try:
+        df.to_parquet(parquet_path, compression="snappy")
+    except Exception as e:
+        log.warning("parquet_save_fallback", path=str(parquet_path), error=str(e))
+
+
 def main() -> None:
     args = parse_args()
 
@@ -89,7 +103,7 @@ def main() -> None:
     log.info("running_abc_xyz")
     classifier = ABCXYZClassifier()
     abc_xyz_df = classifier.classify(panel, prices=prices)
-    abc_xyz_df.to_csv(output_dir / "abc_xyz_classification.csv", index=False)
+    _save_table(abc_xyz_df, output_dir / "abc_xyz_classification")
     log.info("abc_xyz_saved", rows=len(abc_xyz_df))
 
     # Plots
@@ -130,7 +144,7 @@ def main() -> None:
     forecasts["forecast"] = forecasts["forecast"].fillna(0.0)
 
     ss_df = calc.from_forecast_errors(forecasts, actuals, panel)
-    ss_df.to_csv(output_dir / "safety_stock.csv", index=False)
+    _save_table(ss_df, output_dir / "safety_stock")
     log.info("safety_stock_saved", rows=len(ss_df))
 
     # ---------------------------------------------------------------
@@ -139,13 +153,13 @@ def main() -> None:
     log.info("running_service_level_analysis")
     sla = ServiceLevelAnalyzer()
     scenarios = sla.analyze(ss_df, abc_xyz_df, prices=prices, panel=panel)
-    scenarios.to_csv(output_dir / "service_level_scenarios.csv", index=False)
+    _save_table(scenarios, output_dir / "service_level_scenarios")
 
     seg_summary = sla.segment_summary(scenarios)
-    seg_summary.to_csv(output_dir / "segment_summary.csv", index=False)
+    _save_table(seg_summary, output_dir / "segment_summary")
 
     marginals = sla.marginal_analysis(scenarios)
-    marginals.to_csv(output_dir / "marginal_analysis.csv", index=False)
+    _save_table(marginals, output_dir / "marginal_analysis")
 
     if len(seg_summary) > 0:
         plot_service_level_tradeoff(seg_summary, output_dir / "service_level_tradeoff.png")
@@ -156,13 +170,13 @@ def main() -> None:
     log.info("running_working_capital")
     wca = WorkingCapitalAnalyzer()
     kpis = wca.compute_kpis(scenarios)
-    kpis.to_csv(output_dir / "inventory_kpis.csv", index=False)
+    _save_table(kpis, output_dir / "inventory_kpis")
 
     recs = wca.recommend_policy(kpis, current_sl=args.current_sl)
-    recs.to_csv(output_dir / "policy_recommendations.csv", index=False)
+    _save_table(recs, output_dir / "policy_recommendations")
 
     portfolio = wca.portfolio_summary(recs)
-    portfolio.to_csv(output_dir / "portfolio_summary.csv", index=False)
+    _save_table(portfolio, output_dir / "portfolio_summary")
 
     if len(portfolio) > 0:
         plot_working_capital_waterfall(portfolio, output_dir / "working_capital_waterfall.png")

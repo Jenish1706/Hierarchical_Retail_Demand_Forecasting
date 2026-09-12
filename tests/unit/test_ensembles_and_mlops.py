@@ -1,7 +1,6 @@
 """Tests that enforce OOF-only ensemble fitting and promotion policy semantics."""
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 import pytest
 

@@ -142,3 +142,28 @@ stages:
     metrics:
       - reports/backtest_main/significance/significance_report.json:
           cache: false
+
+  # -------------------------------------------------------------------------
+  # 6. Inventory optimisation: ABC/XYZ segmentation, safety stock, working capital.
+  # -------------------------------------------------------------------------
+  inventory:
+    cmd: python scripts/run_inventory_analysis.py --stores CA_1 CA_2
+    deps:
+      - scripts/run_inventory_analysis.py
+      - src/inventory/abc_xyz.py
+      - src/inventory/safety_stock.py
+      - src/inventory/service_level.py
+      - src/inventory/working_capital.py
+      - data/raw/sales_train_validation.parquet
+      - data/raw/sell_prices.parquet
+      - data/raw/calendar.parquet
+    params:
+      - configs/model_config.yml:
+          - inventory
+    outs:
+      - reports/inventory/abc_xyz_classification.csv
+      - reports/inventory/safety_stock.csv
+      - reports/inventory/service_level_scenarios.csv
+      - reports/inventory/policy_recommendations.csv
+      - reports/inventory/portfolio_summary.csv
+

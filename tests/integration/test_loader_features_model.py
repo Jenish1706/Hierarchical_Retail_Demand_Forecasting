@@ -14,7 +14,6 @@ from src.data.loader import M5Loader
 from src.evaluation.point_metrics import compute_metrics
 from src.features.base import FeaturePipeline
 
-
 pytestmark = pytest.mark.integration
 
 

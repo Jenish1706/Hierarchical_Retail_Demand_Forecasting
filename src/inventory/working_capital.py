@@ -45,8 +45,6 @@ Scholz-Reiter et al. (2012), "An integrated model for inventory and
 
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
 import pandas as pd
 

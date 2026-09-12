@@ -9,18 +9,27 @@ fails here rather than in a leaderboard nobody can sanity-check.
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 import pytest
 
 from src.evaluation.point_metrics import (
-    bias, compute_metrics, mae, mape_nonzero, mase, naive_scale, rmse, rmsse, wape,
+    bias,
+    compute_metrics,
+    mae,
+    mape_nonzero,
+    mase,
+    naive_scale,
+    rmse,
+    rmsse,
+    wape,
 )
 from src.evaluation.probabilistic_metrics import (
-    crps_from_quantiles, crps_from_samples, empirical_coverage,
-    enforce_monotonic_quantiles, mean_pinball_loss, pinball_loss,
-    reliability_curve, winkler_score,
+    crps_from_samples,
+    empirical_coverage,
+    enforce_monotonic_quantiles,
+    pinball_loss,
+    reliability_curve,
+    winkler_score,
 )
-
 
 # ===========================================================================
 # Point metrics
@@ -128,7 +137,7 @@ class TestProbabilisticMetrics:
         assert under > over
 
     def test_pinball_rejects_invalid_quantile(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="quantile must be in"):
             pinball_loss(np.array([1.0]), np.array([1.0]), 1.5)
 
     def test_crps_equals_mae_for_point_forecast(self):

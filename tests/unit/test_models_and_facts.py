@@ -15,18 +15,26 @@ import pytest
 
 from src.config.settings import M5
 from src.evaluation.significance import (
-    adjust_pvalues, diebold_mariano, friedman_test, mcb_test,
-    nemenyi_critical_difference, nemenyi_test,
+    adjust_pvalues,
+    diebold_mariano,
+    friedman_test,
+    mcb_test,
+    nemenyi_critical_difference,
+    nemenyi_test,
 )
 from src.evaluation.splits import (
-    assert_no_temporal_leakage, canonical_splits, rolling_origins,
+    assert_no_temporal_leakage,
+    canonical_splits,
+    rolling_origins,
 )
+from src.models.router import DEFAULT_ROUTING, LITERATURE_ROUTING
 from src.models.statistical.intermittent import (
-    ADIDAForecaster, CrostonForecaster, DemandPattern, classify_demand,
+    ADIDAForecaster,
+    CrostonForecaster,
+    DemandPattern,
+    classify_demand,
 )
 from src.models.statistical.naive import BASELINE_REGISTRY, build_baseline
-from src.models.router import DEFAULT_ROUTING, LITERATURE_ROUTING
-
 
 # ===========================================================================
 # M5 dataset facts
@@ -179,7 +187,7 @@ class TestIntermittentClassification:
         assert cls.adi > 1.0
 
     def test_empty_series_raises(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="cannot classify an empty series"):
             classify_demand(np.array([]))
 
 
@@ -209,7 +217,7 @@ class TestIntermittentForecasters:
         assert 0.6 < ADIDAForecaster().fit_predict(demand, 1)[0] < 1.5
 
     def test_invalid_alpha_rejected(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="alpha must be in"):
             CrostonForecaster(alpha=0.0)
 
 
@@ -233,7 +241,7 @@ class TestSignificance:
         assert diebold_mariano(a, b, horizon=28).better == "indistinguishable"
 
     def test_dm_rejects_mismatched_lengths(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="error arrays must align"):
             diebold_mariano(np.zeros(10), np.zeros(11))
 
     def test_holm_is_more_conservative_than_bh(self):

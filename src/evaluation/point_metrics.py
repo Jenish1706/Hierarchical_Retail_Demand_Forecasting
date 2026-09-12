@@ -408,7 +408,7 @@ def metrics_by_group(
             series_weights = []
 
             # Using numpy operations is faster, but for exactness we group by series
-            for sid, s_group in g.groupby(series_id_col):
+            for _sid, s_group in g.groupby(series_id_col):
                 s_yt = s_group[y_true_col].to_numpy(dtype=float)
                 s_yp = np.clip(s_group[y_pred_col].to_numpy(dtype=float), 0.0, None)
                 s_scale = s_group[scale_col].iloc[0]

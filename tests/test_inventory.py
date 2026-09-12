@@ -21,7 +21,7 @@ from src.inventory.abc_xyz import ABCXYZClassifier
 from src.inventory.safety_stock import SafetyStockCalculator
 from src.inventory.service_level import ServiceLevelAnalyzer
 from src.inventory.working_capital import WorkingCapitalAnalyzer
-from src.models.statistical.intermittent import DemandPattern, classify_demand
+from src.models.statistical.intermittent import DemandPattern
 
 
 @pytest.fixture
@@ -162,7 +162,7 @@ class TestSafetyStockCalculator:
         ss_df = calc.from_forecast_errors(forecasts, actuals, panel)
 
         # For each SKU, check monotonic increase across 0.90, 0.95, 0.98
-        for (item, store), group in ss_df.groupby(["item_id", "store_id"]):
+        for (_item, _store), group in ss_df.groupby(["item_id", "store_id"]):
             sorted_group = group.sort_values("service_level")
             ss_vals = sorted_group["safety_stock_units"].tolist()
             assert ss_vals[0] <= ss_vals[1] <= ss_vals[2]

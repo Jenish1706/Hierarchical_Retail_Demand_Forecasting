@@ -482,11 +482,16 @@ class DemandTrainer:
                 "dept_id",
                 "cat_id",
                 "state_id",
+                "series_id",
                 "feature_version",
                 "event_name_1",
                 "event_name_2",
                 "event_type_1",
                 "event_type_2",
+                "wrmsse_weight",
+                "scale",
+                "y_true",
+                "y_pred",
             }
             feature_cols = [
                 c for c in df.columns if c not in exclude and pd.api.types.is_numeric_dtype(df[c])
@@ -865,7 +870,7 @@ class DemandTrainer:
         # without that the promotion gate cannot register an ensemble champion.
         for name, result in self._build_ensembles(X, y, w).items():
             result.run_id = self._log_to_mlflow(name, result, self.fitted_models_.get(name), X)
-            self.results_[model_name] = result
+            self.results_[name] = result
 
         self.leaderboard_ = (
             pd.DataFrame([r.to_row() for r in self.results_.values()])
@@ -881,6 +886,33 @@ class DemandTrainer:
             n_models=len(self.results_),
         )
         return self.leaderboard_
+
+    def predict(self, df: pd.DataFrame, model_name: str | None = None) -> np.ndarray:
+        """
+        Generate non-negative point predictions using a fitted model or champion.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            DataFrame containing feature columns matching `self.feature_names_`.
+        model_name : str | None
+            Name of model in `self.fitted_models_`. Defaults to `self.champion_`.
+
+        Returns
+        -------
+        np.ndarray
+            Predicted demand clipped at 0.0 lower bound.
+        """
+        name = model_name or self.champion_
+        if not name or name not in self.fitted_models_:
+            raise ValueError(
+                f"Model {name!r} is not fitted. Available: {list(self.fitted_models_.keys())}"
+            )
+        if not self.feature_names_:
+            raise ValueError("Trainer has not been fitted with feature names yet.")
+
+        X = df[self.feature_names_].astype(float).fillna(0.0)
+        return np.clip(self.fitted_models_[name].predict(X), 0.0, None)
 
     def _select_champion(self) -> str:
         """

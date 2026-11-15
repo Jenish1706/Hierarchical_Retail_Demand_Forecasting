@@ -1,10 +1,10 @@
 # M5 Forecasting Laboratory: Model Card
 
 ## Model Details
-- **Architecture**: Ensembled approach featuring LightGBM (gradient boosting), DLinear (deep learning), and ADIDA (statistical routing for intermittent series).
-- **Frameworks**: LightGBM, NeuralForecast, StatsForecast.
-- **Task**: 28-day horizon hierarchical retail demand forecasting.
-- **Data**: M5 Walmart Retail Dataset (30,490 item-store series).
+- **Architecture**: Multi-tier benchmark comparing statistical intermittent models (ADIDA, Croston SBA), exponential smoothing/baselines, gradient boosted trees (LightGBM), and segment-based routing.
+- **Frameworks**: LightGBM, StatsForecast, Scikit-learn.
+- **Task**: 28-day horizon retail demand forecasting and inventory decision support.
+- **Data**: M5 Walmart Retail Dataset (30,490 item-store series across 1,913 days; evaluated on a 3,000-series sample across 3 rolling origins).
 
 ## Intended Use
 - **Primary Use Case**: Research and comparative benchmarking of forecasting architectures across varying levels of aggregation and series sparsity.
@@ -15,9 +15,9 @@
 - **Aggregation Levels**: Accuracy varies significantly by hierarchy. Deep learning excels at highly aggregated, dense continuous series (Levels 1-3), while gradient boosting excels at the lowest, most granular item-store level (Level 12).
 
 ## Metrics
-- **Primary Accuracy**: WRMSSE (Weighted Root Mean Squared Scaled Error), weighted by the cumulative dollar sales over the final 28 training days.
-- **Interpretability**: SHAP (for LightGBM).
-- **Probabilistic Calibration**: Pinball Loss, Empirical Coverage. 
+- **Primary Accuracy**: WAPE (Weighted Absolute Percentage Error) and RMSSE (Root Mean Squared Scaled Error) evaluated across 3 walk-forward origins.
+- **Statistical Significance**: Omnibus Friedman test, post-hoc Nemenyi critical difference ranking, and Holm-corrected pairwise Diebold-Mariano tests.
+- **Inventory Metrics**: Cycle Service Level (CSL), Safety Stock, Working Capital, and Stockout Risk. 
 
 ## Technical & Deployment Limitations
 - **Memory Profiling**: Feature pipeline requires ~2.5GB RAM for the full M5 dataset. Vectorization is mandatory for efficiency. 

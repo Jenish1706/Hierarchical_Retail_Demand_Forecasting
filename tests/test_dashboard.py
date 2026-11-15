@@ -50,3 +50,22 @@ def test_views_have_render():
     for view in views:
         assert hasattr(view, "render")
         assert callable(view.render)
+
+
+def test_no_hardcoded_metric_literals_in_dashboard():
+    """Ensure dashboard views and streamlit_app.py do not hardcode stale result literals."""
+    root = dl.get_project_root()
+    dashboard_files = list((root / "src" / "dashboard").rglob("*.py")) + [root / "streamlit_app.py"]
+
+    forbidden_literals = [
+        "0.812 RMSSE",
+        "$3,223 Capital Freed",
+        "32% Buffer Cut",
+        "32% buffer cost cut",
+    ]
+
+    for py_file in dashboard_files:
+        content = py_file.read_text(encoding="utf-8")
+        for literal in forbidden_literals:
+            assert literal not in content, f"Forbidden hardcoded literal '{literal}' found in {py_file.name}"
+

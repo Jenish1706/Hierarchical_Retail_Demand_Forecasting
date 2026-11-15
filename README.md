@@ -7,7 +7,7 @@
 [![Data Engine: Polars](https://img.shields.io/badge/engine-Polars%20lazy%20streaming-blueviolet.svg)](https://pola.rs)
 [![Streamlit Dashboard](https://img.shields.io/badge/dashboard-Streamlit-FF4B4B.svg)](streamlit_app.py)
 
-A production-grade, end-to-end demand intelligence and operations analytics platform built on **58.3 million transactions** of daily Walmart retail sales (30,490 SKUs across 10 stores over 5 years).
+A production-grade, end-to-end demand intelligence and operations analytics platform built on **58.3 million daily panel observations** from Walmart retail sales (30,490 SKUs across 10 stores over 1,913 days).
 
 The platform bridges the gap between raw statistical/machine learning forecasts and **actionable inventory decisions**—solving the fundamental supply chain trade-off: **Stockout Risk vs. Working Capital**.
 
@@ -18,38 +18,37 @@ The platform bridges the gap between raw statistical/machine learning forecasts 
 ```mermaid
 flowchart TD
     subgraph S1["1. High-Throughput Data Engine"]
-        A["M5 Source Data (4 sheets, 58.3M rows)"] --> B["Polars Out-of-Core Lazy Engine"]
+        A["M5 Source Data (30,490 Series x 1,913 Days)"] --> B["Polars Out-of-Core Lazy Engine"]
         B --> C["Pandera Schema Validation"]
-        B --> D["48+ Horizon-Safe Lag/Rolling Features"]
+        B --> D["Horizon-Safe Lag/Rolling Features (28d+ Shift)"]
     end
 
-    subgraph S2["2. Multi-Tier Model Zoo (15 Models)"]
-        D --> E1["Tier 1: Statistical & Intermittent<br/>(Croston, SBA, TSB, ADIDA, AutoETS)"]
-        D --> E2["Tier 2: Global Gradient Boosting<br/>(LightGBM, CatBoost, XGBoost)"]
+    subgraph S2["2. Multi-Tier Model Zoo"]
+        D --> E1["Tier 1: Statistical & Intermittent<br/>(ADIDA, Croston SBA, SES, Moving Avg)"]
+        D --> E2["Tier 2: Global Gradient Boosting<br/>(LightGBM, LightGBM Tweedie)"]
         D --> E3["Tier 3: Probabilistic & Hurdle<br/>(Two-Stage Classifier + Quantile Reg)"]
-        D --> E4["Tier 4: Deep Learning<br/>(N-BEATS, TFT, PatchTST, DeepAR, DLinear)"]
-        D --> E5["Tier 5: Reconciliation & Ensembles<br/>(MinT, Bottom-Up, Stacking, SBT Router)"]
+        D --> E4["Tier 4: Reconciliation & Ensembles<br/>(SBT Segment Router, Naive Baselines)"]
     end
 
     subgraph S3["3. Statistical Significance Engine"]
-        E1 & E2 & E3 & E4 & E5 --> F["Nested 3x3 TimeSeriesSplit CV"]
-        F --> G["Diebold-Mariano (Holm-corrected)"]
-        F --> H["Friedman Test (chi-sq=2,461, p<1e-12)"]
-        H --> I["Nemenyi Critical Difference (35/45 separable)"]
-        G & I --> J["Champion Promotion Gate"]
+        E1 & E2 & E3 & E4 --> F["Walk-Forward Rolling-Origin Backtest (3,000 Series x 3 Origins)"]
+        F --> G["Holm-Corrected Diebold-Mariano (35/45 Separable)"]
+        F --> H["Friedman Omnibus Test (chi-sq=2,461, p<1e-12)"]
+        H --> I["Nemenyi Critical Difference (CD=0.249)"]
+        G & I --> J["Champion Selection & Routing Verification"]
     end
 
     subgraph S4["4. Inventory Decision Layer (Operations Analytics)"]
-        J --> K["3x3 ABC/XYZ Pareto Segmentation"]
-        K --> L["Parametric & Empirical Quantile Safety Stock"]
-        L --> M["Service-Level Trade-offs (90% / 95% / 98% Fill Rates)"]
+        J --> K["3x3 ABC/XYZ Pareto Segmentation (CA_1 & CA_2)"]
+        K --> L["Parametric Normal Safety Stock (L=7d)"]
+        L --> M["Service-Level Trade-offs (90% / 95% / 98% CSL)"]
         M --> N["Working Capital & Reorder Point Optimization"]
     end
 
     subgraph S5["5. Production Artifacts"]
-        N --> O1["Reproducible DVC Pipeline (6 Stages)"]
-        N --> O2["Clean 7-Bit ASCII Reports + Snappy Parquet (68.4% savings)"]
-        N --> O3["Visual Executive Dashboards"]
+        N --> O1["Reproducible Pipeline Scripts"]
+        N --> O2["Clean 7-Bit ASCII Reports + Snappy Parquet Companions"]
+        N --> O3["Interactive Streamlit Dashboard"]
     end
 ```
 
@@ -67,41 +66,38 @@ Analyzed all 30,490 series over 1,913 days to categorize demand dynamics under t
 | **SMOOTH** | **3.2%** | 19.9% | $p < 1.32$ | $CV^2 < 0.49$ |
 | **ERRATIC** | **1.6%** | 9.9% | $p < 1.32$ | $CV^2 \ge 0.49$ |
 
-- **95.2% of series are sparse**, and **68.2% of all daily sales are zero**. Intermittent demand handling is not an edge case; it is the dominant physical reality of the supply chain.
+- **High Sparsity Context**: 95.2% of raw catalog series display intermittency or lumpiness when calculated across the full timeline, and 68.2% of daily records are zero. Note that this unadjusted baseline includes pre-launch zeros (median product first sale is at day 160). Trimming pre-launch zeros refines the operational demand baseline.
 
 ### Pillar 2: High-Performance Data Engineering (Polars Engine)
-- **17GB MemoryError Crash Eliminated**: Standard Pandas pipelines failed with Out-Of-Memory exceptions when computing rolling aggregates over 58.3M records.
-- **Out-of-Core Lazy Streaming**: Built a streaming feature engine using Polars lazy expressions (`scan_parquet`, `sink_parquet`), processing all **58.3M rows in 113 seconds at 10.7GB peak RAM**.
-- **Horizon-Safe Leakage Safeguard**: Features shifted by the full 28-day forecast horizon. Runtime assertions (`assert_no_temporal_leakage`) perturb target labels and verify that zero feature values shift.
-- **Data Validation**: Pandera schema checks validate 100% of data inputs against strict type and range constraints.
+- **Memory Efficiency**: Built a streaming feature engine using Polars lazy expressions (`scan_parquet`, `sink_parquet`), handling panel transforms and rolling windows without out-of-memory crashes.
+- **Horizon-Safe Leakage Safeguard**: Features shifted by at least the 28-day forecast horizon. Runtime assertions (`assert_no_temporal_leakage`) enforce strict chronological boundaries ensuring test periods never overlap with training data.
+- **Data Validation**: Pandera schema checks validate data inputs against strict type and range constraints.
 
-### Pillar 3: Multi-Tier Model Zoo (15 Models)
-1. **Tier 1 (Statistical & Intermittent)**: Naive, Seasonal Naive, Croston, Syntetos-Boylan Approximation (SBA), Teunter-Syntetos-Babai (TSB), ADIDA, AutoARIMA, AutoETS.
-2. **Tier 2 (Global Gradient Boosters)**: LightGBM (L2, Tweedie, Quantile objectives), CatBoost, XGBoost.
-3. **Tier 3 (Probabilistic & Hurdle)**: Two-stage Hurdle models (binary zero classifier + zero-truncated regression) and pinball-loss quantile regression.
-4. **Tier 4 (Deep Learning)**: N-BEATS, Temporal Fusion Transformer (TFT), PatchTST, DeepAR, DLinear, and TiDE.
-5. **Tier 5 (Hierarchical Reconciliation & Ensembles)**: Minimum Trace (MinT), Bottom-Up, Top-Down reconciliation; out-of-fold Stacking / Blending; SBT segment-based routing.
+### Pillar 3: Multi-Tier Forecasting Models
+1. **Tier 1 (Statistical & Intermittent)**: Naive, Seasonal Naive, Croston SBA, SES, ADIDA, Moving Average.
+2. **Tier 2 (Global Gradient Boosters)**: LightGBM (L2 regression and Tweedie objectives) with calendar and lag features.
+3. **Tier 3 (Probabilistic & Hurdle)**: Two-stage Hurdle models (logistic zero classifier + continuous regression) and quantile regression.
+4. **Tier 4 (Segment Routing & Ensembles)**: SBT segment-based routing dynamically allocating series to intermittent estimators or global models.
 
 ### Pillar 4: Statistical Testing & Model Selection Rigor
-- **The Deep Learning Reality Check**: LightGBM achieved **0.812 RMSSE** (11% better than the published M5 AutoETS baseline of 0.915) and outperformed all 6 deep learning architectures (RMSSE 0.831–0.963). In zero-inflated retail series (68% zeros), multi-head attention layers suffer from gradient starvation, whereas tree-based histogram binning natively isolates zero mass into discrete leaves.
-- **Non-Parametric Friedman Test**: $\chi^2 = 2,461$ ($p < 10^{-12}$), decisively rejecting the null hypothesis of equal model performance across series.
-- **Post-Hoc Nemenyi Critical Difference**: Statistically separated **35 of 45 model pairs**, proving deep learning models formed an indistinguishable cluster while LightGBM's performance lead was statistically significant ($p < 0.01$).
-- **Holm-Corrected Diebold-Mariano**: Pairwise forecast error tests preventing false discovery rate inflation across temporal horizons.
+- **The Intermittent Demand Reality Check**: In the 3,000-series walk-forward backtest (3 origins x 28 days), specialized intermittent statistical models and moving averages matched or outperformed a global LightGBM model (`adida` WAPE: 75.17%, RMSSE: 0.988; `moving_average` WAPE: 75.47%, RMSSE: 0.984; `routed_ensemble` WAPE: 76.52%, RMSSE: 0.998; `lightgbm` WAPE: 77.37%, RMSSE: 0.984). In highly sparse retail series, simple, robust statistical estimators avoid overfitting to noisy low-volume spikes.
+- **Non-Parametric Friedman Test**: $\chi^2 = 2,461$ ($p < 10^{-12}$), decisively rejecting the null hypothesis of equal model performance across the 2,950 complete series.
+- **Post-Hoc Nemenyi Critical Difference**: Critical difference $CD = 0.2494$ at $\alpha = 0.05$. `routed_ensemble` achieved the best average rank (4.545), with `croston_sba` (4.606) statistically indistinguishable from it. `adida` (4.827) and `lightgbm` (5.590) were significantly worse than the best by average rank.
+- **Holm-Corrected Diebold-Mariano**: Pairwise error tests separated 35 of 45 model pairs at $\alpha = 0.05$ after family-wise error rate control.
 
 ### Pillar 5: Inventory Optimization Layer (Stockout vs. Working Capital)
-Converts point and quantile forecasts into operational inventory policy recommendations (`src/inventory/`):
+Converts point and variance estimates into operational inventory policy recommendations (`src/inventory/`):
 
 1. **ABC/XYZ Segmentation Matrix**:
    - **ABC (Revenue Pareto)**: Class A (top 80% revenue), Class B (next 15%), Class C (bottom 5%).
    - **XYZ (Demand Variability)**: Class X ($CV \le 0.50$, stable), Class Y ($0.50 < CV \le 1.0$, moderate), Class Z ($CV > 1.0$, erratic).
 2. **Safety Stock & Reorder Point Formulation**:
-   $$\text{Safety Stock (Normal)} = z \cdot \sigma_L = z \cdot \sqrt{L \cdot \sigma_D^2 + \mu_D^2 \cdot \sigma_L^2}$$
-   $$\text{Empirical Quantile} = \max\left(0, \hat{Q}_\alpha(D_L) - \hat{\mu}_L\right)$$
+   $$\text{Safety Stock (Normal)} = z \cdot \sigma_e \cdot \sqrt{L}$$
    $$\text{Reorder Point (ROP)} = \mu_L + \text{Safety Stock}$$
+   where lead time $L = 7$ days and $\sigma_e$ is the forecast error standard deviation.
 3. **Service-Level Scenario Analysis**:
-   - Evaluated 90% ($z=1.28$), 95% ($z=1.65$), and 98% ($z=2.05$) fill rates.
-   - **Key Finding**: Erratic CZ items consume **3× more working capital per percentage point of stockout risk reduced** than core AX items due to extreme demand variance inflating the tail multiplier.
-   - **Policy Impact**: Differentiated replenishment policies (AX at 98% SL, CZ at 90% SL) released **$3,223 in trapped working capital** without increasing stockout risk on revenue drivers.
+   - Evaluated 90% ($z=1.28$), 95% ($z=1.65$), and 98% ($z=2.05$) Cycle Service Levels (CSL).
+   - **Policy Impact**: Differentiated replenishment policies (AX at 98% CSL, CZ at 90% CSL) evaluated on price-verified California stores (CA_1 and CA_2, 6,098 SKUs) released **$3,223.14 in trapped working capital** without increasing stockout risk on revenue drivers.
 
 ---
 
@@ -109,41 +105,42 @@ Converts point and quantile forecasts into operational inventory policy recommen
 
 ### 1. Model Accuracy Leaderboard (M5 Benchmark)
 
-| Model Rank | Model Name | Architecture Tier | RMSSE | WRMSSE | Training Time | Memory Peak |
+Evaluated across a representative sample of 3,000 series over 3 walk-forward rolling 28-day origins (84 evaluation days per series = 252,000 predictions per model):
+
+| Rank | Model Name | Architecture Tier | WAPE (%) | RMSSE | Nemenyi Avg Rank | Statistical Verdict |
 |---|---|---|---|---|---|---|
-| **1** | **LightGBM (Tuned)** | Global GBDT | **0.812** | **0.784** | 4.2 min | 2.1 GB |
-| **2** | **Routed SBT Ensemble** | Tier 1 + Tier 2 Hybrid | 0.819 | 0.791 | 5.8 min | 2.4 GB |
-| **3** | **Two-Stage Hurdle L-GBM**| Probabilistic Hurdle | 0.825 | 0.798 | 6.5 min | 2.8 GB |
-| **4** | **CatBoost** | Global GBDT | 0.828 | 0.803 | 14.1 min | 3.6 GB |
-| **5** | **DLinear** | PyTorch Native DL | 0.831 | 0.812 | 18.2 min | 4.1 GB |
-| **6** | **PatchTST** | PyTorch Native DL | 0.844 | 0.825 | 42.5 min | 7.2 GB |
-| **7** | **Temporal Fusion Transformer** | NeuralForecast DL | 0.852 | 0.833 | 58.0 min | 9.4 GB |
-| **8** | **N-BEATS** | NeuralForecast DL | 0.867 | 0.849 | 36.4 min | 6.8 GB |
-| **9** | **DeepAR** | NeuralForecast DL | 0.884 | 0.865 | 45.1 min | 8.0 GB |
-| **10** | **ADIDA** | Intermittent Statistical | 0.892 | 0.871 | 1.1 min | 0.8 GB |
-| **11** | **M5 AutoETS (Benchmark)**| Classical Statistical | 0.915 | 0.894 | 8.3 min | 1.2 GB |
-| **12** | **TSB** | Intermittent Statistical | 0.923 | 0.902 | 0.9 min | 0.6 GB |
-| **13** | **Croston (Classic)** | Intermittent Statistical | 0.938 | 0.918 | 0.8 min | 0.6 GB |
-| **14** | **Seasonal Naive** | Baseline | 1.042 | 1.021 | 0.1 min | 0.3 GB |
-| **15** | **Naive** | Baseline | 1.215 | 1.198 | 0.05 min | 0.2 GB |
+| **1** | **ADIDA** | Intermittent Statistical | **75.17%** | 0.988 | 4.83 | Significantly worse than best rank |
+| **2** | **Moving Average (28d)** | Simple Baseline | 75.47% | **0.984** | 4.97 | Significantly worse than best rank |
+| **3** | **Routed SBT Ensemble** | Hybrid (ADIDA + Global) | 76.52% | 0.998 | **4.54** | **Best by Average Rank** |
+| **4** | **SES** | Exponential Smoothing | 76.99% | 0.991 | 4.96 | Significantly worse than best rank |
+| **5** | **LightGBM** | Global GBDT | 77.37% | **0.984** | 5.59 | Significantly worse than best rank |
+| **6** | **LightGBM (Tweedie)** | Global GBDT | 77.46% | 1.011 | 5.41 | Significantly worse than best rank |
+| **7** | **Croston SBA** | Intermittent Statistical | 77.81% | 1.002 | 4.61 | **Indistinguishable from Best** |
+| **8** | **Seasonal Naive (Weekly)**| Baseline | 88.08% | 1.242 | 6.74 | Significantly worse than best rank |
+| **9** | **Seasonal Naive (28d)** | Baseline | 98.92% | 1.289 | 7.19 | Baseline |
+| **10** | **Naive** | Baseline | 99.65% | 1.319 | 6.16 | Baseline |
+
+*Statistical significance: Omnibus Friedman test $\chi^2 = 2460.79$ ($p < 10^{-12}$, 10 models $\times$ 2,950 complete series). Post-hoc Nemenyi critical difference $CD = 0.2494$ ($\alpha = 0.05$). Holm-corrected Diebold-Mariano tests separated 35 of 45 model pairs.*
 
 ---
 
 ### 2. Inventory Optimization & Capital Allocation Matrix
 
-Analysis across 30,490 catalog SKUs (evaluated on price-verified CA stores):
+Evaluated on stores CA_1 and CA_2 (6,098 SKUs, 4,591 with price data):
 
-| ABC/XYZ Cell | SKU Count | Revenue Share | Mean Demand CV | Recommended Policy | Target Service Level | Capital Impact |
+| ABC/XYZ Cell | SKU Count | Current Working Capital ($) | Recommended Working Capital ($) | Capital Released ($) | Target Service Level (CSL) | Policy Impact |
 |---|---|---|---|---|---|---|
-| **AX** | 248 | 62.4% | 0.38 | Continuous Review / Auto-Replenish | **98%** | High turnover, low buffer |
-| **AY** | 186 | 13.1% | 0.74 | Weekly Review / Moderate Buffer | **95%** | Medium buffer |
-| **AZ** | 42 | 4.5% | 1.24 | Bi-weekly Review / Guarded Buffer | **92%** | High volatility risk |
-| **BX** | 412 | 8.2% | 0.42 | Periodic Review / Batch Reorder | **95%** | Stable secondary stock |
-| **BY** | 620 | 5.3% | 0.78 | Periodic Review / Standard Buffer | **92%** | Moderate volume |
-| **BZ** | 215 | 1.5% | 1.35 | Dynamic Buffer / Close Monitoring | **90%** | Capital trap risk |
-| **CX** | 894 | 2.8% | 0.45 | Bulk Order / Low Attention | **92%** | Negligible holding cost |
-| **CY** | 1,421 | 1.6% | 0.82 | Min-Max Order / Conservative | **90%** | Working capital release |
-| **CZ** | 2,058 | 0.6% | 1.62 | Make-to-Order / Low Buffer (Drop) | **85%–90%** | **Freed $3,223 tied capital** |
+| **AX** | 51 | $3,249.87 | $3,553.91 | -$304.04 | **98%** | High-turnover revenue drivers; upgraded buffer |
+| **AY** | 714 | $22,398.62 | $22,398.62 | $0.00 | **95%** | Moderate volume; maintained standard buffer |
+| **AZ** | 1,086 | $24,320.08 | $24,320.08 | $0.00 | **92%** | High volatility; guarded safety buffer |
+| **BX** | 9 | $30.61 | $30.61 | $0.00 | **95%** | Stable secondary SKUs; maintained |
+| **BY** | 129 | $1,424.57 | $1,424.57 | $0.00 | **92%** | Moderate secondary volume; maintained |
+| **BZ** | 1,212 | $13,591.24 | $11,393.62 | +$2,197.62 | **90%** | Volatile secondary; working capital released |
+| **CX** | 45 | $46.51 | $46.51 | $0.00 | **92%** | Stable low volume; bulk periodic order |
+| **CY** | 30 | $192.80 | $158.52 | +$34.28 | **90%** | Slow-moving; conservative buffer |
+| **CZ** | 1,315 | $7,172.06 | $5,876.78 | +$1,295.28 | **90%** | Erratic low volume; working capital released |
+| **Unpriced (?X/?Y/?Z)** | 1,507 | $0.00 | $0.00 | $0.00 | — | CA_2 items lacking price coverage |
+| **Total Portfolio** | **6,098** | **$72,386.36** | **$69,163.22** | **+$3,223.14** | — | **$3,223.14 Net Working Capital Released** |
 
 ---
 
@@ -292,6 +289,16 @@ print('All report CSV files are 100% valid ASCII!')
 3. **Out-of-Fold Discipline**: Ensembles and meta-learners are trained strictly on out-of-fold cross-validation predictions.
 4. **No Unbacked Rankings**: No model is designated a winner based on test-set point metrics alone; all rankings require non-parametric Friedman and post-hoc Nemenyi tests.
 5. **No Data Fabrication**: Where M5 data is absent (e.g. true COGS, store coordinates, supply chain lead times), assumed parameters (holding cost %, category margins) are explicitly declared as configurable assumptions in `configs/model_config.yml`.
+
+---
+
+## Limitations
+
+1. **Truncated Price Data**: The raw source sell-price workbook was truncated at Excel's worksheet limit (1,048,575 rows), preserving price records for California stores CA_1 and CA_2 only (15.33% of the catalog). Inventory dollar valuations and capital reallocation recommendations apply strictly to these two stores; unpriced items are flagged and excluded from revenue sums.
+2. **Bottom-Level Backtest Protocol**: The cross-tier backtest evaluates a 3,000-series sample at the bottom item-store level (Level 12) across 3 rolling 28-day origins. Published Kaggle competition scores use WRMSSE aggregated across all 12 hierarchy levels across all 30,490 series, which is not directly comparable.
+3. **Deep Learning Benchmarks Pending**: Deep learning models were explored in preliminary runs but not evaluated in the cross-tier 3,000-series walk-forward backtest.
+4. **Pre-Launch Zero Exposure**: Full-history EDA includes zero sales periods prior to product launch dates (median first sale day 160).
+5. **Single-Echelon Scope**: Inventory modeling assumes single-echelon store replenishment with constant 7-day lead times; multi-echelon warehouse-to-store network interactions are not modeled.
 
 ---
 

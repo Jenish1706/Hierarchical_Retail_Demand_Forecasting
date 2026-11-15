@@ -14,8 +14,8 @@ def render() -> None:
     st.markdown("## 🤖 Model Zoo Leaderboard & Series Forecast Viewer")
     st.markdown(
         """
-        Benchmarking **15 distinct forecasting models** across 5 methodological tiers
-        using nested TimeSeriesSplit cross-validation and standardized WRMSSE / RMSSE metrics.
+        Benchmarking forecasting models across statistical, intermittent, and gradient-boosted
+        tiers using walk-forward rolling-origin evaluation and standardized accuracy metrics.
         """
     )
 

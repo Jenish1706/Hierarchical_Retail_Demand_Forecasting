@@ -59,10 +59,10 @@ st.sidebar.markdown("---")
 st.sidebar.markdown(
     """
     **Project Highlights**:
-    * **Data**: 58.3M rows / 30,490 SKUs
-    * **Accuracy**: 0.812 RMSSE (LightGBM)
-    * **Impact**: 32% buffer cost cut
-    * **Testing**: 87 automated tests passing
+    * **Data**: 58.3M panel records / 30,490 SKUs
+    * **Evaluation**: Rolling-origin walk-forward backtest
+    * **Decision Layer**: ABC/XYZ inventory & working capital simulator
+    * **Testing**: 91 automated tests passing
     """
 )
 st.sidebar.caption("IIT Kharagpur Placement Portfolio")

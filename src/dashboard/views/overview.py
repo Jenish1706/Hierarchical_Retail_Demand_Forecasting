@@ -18,6 +18,25 @@ def render() -> None:
         """
     )
 
+    # Dynamic KPI calculation from artifacts
+    acc_df = dl.load_accuracy_overall()
+    if not acc_df.empty:
+        best_row = acc_df.sort_values(by="wape").iloc[0]
+        acc_value = f"{best_row['wape']:.1f}% WAPE"
+        acc_delta = f"{best_row['model']} (RMSSE: {best_row['rmsse']:.3f})"
+    else:
+        acc_value = "Pending"
+        acc_delta = "Run backtest"
+
+    portfolio_df = dl.load_portfolio_summary()
+    if not portfolio_df.empty and "capital_released_total" in portfolio_df.columns:
+        freed = portfolio_df["capital_released_total"].sum()
+        inv_value = f"${freed:,.0f} Freed"
+        inv_delta = "CA_1 & CA_2 Rebalancing"
+    else:
+        inv_value = "Pending"
+        inv_delta = "Run inventory analysis"
+
     # Top KPI Metrics row
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -29,24 +48,24 @@ def render() -> None:
         )
     with col2:
         st.metric(
-            label="Transaction Data",
+            label="Panel Observations",
             value="58.3M Records",
-            delta="1,913 Days (5 Yrs)",
+            delta="1,913 Days (30,490 Series)",
             delta_color="off",
         )
     with col3:
         st.metric(
-            label="Forecast Accuracy",
-            value="0.812 RMSSE",
-            delta="-11% vs AutoETS Baseline",
-            delta_color="normal",
+            label="Champion Forecast",
+            value=acc_value,
+            delta=acc_delta,
+            delta_color="off",
         )
     with col4:
         st.metric(
-            label="Inventory Optimization",
-            value="32% Buffer Cut",
-            delta="$3,223 Capital Freed",
-            delta_color="normal",
+            label="Working Capital Impact",
+            value=inv_value,
+            delta=inv_delta,
+            delta_color="off",
         )
 
     st.markdown("---")
@@ -70,11 +89,11 @@ def render() -> None:
         st.success(
             """
             * **High-Throughput Streaming Engine**:
-              Processes 58.3M rows in 113s at 10.7GB RAM via Polars out-of-core lazy execution, eliminating 17GB Pandas OOM crashes.
-            * **Multi-Tier Model Zoo (15 Models)**:
-              Benchmarks statistical, intermittent, gradient boosted, and deep learning architectures with nested TimeSeriesSplit validation.
+              Processes 58.3M rows via Polars out-of-core lazy execution, eliminating high memory consumption during feature generation.
+            * **Multi-Tier Benchmark**:
+              Benchmarks statistical, intermittent, and gradient-boosted architectures on walk-forward rolling origins with non-parametric significance testing.
             * **Differentiated ABC/XYZ Policies**:
-              Segments catalog into a 3x3 matrix: ensures 98% availability on high-revenue staples (AX) while dialing back erratic, slow-moving items (CZ) to 90%, freeing capital with zero revenue loss.
+              Segments catalog into a 3x3 matrix: ensures higher availability on high-revenue staples (AX) while dialing back erratic, slow-moving items (CZ), freeing capital with controlled stockout risk.
             """
         )
 
@@ -85,8 +104,8 @@ def render() -> None:
         """
         ```mermaid
         flowchart LR
-            A[M5 Data: 58.3M Rows] --> B[Polars Lazy Engine]
-            B --> C[15 Forecasting Models]
+            A[M5 Panel: 58.3M Rows] --> B[Polars Lazy Engine]
+            B --> C[Forecasting Model Benchmark]
             C --> D[Friedman & Nemenyi Tests]
             D --> E[ABC/XYZ Segmentation]
             E --> F[Safety Stock & Capital Optimizer]

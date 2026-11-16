@@ -11,11 +11,11 @@
 - **Out of Scope**: Real-world deployment without real-time price elasticity inputs, promotional overrides, or supply constraints.
 
 ## Factors & Subgroups
-- **Sparsity**: 95.2% of the dataset is zero. The models handle this by separating predictions into intermittent (`ADIDA` via SegmentRouter) and continuous/dense blocks (where `LightGBM` and `DLinear` dominate).
-- **Aggregation Levels**: Accuracy varies significantly by hierarchy. Deep learning excels at highly aggregated, dense continuous series (Levels 1-3), while gradient boosting excels at the lowest, most granular item-store level (Level 12).
+- **Sparsity**: 68.2% of daily records across the catalog are zero; 95.2% of series fall into intermittent or lumpy SBT quadrants under full-history profiling (72.6% intermittent after pre-launch trimming). The models handle this by separating predictions into intermittent (`ADIDA` via SegmentRouter) and continuous/dense blocks (where `LightGBM` operates).
+- **Aggregation Levels**: Accuracy varies significantly by hierarchy. Point forecasts were evaluated at the lowest item-store level (Level 12) across a 3,000-series sample, where specialized intermittent statistical estimators match or beat global gradient boosting.
 
 ## Metrics
-- **Primary Accuracy**: WAPE (Weighted Absolute Percentage Error) and RMSSE (Root Mean Squared Scaled Error) evaluated across 3 walk-forward origins.
+- **Primary Accuracy**: WAPE (Weighted Absolute Percentage Error) and RMSSE (Root Mean Squared Scaled Error) evaluated across 3 walk-forward origins under canonical M5 per-series evaluation rules.
 - **Statistical Significance**: Omnibus Friedman test, post-hoc Nemenyi critical difference ranking, and Holm-corrected pairwise Diebold-Mariano tests.
 - **Inventory Metrics**: Cycle Service Level (CSL), Safety Stock, Working Capital, and Stockout Risk. 
 
@@ -26,5 +26,5 @@
 
 ## MLOps Registry Integration
 - The deployment of the final model is gated by the `PromotionGate` (`src/mlops/registry.py`).
-- Candidate models are strictly required to exceed the incumbent's WRMSSE by `promotion_min_improvement_pct` before being committed to the MLflow Model Registry.
+- Candidate models are strictly required to exceed the incumbent's primary metric (WAPE/RMSSE) by `promotion_min_improvement_pct` before being committed to the MLflow Model Registry.
 - Tracks configuration schemas dynamically, falling back to SQLite if the central tracking server is unreachable.

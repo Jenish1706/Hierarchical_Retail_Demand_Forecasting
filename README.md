@@ -1,7 +1,7 @@
 # M5 Retail Demand & Inventory Intelligence Platform
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-91%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-96%20passed-brightgreen.svg)]()
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![DVC Pipeline](https://img.shields.io/badge/pipeline-DVC%20v3-orange.svg)](https://dvc.org)
 [![Data Engine: Polars](https://img.shields.io/badge/engine-Polars%20lazy%20streaming-blueviolet.svg)](https://pola.rs)
@@ -59,14 +59,14 @@ flowchart TD
 ### Pillar 1: Large-Scale Exploratory Data Analysis & Sparsity Audit
 Analyzed all 30,490 series over 1,913 days to categorize demand dynamics under the **Syntetos-Boylan-Teunter (SBT)** framework:
 
-| Demand Classification (SBT) | % of Series | % of Sales Volume | Average Inter-Demand Interval ($p$) | Squared CV ($CV^2$) |
-|---|---|---|---|---|
-| **INTERMITTENT** | **75.6%** | 42.6% | $p \ge 1.32$ | $CV^2 < 0.49$ |
-| **LUMPY** | **19.5%** | 27.7% | $p \ge 1.32$ | $CV^2 \ge 0.49$ |
-| **SMOOTH** | **3.2%** | 19.9% | $p < 1.32$ | $CV^2 < 0.49$ |
-| **ERRATIC** | **1.6%** | 9.9% | $p < 1.32$ | $CV^2 \ge 0.49$ |
+| Demand Classification (SBT) | % of Series (Trimmed) | % of Volume | % of Series (Unadjusted) | Average Inter-Demand Interval ($p$) | Squared CV ($CV^2$) |
+|---|---|---|---|---|---|
+| **INTERMITTENT** | **72.6%** (22,138) | 34.0% | 75.6% (23,054) | $p \ge 1.32$ | $CV^2 < 0.49$ |
+| **LUMPY** | **18.4%** (5,598) | 23.7% | 19.5% (5,959) | $p \ge 1.32$ | $CV^2 \ge 0.49$ |
+| **SMOOTH** | **6.2%** (1,895) | 28.5% | 3.2% (979) | $p < 1.32$ | $CV^2 < 0.49$ |
+| **ERRATIC** | **2.8%** (859) | 13.8% | 1.6% (498) | $p < 1.32$ | $CV^2 \ge 0.49$ |
 
-- **High Sparsity Context**: 95.2% of raw catalog series display intermittency or lumpiness when calculated across the full timeline, and 68.2% of daily records are zero. Note that this unadjusted baseline includes pre-launch zeros (median product first sale is at day 160). Trimming pre-launch zeros refines the operational demand baseline.
+- **High Sparsity & Lifecycle Trimming**: 68.2% of all daily catalog records are zero. Crucially, 23,511 of 30,490 series (77%) were introduced after Day 1 (median first-sale day 160). When unadjusted for product introduction, pre-launch zeros falsely inflate $ADI$, masking smooth products. Trimming pre-launch zeros nearly doubles the smooth series share (3.2% -> 6.2%), with 91.0% remaining sparse (intermittent or lumpy).
 
 ### Pillar 2: High-Performance Data Engineering (Polars Engine)
 - **Memory Efficiency**: Built a streaming feature engine using Polars lazy expressions (`scan_parquet`, `sink_parquet`), handling panel transforms and rolling windows without out-of-memory crashes.
@@ -110,16 +110,16 @@ Evaluated across a representative sample of 3,000 series over 3 walk-forward rol
 <!-- BEGIN_LEADERBOARD_TABLE -->
 | Rank | Model Name | Architecture Tier | WAPE (%) | RMSSE | Nemenyi Avg Rank | Statistical Verdict |
 |---|---|---|---|---|---|---|
-| **1** | **ADIDA** | Intermittent Statistical | **75.17%** | 0.988 | 4.83 | Significantly worse than best rank |
-| **2** | **Moving Average (28d)** | Simple Baseline | 75.47% | **0.984** | 4.97 | Significantly worse than best rank |
-| **3** | **Routed SBT Ensemble** | Hybrid (ADIDA + Global) | 76.52% | 0.998 | **4.54** | **Best by Average Rank** |
-| **4** | **SES** | Exponential Smoothing | 76.99% | 0.991 | 4.96 | Significantly worse than best rank |
-| **5** | **LightGBM** | Global GBDT | 77.37% | **0.984** | 5.59 | Significantly worse than best rank |
-| **6** | **LightGBM (Tweedie)** | Global GBDT | 77.46% | 1.011 | 5.41 | Significantly worse than best rank |
-| **7** | **Croston SBA** | Intermittent Statistical | 77.81% | 1.002 | 4.61 | **Indistinguishable from Best** |
-| **8** | **Seasonal Naive (Weekly)** | Baseline | 88.08% | 1.242 | 6.74 | Significantly worse than best rank |
-| **9** | **Seasonal Naive (28d)** | Baseline | 98.92% | 1.289 | 7.19 | Baseline |
-| **10** | **Naive** | Baseline | 99.65% | 1.319 | 6.16 | Baseline |
+| **1** | **ADIDA** | Intermittent Statistical | **75.17%** | **0.844** | 4.83 | Significantly worse than best rank |
+| **2** | **Moving Average (28d)** | Simple Baseline | 75.47% | 0.845 | 4.97 | Significantly worse than best rank |
+| **3** | **Routed SBT Ensemble** | Hybrid (ADIDA + Global) | 76.52% | 0.854 | **4.54** | **Best by Average Rank** |
+| **4** | **SES** | Exponential Smoothing | 76.99% | 0.848 | 4.96 | Significantly worse than best rank |
+| **5** | **LightGBM** | Global GBDT | 77.37% | 0.850 | 5.59 | Significantly worse than best rank |
+| **6** | **LightGBM (Tweedie)** | Global GBDT | 77.46% | 0.851 | 5.41 | Significantly worse than best rank |
+| **7** | **Croston SBA** | Intermittent Statistical | 77.80% | 0.858 | 4.61 | **Indistinguishable from Best** |
+| **8** | **Seasonal Naive (Weekly)** | Baseline | 88.08% | 1.102 | 6.74 | Significantly worse than best rank |
+| **9** | **Seasonal Naive (28d)** | Baseline | 98.92% | 1.172 | 7.19 | Baseline |
+| **10** | **Naive** | Baseline | 99.65% | 1.137 | 6.16 | Baseline |
 
 *Statistical significance: Omnibus Friedman test $\chi^2 = 2460.79$ ($p < 10^{-12}$, 10 models $\times$ 2,950 complete series). Post-hoc Nemenyi critical difference $CD = 0.2494$ ($\alpha = 0.05$). Holm-corrected Diebold-Mariano tests separated 35 of 45 model pairs.*
 <!-- END_LEADERBOARD_TABLE -->
@@ -193,7 +193,7 @@ Evaluated on stores CA_1 and CA_2 (6,098 SKUs, 4,591 with price data):
 │   ├── visualization/               # Publication-grade plotting styles & dashboards
 │   └── mlops/                       # Drift detection & experiment tracking
 ├── streamlit_app.py                 # Interactive Streamlit dashboard entry point
-└── tests/                           # 91 automated unit, integration, and E2E tests
+└── tests/                           # 96 automated unit, integration, and E2E tests
 ```
 
 ---

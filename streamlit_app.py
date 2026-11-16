@@ -62,7 +62,7 @@ st.sidebar.markdown(
     * **Data**: 58.3M panel records / 30,490 SKUs
     * **Evaluation**: Rolling-origin walk-forward backtest
     * **Decision Layer**: ABC/XYZ inventory & working capital simulator
-    * **Testing**: 91 automated tests passing
+    * **Testing**: 96 automated tests passing
     """
 )
 st.sidebar.caption("IIT Kharagpur Placement Portfolio")

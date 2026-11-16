@@ -191,16 +191,19 @@ class ServiceLevelAnalyzer:
                 holding_cost = inventory_value * self.holding_cost_rate
 
                 sigma_e = row.get("forecast_error_std", np.nan)
-                if pd.notna(sigma_e) and sigma_e <= 1e-12:
+                if pd.notna(sigma_e) and sigma_e <= 1e-4:
                     stockout_prob = 0.0
-                elif pd.notna(sigma_e) and sigma_e > 1e-12 and lt > 0:
+                elif pd.notna(sigma_e) and sigma_e > 1e-4 and lt > 0:
                     sigma_l = sigma_e * np.sqrt(lt)
-                    z_eff = ss / sigma_l
+                    z_eff = max(0.0, ss / sigma_l)
                     stockout_prob = float(1.0 - ndtr(z_eff))
                 else:
                     stockout_prob = float(1.0 - sl)
 
-                stockout_cost = stockout_prob * avg_demand * lt * unit_margin
+                # Annualized stockout cost: cycle stockout margin * (365 / lt)
+                # = stockout_prob * (avg_demand * lt) * unit_margin * (365 / lt)
+                # = stockout_prob * avg_demand * 365 * unit_margin
+                stockout_cost = stockout_prob * avg_demand * 365.0 * unit_margin
                 total_cost = holding_cost + stockout_cost
             else:
                 unit_cost = np.nan

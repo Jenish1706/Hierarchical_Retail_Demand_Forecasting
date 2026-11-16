@@ -77,6 +77,12 @@ class TestScaledErrors:
         y = np.array([1.0, 3.0, 6.0])          # diffs 2, 3 -> mean sq = 6.5
         assert naive_scale(y, seasonality=1) == pytest.approx(6.5)
 
+    def test_naive_scale_trims_pre_launch_zeros(self):
+        # Leading zeros prior to first sale must not dilute the random-walk scale
+        y_active = np.array([1.0, 3.0, 6.0])  # diffs 2, 3 -> mean sq = 6.5
+        y_padded = np.concatenate([np.zeros(50), y_active])
+        assert naive_scale(y_padded, seasonality=1) == pytest.approx(6.5)
+
     def test_rmsse_zero_for_perfect_forecast(self):
         rng = np.random.default_rng(0)
         ins = rng.poisson(4, 300).astype(float)

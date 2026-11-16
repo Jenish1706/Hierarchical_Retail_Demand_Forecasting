@@ -186,6 +186,15 @@ class TestIntermittentClassification:
         assert cls.cv2 == pytest.approx(0.0, abs=1e-9)
         assert cls.adi > 1.0
 
+    def test_classify_demand_trims_pre_launch_zeros(self):
+        # A product launched on day 101 selling every day should be SMOOTH (ADI=1.0)
+        # Pre-launch zero padding must not misclassify it as INTERMITTENT.
+        y = np.concatenate([np.zeros(100), np.ones(30) * 5.0])
+        cls = classify_demand(y)
+        assert cls.adi == pytest.approx(1.0)
+        assert cls.pattern == DemandPattern.SMOOTH
+        assert cls.zero_fraction == pytest.approx(0.0)
+
     def test_empty_series_raises(self):
         with pytest.raises(ValueError, match="cannot classify an empty series"):
             classify_demand(np.array([]))

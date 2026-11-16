@@ -138,7 +138,11 @@ def mape_nonzero(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 # ---------------------------------------------------------------------------
 
 
-def naive_scale(y_insample: np.ndarray, seasonality: int = 1) -> float:
+def naive_scale(
+    y_insample: np.ndarray,
+    seasonality: int = 1,
+    trim_pre_launch: bool = True,
+) -> float:
     """
     Denominator of the scaled error: in-sample MSE of a seasonal naive forecast.
 
@@ -147,10 +151,18 @@ def naive_scale(y_insample: np.ndarray, seasonality: int = 1) -> float:
     with m = `seasonality` (m=1 is the random walk used by the M5 rules).
 
     The M5 guidelines specify this be computed on the TRAINING window only.
-    Computing it on the evaluation window would leak test information into
-    the metric and make RMSSE values incomparable across papers.
+    When `trim_pre_launch=True` (canonical M5 rule), the evaluation window starts
+    from the first non-zero sale rather than day 1, preventing pre-introduction
+    zeros from diluting the scale.
     """
-    y = np.asarray(y_insample, dtype=float)
+    y = np.asarray(y_insample, dtype=float).ravel()
+    if trim_pre_launch:
+        nonzero_indices = np.where(y > _EPS)[0]
+        if len(nonzero_indices) > 0:
+            y = y[nonzero_indices[0]:]
+        else:
+            return float("nan")
+
     if y.size <= seasonality:
         return float("nan")
 

@@ -99,7 +99,7 @@ class DemandClassification:
         return self.pattern in (DemandPattern.INTERMITTENT, DemandPattern.LUMPY)
 
 
-def classify_demand(y: np.ndarray) -> DemandClassification:
+def classify_demand(y: np.ndarray, trim_pre_launch: bool = True) -> DemandClassification:
     """
     Assign a series to an SBT quadrant.
 
@@ -109,12 +109,32 @@ def classify_demand(y: np.ndarray) -> DemandClassification:
     Note CV^2 is computed over NON-ZERO observations only. Including the zeros
     would conflate the two axes -- a sparse series would automatically look
     size-variable, and the quadrants would collapse onto one diagonal.
+
+    When `trim_pre_launch=True` (default per M5 protocol), leading zeros before
+    the first non-zero sale are trimmed so pre-launch inactive days do not
+    inflate ADI or artificial zero fractions.
     """
     y = np.asarray(y, dtype=float).ravel()
     n = int(y.size)
 
     if n == 0:
         raise ValueError("cannot classify an empty series")
+
+    if trim_pre_launch:
+        nonzero_indices = np.where(y > _EPS)[0]
+        if len(nonzero_indices) > 0:
+            y = y[nonzero_indices[0]:]
+            n = int(y.size)
+        else:
+            return DemandClassification(
+                pattern=DemandPattern.NO_DEMAND,
+                adi=float("inf"),
+                cv2=0.0,
+                n_periods=n,
+                n_nonzero=0,
+                zero_fraction=1.0,
+                mean_demand=0.0,
+            )
 
     nonzero = y[y > _EPS]
     n_nz = int(nonzero.size)

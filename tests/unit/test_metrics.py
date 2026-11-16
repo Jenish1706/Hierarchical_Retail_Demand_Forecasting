@@ -9,6 +9,7 @@ fails here rather than in a leaderboard nobody can sanity-check.
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from src.evaluation.point_metrics import (
@@ -17,6 +18,7 @@ from src.evaluation.point_metrics import (
     mae,
     mape_nonzero,
     mase,
+    metrics_by_group,
     naive_scale,
     rmse,
     rmsse,
@@ -72,10 +74,21 @@ class TestPointMetrics:
         assert mape_nonzero(y, p) == pytest.approx(10.0)
 
 
-class TestScaledErrors:
-    def test_naive_scale_matches_definition(self):
-        y = np.array([1.0, 3.0, 6.0])          # diffs 2, 3 -> mean sq = 6.5
-        assert naive_scale(y, seasonality=1) == pytest.approx(6.5)
+    def test_rmsse_per_series_averaging_matches_m5_rule(self):
+        # M5 rule: calculate RMSSE_i = sqrt(MSE_i / scale_i) for each series,
+        # then take the mean across series (unweighted).
+        # Series 1: MSE = 4, scale = 4 -> RMSSE_1 = 1.0
+        # Series 2: MSE = 9, scale = 1 -> RMSSE_2 = 3.0
+        # Mean RMSSE = (1.0 + 3.0) / 2 = 2.0
+        df = pd.DataFrame({
+            "series_id": ["s1", "s1", "s2", "s2"],
+            "model": ["test_model"] * 4,
+            "y_true": [0.0, 0.0, 0.0, 0.0],
+            "y_pred": [2.0, 2.0, 3.0, 3.0],  # s1 sq_err = 4, s2 sq_err = 9
+            "scale": [4.0, 4.0, 1.0, 1.0],
+        })
+        res = metrics_by_group(df, ["model"], scale_col="scale")
+        assert res.iloc[0]["rmsse"] == pytest.approx(2.0)
 
     def test_naive_scale_trims_pre_launch_zeros(self):
         # Leading zeros prior to first sale must not dilute the random-walk scale

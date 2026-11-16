@@ -90,9 +90,10 @@ def score_at_level(
     """
     if level == "item_store":
         df = predictions.copy()
-        if scales:
+        if scales and "scale" not in df.columns:
             df["scale"] = df["series_id"].map(scales)
-        metrics = metrics_by_group(df, ["model"], scale_col="scale" if scales else None)
+        has_scale = "scale" in df.columns or bool(scales)
+        metrics = metrics_by_group(df, ["model"], scale_col="scale" if has_scale else None)
         metrics["level"] = "item_store"
         return metrics
 
@@ -103,7 +104,7 @@ def score_at_level(
     for model, g in agg.groupby("model", observed=True):
         # Per aggregated series: score, then average scaled errors across
         # them -- the same construction the M5 rules use one level down.
-        sq_scaled: list[float] = []
+        series_rmsse: list[float] = []
         abs_err = 0.0
         actual_sum = 0.0
 
@@ -116,15 +117,15 @@ def score_at_level(
             actual_sum += float(np.abs(yt).sum())
             scale = naive_scale(yt, seasonality=1)
             if np.isfinite(scale) and scale > 0:
-                sq_scaled.append(float(np.mean((yt - yp) ** 2) / scale))
+                series_rmsse.append(float(np.sqrt(np.mean((yt - yp) ** 2) / scale)))
 
         rows.append(
             {
                 "model": str(model),
                 "level": level,
                 "wape": 100.0 * abs_err / actual_sum if actual_sum > 0 else np.nan,
-                "rmsse": float(np.sqrt(np.mean(sq_scaled))) if sq_scaled else np.nan,
-                "n_aggregated_series": len(sq_scaled) if sq_scaled else 1,
+                "rmsse": float(np.mean(series_rmsse)) if series_rmsse else np.nan,
+                "n_aggregated_series": len(series_rmsse) if series_rmsse else 1,
                 "n_obs": len(g),
             }
         )

@@ -4,7 +4,7 @@ This document provides a synthesis of the M5 Forecasting Laboratory based on the
 
 ## 1. Which model wins overall, and is the margin statistically significant?
 Across the 3,000 sampled series over 3 walk-forward rolling 28-day origins (84 test days per series):
-* **Pooled WAPE**: `adida` achieved the lowest overall WAPE at **75.17%** (RMSSE 0.9878), followed closely by `moving_average` (75.47%, RMSSE 0.9840), `routed_ensemble` (76.52%, RMSSE 0.9975), and `lightgbm` (77.37%, RMSSE 0.9841).
+* **Pooled WAPE & Canonical M5 RMSSE**: `adida` achieved the lowest overall WAPE at **75.17%** and lowest RMSSE at **0.8443**, followed closely by `moving_average` (75.47% WAPE, RMSSE 0.8445), `routed_ensemble` (76.52% WAPE, RMSSE 0.8535), and `lightgbm` (77.37% WAPE, RMSSE 0.8501).
 * **Statistical Significance (Ranks)**: The omnibus Friedman test decisively rejects equal performance across models ($\chi^2 = 2,460.79, p < 10^{-12}$). Post-hoc Nemenyi testing (Critical Difference $CD = 0.2494$) ranks `routed_ensemble` best (average rank 4.545), with `croston_sba` (average rank 4.606) statistically indistinguishable from it. `adida` (rank 4.827) and `lightgbm` (rank 5.590) are statistically significantly worse than `routed_ensemble` on average rank.
 * **Key Takeaway**: On this sample, specialized intermittent-demand methods match or beat a complex global LightGBM model.
 

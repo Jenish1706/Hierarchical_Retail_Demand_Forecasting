@@ -1,3 +1,4 @@
 [core]
     analytics = false
     check_update = false
+    site_cache_dir = .dvc/tmp/cache

@@ -22,13 +22,13 @@ def render() -> None:
     with col1:
         st.metric("Friedman Test Statistic", "chi-sq = 2,461", "p < 1e-12 (Decisive)")
     with col2:
-        st.metric("Separable Model Pairs", "35 of 45 Pairs", "Nemenyi Post-Hoc")
+        st.metric("Separable Model Pairs", "35 of 45 Pairs", "Holm-Corrected Diebold-Mariano")
     with col3:
         st.metric("Family-Wise Error Control", "Holm-Bonferroni", "Alpha = 0.05")
 
     st.markdown("---")
 
-    tab1, tab2, tab3 = st.tabs(["Nemenyi MCB Ranking", "Diebold-Mariano Tests", "Why DL Lost to LightGBM"])
+    tab1, tab2, tab3 = st.tabs(["Nemenyi MCB Ranking", "Diebold-Mariano Tests", "Intermittent Demand Dynamics"])
 
     with tab1:
         st.markdown("### 🏆 Multiple Comparison with the Best (MCB)")
@@ -60,14 +60,14 @@ def render() -> None:
             st.info("Diebold-Mariano pairwise matrix not found in reports.")
 
     with tab3:
-        st.markdown("### 💡 Technical Analysis: Why LightGBM Beat All 6 Deep Learning Models")
+        st.markdown("### 💡 Why Simple Intermittent Models Matched Global LightGBM")
         st.markdown(
             """
-            1. **The Intermittent Zero-Inflation Effect**:
-               Over 68% of daily sales in the M5 catalog are zero. Deep neural networks (TFT, PatchTST, N-BEATS) rely on continuous gradient updates, which become starved and unstable over sparse impulse sequences.
-            2. **Native Leaf Splitting**:
-               LightGBM's histogram-based binning and leaf-wise splitting naturally segregate zero-sales mass into dedicated leaves, completely avoiding gradient vanishing.
-            3. **Out-of-Core Computational Efficiency**:
-               LightGBM trains in ~4 minutes on a single CPU core, while heavy Transformer models require >45 minutes of GPU compute without yielding higher accuracy.
+            1. **The Intermittent Zero-Inflation Reality**:
+               Over 57.5% of test window sales are zero (68.2% across the full catalog). In high-sparsity panels, complex global models risk overfitting to stochastic non-zero impulses.
+            2. **Temporal Aggregation Shrinkage (ADIDA)**:
+               ADIDA aggregates high-frequency zero-inflated demand into lower-frequency time buckets, filters noise via exponential smoothing, and disaggregates back, acting as an effective shrinkage estimator.
+            3. **Segment-Conditioned Routing (SBT)**:
+               Dynamic routing achieves the best average Nemenyi rank (4.54) by steering intermittent/lumpy series to specialized statistical estimators while reserving LightGBM for regular, high-volume items.
             """
         )

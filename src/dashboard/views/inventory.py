@@ -24,10 +24,10 @@ def render() -> None:
     port_df = dl.load_portfolio_summary()
     if not port_df.empty:
         try:
-            curr_cap = float(port_df["current_working_capital"].iloc[0])
-            prop_cap = float(port_df["proposed_working_capital"].iloc[0])
-            freed_cap = float(port_df["capital_freed"].iloc[0])
-            pct_freed = float(port_df["capital_freed_pct"].iloc[0])
+            curr_cap = float(port_df["current_wc_total"].sum())
+            prop_cap = float(port_df["recommended_wc_total"].sum())
+            freed_cap = float(port_df["capital_released_total"].sum())
+            pct_freed = (freed_cap / curr_cap * 100.0) if curr_cap > 0 else 0.0
 
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -35,11 +35,11 @@ def render() -> None:
             with col2:
                 st.metric("Optimized Working Capital", f"${prop_cap:,.2f}")
             with col3:
-                st.metric("Released Working Capital", f"${freed_cap:,.2f}", delta=f"-{pct_freed:.1f}%")
+                st.metric("Released Working Capital", f"${freed_cap:,.2f}", delta=f"{pct_freed:.1f}% Freed")
             with col4:
-                st.metric("Fill Rate on Core Items", "95% - 98%", "Guaranteed")
-        except Exception:
-            pass
+                st.metric("Cycle Service Level (CSL)", "98% (AX) / 90% (CZ)", "Segmented Policy")
+        except Exception as e:
+            st.warning(f"Unable to render portfolio KPIs: {e}")
 
     st.markdown("---")
 

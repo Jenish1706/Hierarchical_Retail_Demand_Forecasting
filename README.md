@@ -107,6 +107,7 @@ Converts point and variance estimates into operational inventory policy recommen
 
 Evaluated across a representative sample of 3,000 series over 3 walk-forward rolling 28-day origins (84 evaluation days per series = 252,000 predictions per model):
 
+<!-- BEGIN_LEADERBOARD_TABLE -->
 | Rank | Model Name | Architecture Tier | WAPE (%) | RMSSE | Nemenyi Avg Rank | Statistical Verdict |
 |---|---|---|---|---|---|---|
 | **1** | **ADIDA** | Intermittent Statistical | **75.17%** | 0.988 | 4.83 | Significantly worse than best rank |
@@ -116,11 +117,12 @@ Evaluated across a representative sample of 3,000 series over 3 walk-forward rol
 | **5** | **LightGBM** | Global GBDT | 77.37% | **0.984** | 5.59 | Significantly worse than best rank |
 | **6** | **LightGBM (Tweedie)** | Global GBDT | 77.46% | 1.011 | 5.41 | Significantly worse than best rank |
 | **7** | **Croston SBA** | Intermittent Statistical | 77.81% | 1.002 | 4.61 | **Indistinguishable from Best** |
-| **8** | **Seasonal Naive (Weekly)**| Baseline | 88.08% | 1.242 | 6.74 | Significantly worse than best rank |
+| **8** | **Seasonal Naive (Weekly)** | Baseline | 88.08% | 1.242 | 6.74 | Significantly worse than best rank |
 | **9** | **Seasonal Naive (28d)** | Baseline | 98.92% | 1.289 | 7.19 | Baseline |
 | **10** | **Naive** | Baseline | 99.65% | 1.319 | 6.16 | Baseline |
 
 *Statistical significance: Omnibus Friedman test $\chi^2 = 2460.79$ ($p < 10^{-12}$, 10 models $\times$ 2,950 complete series). Post-hoc Nemenyi critical difference $CD = 0.2494$ ($\alpha = 0.05$). Holm-corrected Diebold-Mariano tests separated 35 of 45 model pairs.*
+<!-- END_LEADERBOARD_TABLE -->
 
 ---
 
@@ -128,19 +130,21 @@ Evaluated across a representative sample of 3,000 series over 3 walk-forward rol
 
 Evaluated on stores CA_1 and CA_2 (6,098 SKUs, 4,591 with price data):
 
+<!-- BEGIN_INVENTORY_TABLE -->
 | ABC/XYZ Cell | SKU Count | Current Working Capital ($) | Recommended Working Capital ($) | Capital Released ($) | Target Service Level (CSL) | Policy Impact |
 |---|---|---|---|---|---|---|
 | **AX** | 51 | $3,249.87 | $3,553.91 | -$304.04 | **98%** | High-turnover revenue drivers; upgraded buffer |
 | **AY** | 714 | $22,398.62 | $22,398.62 | $0.00 | **95%** | Moderate volume; maintained standard buffer |
-| **AZ** | 1,086 | $24,320.08 | $24,320.08 | $0.00 | **92%** | High volatility; guarded safety buffer |
+| **AZ** | 1,086 | $24,320.08 | $24,320.08 | $0.00 | **95%** | High volatility; guarded safety buffer |
 | **BX** | 9 | $30.61 | $30.61 | $0.00 | **95%** | Stable secondary SKUs; maintained |
-| **BY** | 129 | $1,424.57 | $1,424.57 | $0.00 | **92%** | Moderate secondary volume; maintained |
+| **BY** | 129 | $1,424.57 | $1,424.57 | $0.00 | **95%** | Moderate secondary volume; maintained |
 | **BZ** | 1,212 | $13,591.24 | $11,393.62 | +$2,197.62 | **90%** | Volatile secondary; working capital released |
-| **CX** | 45 | $46.51 | $46.51 | $0.00 | **92%** | Stable low volume; bulk periodic order |
+| **CX** | 45 | $46.51 | $46.51 | $0.00 | **90%** | Stable low volume; bulk periodic order |
 | **CY** | 30 | $192.80 | $158.52 | +$34.28 | **90%** | Slow-moving; conservative buffer |
 | **CZ** | 1,315 | $7,172.06 | $5,876.78 | +$1,295.28 | **90%** | Erratic low volume; working capital released |
 | **Unpriced (?X/?Y/?Z)** | 1,507 | $0.00 | $0.00 | $0.00 | — | CA_2 items lacking price coverage |
-| **Total Portfolio** | **6,098** | **$72,386.36** | **$69,163.22** | **+$3,223.14** | — | **$3,223.14 Net Working Capital Released** |
+| **Total Portfolio** | **6,098** | **$72,426.36** | **$69,203.22** | **+$3,223.14** | — | **$3,223.14 Net Working Capital Released** |
+<!-- END_INVENTORY_TABLE -->
 
 ---
 

@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from scipy.special import ndtr
 
 from src.config.logging import get_logger
 
@@ -161,7 +162,7 @@ class ServiceLevelAnalyzer:
                 .rename(columns={"sell_price": "avg_sell_price"})
             )
             df = df.merge(prices_agg, on=["item_id", "store_id"], how="left")
-        else:
+        elif "avg_sell_price" not in df.columns:
             df["avg_sell_price"] = np.nan
 
         # Compute cost components
@@ -188,7 +189,18 @@ class ServiceLevelAnalyzer:
 
                 inventory_value = avg_inventory * unit_cost
                 holding_cost = inventory_value * self.holding_cost_rate
-                stockout_cost = (1.0 - sl) * avg_demand * lt * unit_margin
+
+                sigma_e = row.get("forecast_error_std", np.nan)
+                if pd.notna(sigma_e) and sigma_e <= 1e-12:
+                    stockout_prob = 0.0
+                elif pd.notna(sigma_e) and sigma_e > 1e-12 and lt > 0:
+                    sigma_l = sigma_e * np.sqrt(lt)
+                    z_eff = ss / sigma_l
+                    stockout_prob = float(1.0 - ndtr(z_eff))
+                else:
+                    stockout_prob = float(1.0 - sl)
+
+                stockout_cost = stockout_prob * avg_demand * lt * unit_margin
                 total_cost = holding_cost + stockout_cost
             else:
                 unit_cost = np.nan

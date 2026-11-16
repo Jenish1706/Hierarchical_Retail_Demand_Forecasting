@@ -248,3 +248,41 @@ class TestServiceLevelAndWorkingCapital:
         assert "delta_safety_stock" in marginals.columns
         assert "delta_holding_cost" in marginals.columns
         assert (marginals["delta_safety_stock"] >= 0).all()
+
+    def test_marginal_stockout_cost_delta_zero_when_safety_stock_unchanged(self):
+        """When safety stock is 0 across service levels (e.g. zero forecast error std),
+        stockout cost delta must be 0 rather than falsely reporting savings."""
+        sla = ServiceLevelAnalyzer()
+        ss_df = pd.DataFrame([
+            {
+                "item_id": "ITEM_ZERO_VAR",
+                "store_id": "CA_1",
+                "service_level": 0.90,
+                "lead_time_days": 7,
+                "avg_daily_demand": 5.0,
+                "safety_stock_units": 0.0,
+                "forecast_error_std": 0.0,
+                "avg_sell_price": 2.0,
+                "cat_id": "FOODS",
+            },
+            {
+                "item_id": "ITEM_ZERO_VAR",
+                "store_id": "CA_1",
+                "service_level": 0.95,
+                "lead_time_days": 7,
+                "avg_daily_demand": 5.0,
+                "safety_stock_units": 0.0,
+                "forecast_error_std": 0.0,
+                "avg_sell_price": 2.0,
+                "cat_id": "FOODS",
+            },
+        ])
+        abc_xyz = pd.DataFrame([{
+            "item_id": "ITEM_ZERO_VAR", "store_id": "CA_1", "abc_xyz_class": "CZ",
+            "abc_class": "C", "xyz_class": "Z"
+        }])
+        analyzed = sla.analyze(ss_df, abc_xyz)
+        marginals = sla.marginal_analysis(analyzed)
+        assert len(marginals) == 1
+        assert marginals.iloc[0]["delta_safety_stock"] == 0.0
+        assert marginals.iloc[0]["delta_stockout_cost"] == 0.0

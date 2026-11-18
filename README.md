@@ -80,10 +80,12 @@ Analyzed all 30,490 series over 1,913 days to categorize demand dynamics under t
 4. **Tier 4 (Segment Routing & Ensembles)**: SBT segment-based routing dynamically allocating series to intermittent estimators or global models.
 
 ### Pillar 4: Statistical Testing & Model Selection Rigor
-- **The Intermittent Demand Reality Check**: In the 3,000-series walk-forward backtest (3 origins x 28 days), specialized intermittent statistical models and moving averages matched or outperformed a global LightGBM model (`adida` WAPE: 75.17%, RMSSE: 0.844; `moving_average` WAPE: 75.47%, RMSSE: 0.845; `routed_ensemble` WAPE: 76.52%, RMSSE: 0.854; `lightgbm` WAPE: 77.37%, RMSSE: 0.850). In highly sparse retail series, simple, robust statistical estimators avoid overfitting to noisy low-volume spikes.
-- **Non-Parametric Friedman Test**: $\chi^2 = 2,461$ ($p < 10^{-12}$), decisively rejecting the null hypothesis of equal model performance across the 2,950 complete series.
-- **Post-Hoc Nemenyi Critical Difference**: Critical difference $CD = 0.2494$ at $\alpha = 0.05$. `routed_ensemble` achieved the best average rank (4.545), with `croston_sba` (4.606) statistically indistinguishable from it. `adida` (4.827) and `lightgbm` (5.590) were significantly worse than the best by average rank.
-- **Holm-Corrected Diebold-Mariano**: Pairwise error tests separated 35 of 45 model pairs at $\alpha = 0.05$ after family-wise error rate control.
+<!-- BEGIN_STATISTICS_SECTION -->
+- **Non-Parametric Omnibus Test (Friedman)**: Evaluated across 10 models over 2,950 complete series (84 evaluation days per series). The omnibus Friedman test decisively rejects the null hypothesis of equal model performance ($\chi^2 = 2429.30$, $p < 10^{-12}$), justifying post-hoc ranking comparisons.
+- **Post-Hoc Critical Difference (Nemenyi)**: Critical difference $CD = 0.2494$ at $\alpha = 0.05$. **Croston SBA** achieved the best average rank (4.55), forming a top statistically indistinguishable clique with **ADIDA**, **Routed SBT Ensemble**. Standard global models (**LightGBM (Tweedie)** at 5.38, **LightGBM** at 5.56) scored significantly worse in average rank across the panel.
+- **Paired Series Bootstrap (95% CI)**: Resampling whole series over 2,000 replicates (preserving within-series autocorrelation) reveals that **ADIDA** leads pooled volume-weighted accuracy at 75.16% WAPE [72.16%, 78.23%]. Relative to ADIDA, **Routed SBT Ensemble** is statistically indistinguishable in WAPE ($\Delta\text{WAPE} = +0.50\%$, 95% CI [-0.01%, +1.04%]), while **Moving Average (28d)** is indistinguishable in RMSSE ($\Delta\text{RMSSE} = +0.0011$, 95% CI [-0.0001, +0.0023]).
+- **Per-Series Pairwise Win Rates**: Comparing models series-by-series resolves the apparent divergence between rank tests and volume metrics: **Croston SBA** beats **ADIDA** on 57.0% of individual series (favoring rank metrics on sparse items), whereas **ADIDA** achieves lower aggregate error on higher-volume items. On 93.8% of series, the two models are statistically indistinguishable under Holm-corrected per-series Diebold-Mariano testing.
+<!-- END_STATISTICS_SECTION -->
 
 ### Pillar 5: Inventory Optimization Layer (Stockout vs. Working Capital)
 Converts point and variance estimates into operational inventory policy recommendations (`src/inventory/`):

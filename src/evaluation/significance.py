@@ -650,4 +650,344 @@ def full_significance_report(
         errors[str(model)] = g["y_true"].to_numpy(float) - g["y_pred"].to_numpy(float)
     out["diebold_mariano"] = pairwise_dm(errors, horizon=horizon, alpha=alpha)
 
+    # Defensible statistical evidence: paired bootstrap and per-series testing
+    out["bootstrap"] = paired_series_bootstrap(predictions, alpha=alpha)
+    out["pairwise_per_series"] = pairwise_per_series_tests(predictions, horizon=horizon, alpha=alpha)
+
     return out
+
+
+# ---------------------------------------------------------------------------
+# Paired Series Bootstrap
+# ---------------------------------------------------------------------------
+
+
+def paired_series_bootstrap(
+    predictions: pd.DataFrame,
+    n_bootstraps: int = 2000,
+    alpha: float = 0.05,
+    seed: int = 42,
+    ref_model: str | None = None,
+) -> dict[str, Any]:
+    """
+    Compute paired series-level bootstrap confidence intervals for WAPE, RMSSE,
+    and relative differences from the benchmark leader.
+
+    Why series-level bootstrap is necessary:
+    ----------------------------------------
+    Panel observations are not independent: errors on series s at date t are
+    correlated with errors on series s at date t+1. Resampling individual dates
+    or error points destroys serial dependency and deflates standard errors.
+    Instead, resampling entire SERIES (blocks of all horizons and origins)
+    preserves arbitrary within-series autocorrelation, heteroscedasticity, and
+    cross-origin structure.
+
+    Pairing across models is equally critical: in each bootstrap replicate b,
+    all models are evaluated on the exact same resampled set of series. This cancels
+    out common variation across series and provides narrow, defensible confidence
+    intervals on model differences (delta_WAPE and delta_RMSSE).
+    """
+    req_cols = {"series_id", "model", "y_true", "y_pred"}
+    if not req_cols.issubset(predictions.columns):
+        raise ValueError(f"predictions must contain {req_cols}")
+
+    rng = np.random.default_rng(seed)
+    models = sorted(predictions["model"].unique())
+    M = len(models)
+
+    # 1. Total actuals per series
+    first_m = models[0]
+    sub = predictions[predictions["model"] == first_m]
+    y_true_s = sub.groupby("series_id", observed=True)["y_true"].sum().sort_index()
+    series_list = y_true_s.index.to_numpy()
+    S = len(series_list)
+    yt_vec = y_true_s.to_numpy(dtype=np.float64)
+
+    # 2. Absolute error matrix (S x M)
+    abs_err_mat = np.zeros((S, M), dtype=np.float64)
+    for j, m in enumerate(models):
+        m_df = predictions[predictions["model"] == m]
+        err_s = (
+            m_df.groupby("series_id", observed=True)
+            .apply(lambda g: np.abs(g["y_true"] - g["y_pred"]).sum(), include_groups=False)
+            .reindex(series_list)
+            .fillna(0.0)
+            .to_numpy(dtype=np.float64)
+        )
+        abs_err_mat[:, j] = err_s
+
+    # 3. RMSSE matrix per series (S x M)
+    has_scale = "scale" in predictions.columns
+    has_origin = "origin" in predictions.columns
+    rmsse_mat = np.zeros((S, M), dtype=np.float64)
+    valid_rmsse_mask = np.zeros(S, dtype=bool)
+
+    if has_scale:
+        preds_copy = predictions.copy()
+        preds_copy["sq_err"] = (preds_copy["y_true"] - preds_copy["y_pred"]) ** 2
+        group_cols = ["series_id", "origin", "model"] if has_origin else ["series_id", "model"]
+
+        agg_df = (
+            preds_copy.groupby(group_cols, observed=True)
+            .agg(mse=("sq_err", "mean"), scale=("scale", "first"))
+            .reset_index()
+        )
+        agg_df["scale_valid"] = (agg_df["scale"] > 0) & np.isfinite(agg_df["scale"])
+        agg_df["scaled_rmse"] = np.where(
+            agg_df["scale_valid"],
+            np.sqrt(agg_df["mse"] / agg_df["scale"]),
+            np.nan,
+        )
+
+        if has_origin:
+            s_m_rmsse = (
+                agg_df.groupby(["series_id", "model"], observed=True)["scaled_rmse"]
+                .mean()
+                .unstack("model")
+            )
+        else:
+            s_m_rmsse = agg_df.set_index(["series_id", "model"])["scaled_rmse"].unstack("model")
+
+        s_m_rmsse = s_m_rmsse.reindex(index=series_list, columns=models)
+        rmsse_mat = s_m_rmsse.to_numpy(dtype=np.float64)
+        valid_rmsse_mask = ~np.isnan(rmsse_mat).any(axis=1)
+
+    # 4. Bootstrap resampling
+    boot_idx = rng.integers(0, S, size=(n_bootstraps, S))
+    boot_yt = np.take(yt_vec, boot_idx).sum(axis=1)
+    boot_yt = np.maximum(boot_yt, _EPS)
+
+    boot_wape = np.zeros((n_bootstraps, M), dtype=np.float64)
+    for j in range(M):
+        boot_wape[:, j] = 100.0 * np.take(abs_err_mat[:, j], boot_idx).sum(axis=1) / boot_yt
+
+    # RMSSE resample
+    boot_rmsse = np.zeros((n_bootstraps, M), dtype=np.float64)
+    if has_scale and valid_rmsse_mask.any():
+        valid_indices = np.where(valid_rmsse_mask)[0]
+        S_v = len(valid_indices)
+        boot_idx_v = valid_indices[rng.integers(0, S_v, size=(n_bootstraps, S_v))]
+        for j in range(M):
+            boot_rmsse[:, j] = np.take(rmsse_mat[:, j], boot_idx_v).mean(axis=1)
+
+    # Overall point estimates
+    overall_wape = 100.0 * abs_err_mat.sum(axis=0) / max(yt_vec.sum(), _EPS)
+    if ref_model and ref_model in models:
+        best_wape_j = models.index(ref_model)
+    else:
+        best_wape_j = int(np.argmin(overall_wape))
+    best_wape_name = models[best_wape_j]
+
+    if has_scale and valid_rmsse_mask.any():
+        overall_rmsse = np.nanmean(rmsse_mat[valid_rmsse_mask], axis=0)
+        best_rmsse_j = int(np.argmin(overall_rmsse))
+        best_rmsse_name = models[best_rmsse_j]
+    else:
+        overall_rmsse = np.zeros(M)
+        best_rmsse_j = 0
+        best_rmsse_name = models[0]
+
+    delta_wape = boot_wape - boot_wape[:, [best_wape_j]]
+    delta_rmsse = (
+        boot_rmsse - boot_rmsse[:, [best_rmsse_j]]
+        if (has_scale and valid_rmsse_mask.any())
+        else np.zeros_like(boot_wape)
+    )
+
+    lo_pct = 100.0 * (alpha / 2.0)
+    hi_pct = 100.0 * (1.0 - alpha / 2.0)
+
+    out: dict[str, Any] = {}
+    for j, m in enumerate(models):
+        w_ci = np.percentile(boot_wape[:, j], [lo_pct, hi_pct])
+        dw_ci = np.percentile(delta_wape[:, j], [lo_pct, hi_pct])
+
+        wape_dict = {
+            "point": float(overall_wape[j]),
+            "boot_mean": float(boot_wape[:, j].mean()),
+            "ci_lower": float(w_ci[0]),
+            "ci_upper": float(w_ci[1]),
+        }
+
+        dw_dict = {
+            "ref_model": best_wape_name,
+            "point": float(overall_wape[j] - overall_wape[best_wape_j]),
+            "boot_mean": float(delta_wape[:, j].mean()),
+            "ci_lower": float(dw_ci[0]),
+            "ci_upper": float(dw_ci[1]),
+            "separable": bool(dw_ci[0] > 0 or dw_ci[1] < 0),
+        }
+
+        if has_scale and valid_rmsse_mask.any():
+            r_ci = np.percentile(boot_rmsse[:, j], [lo_pct, hi_pct])
+            dr_ci = np.percentile(delta_rmsse[:, j], [lo_pct, hi_pct])
+            rmsse_dict = {
+                "point": float(overall_rmsse[j]),
+                "boot_mean": float(boot_rmsse[:, j].mean()),
+                "ci_lower": float(r_ci[0]),
+                "ci_upper": float(r_ci[1]),
+            }
+            dr_dict = {
+                "ref_model": best_rmsse_name,
+                "point": float(overall_rmsse[j] - overall_rmsse[best_rmsse_j]),
+                "boot_mean": float(delta_rmsse[:, j].mean()),
+                "ci_lower": float(dr_ci[0]),
+                "ci_upper": float(dr_ci[1]),
+                "separable": bool(dr_ci[0] > 0 or dr_ci[1] < 0),
+            }
+        else:
+            rmsse_dict = {"point": float("nan"), "boot_mean": float("nan"), "ci_lower": float("nan"), "ci_upper": float("nan")}
+            dr_dict = {"ref_model": best_wape_name, "point": float("nan"), "boot_mean": float("nan"), "ci_lower": float("nan"), "ci_upper": float("nan"), "separable": False}
+
+        out[m] = {
+            "wape": wape_dict,
+            "rmsse": rmsse_dict,
+            "delta_wape_vs_best": dw_dict,
+            "delta_rmsse_vs_best": dr_dict,
+        }
+
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Per-Series Pairwise Tests & Win-Rates
+# ---------------------------------------------------------------------------
+
+
+def pairwise_per_series_tests(
+    predictions: pd.DataFrame,
+    horizon: int = 28,
+    alpha: float = 0.05,
+    loss: Literal["squared", "absolute"] = "absolute",
+) -> pd.DataFrame:
+    """
+    Per-series head-to-head comparison and Diebold-Mariano testing across all model pairs.
+
+    Why panel-pooled Diebold-Mariano is deprecated:
+    -----------------------------------------------
+    Standard Diebold-Mariano assumes a single time series. Stacking 3,000 heterogeneous
+    series into a 252,000-observation vector creates an artificially massive sample size,
+    forcing standard errors to near-zero and yielding p < 1e-12 even for minute differences,
+    while obscuring that one model may dominate solely due to high-volume outliers.
+
+    This function tests accuracy series-by-series:
+      1. Head-to-head win-rate: fraction of series where model A achieves strictly lower loss than B.
+      2. Per-series Diebold-Mariano with Holm adjustment: tests each series individually,
+         then controls the family-wise error rate across series for each pair.
+    """
+    models = sorted(predictions["model"].unique())
+    n_models = len(models)
+    if n_models < 2:
+        return pd.DataFrame()
+
+    # Pre-sort errors per model: (series_id, date)
+    err_dict: dict[str, np.ndarray] = {}
+    first_series_order: np.ndarray | None = None
+    for m in models:
+        sub = predictions[predictions["model"] == m].sort_values(["series_id", "date"])
+        if first_series_order is None:
+            first_series_order = sub["series_id"].to_numpy()
+        err_dict[m] = (sub["y_true"].to_numpy(float) - sub["y_pred"].to_numpy(float))
+
+    unique_series, series_counts = np.unique(first_series_order, return_counts=True)
+    S = len(unique_series)
+    uniform_obs = bool((series_counts == series_counts[0]).all())
+    n_obs = int(series_counts[0]) if uniform_obs else 0
+
+    records: list[dict[str, Any]] = []
+
+    for a, b in combinations(models, 2):
+        ea_all = err_dict[a]
+        eb_all = err_dict[b]
+
+        if uniform_obs and n_obs >= 3:
+            # Fast vectorized calculation
+            ea = ea_all.reshape(S, n_obs)
+            eb = eb_all.reshape(S, n_obs)
+            if loss == "squared":
+                d = ea**2 - eb**2
+                loss_a = np.mean(ea**2, axis=1)
+                loss_b = np.mean(eb**2, axis=1)
+            else:
+                d = np.abs(ea) - np.abs(eb)
+                loss_a = np.sum(np.abs(ea), axis=1)
+                loss_b = np.sum(np.abs(eb), axis=1)
+
+            diff = loss_a - loss_b
+            a_wins = int((diff < -_EPS).sum())
+            b_wins = int((diff > _EPS).sum())
+            ties = int((np.abs(diff) <= _EPS).sum())
+
+            d_bar = d.mean(axis=1)
+            d_centred = d - d_bar[:, None]
+            gamma0 = np.mean(d_centred**2, axis=1)
+            lrv = gamma0.copy()
+            h = min(horizon, n_obs)
+            for k in range(1, h):
+                gamma_k = np.mean(d_centred[:, k:] * d_centred[:, :-k], axis=1)
+                lrv += 2.0 * gamma_k
+
+            lrv = np.where(lrv <= _EPS, gamma0, lrv)
+            se = np.sqrt(np.maximum(lrv, _EPS) / n_obs)
+            dm_stat = np.where(se > _EPS, d_bar / se, 0.0)
+
+            factor = (n_obs + 1 - 2 * h + h * (h - 1) / n_obs) / n_obs
+            if factor > 0:
+                dm_stat = dm_stat * np.sqrt(factor)
+                p_vals = 2.0 * (1.0 - stats.t.cdf(np.abs(dm_stat), df=n_obs - 1))
+            else:
+                p_vals = 2.0 * (1.0 - stats.norm.cdf(np.abs(dm_stat)))
+
+        else:
+            # Fallback for ragged series lengths
+            p_vals_list = []
+            d_bar_list = []
+            a_wins = 0
+            b_wins = 0
+            ties = 0
+
+            idx = 0
+            for cnt in series_counts:
+                ea_s = ea_all[idx : idx + cnt]
+                eb_s = eb_all[idx : idx + cnt]
+                idx += cnt
+
+                res = diebold_mariano(
+                    ea_s, eb_s, horizon=horizon, loss=loss, model_a=a, model_b=b, alpha=alpha
+                )
+                p_vals_list.append(res.p_value)
+                d_bar_list.append(res.mean_loss_diff)
+
+                if loss == "squared":
+                    la, lb = float(np.mean(ea_s**2)), float(np.mean(eb_s**2))
+                else:
+                    la, lb = float(np.sum(np.abs(ea_s))), float(np.sum(np.abs(eb_s)))
+
+                if la < lb - _EPS:
+                    a_wins += 1
+                elif lb < la - _EPS:
+                    b_wins += 1
+                else:
+                    ties += 1
+
+            p_vals = np.array(p_vals_list)
+            d_bar = np.array(d_bar_list)
+
+        p_adj = adjust_pvalues(p_vals, method="holm")
+        a_sig = int(((p_adj < alpha) & (d_bar < 0)).sum())
+        b_sig = int(((p_adj < alpha) & (d_bar > 0)).sum())
+        indist = int((p_adj >= alpha).sum() + np.isnan(p_adj).sum())
+
+        records.append({
+            "model_a": a,
+            "model_b": b,
+            "a_win_pct": round(100.0 * a_wins / S, 2),
+            "b_win_pct": round(100.0 * b_wins / S, 2),
+            "tie_pct": round(100.0 * ties / S, 2),
+            "dm_a_beats_b_pct": round(100.0 * a_sig / S, 2),
+            "dm_b_beats_a_pct": round(100.0 * b_sig / S, 2),
+            "dm_indistinguishable_pct": round(100.0 * indist / S, 2),
+        })
+
+    return pd.DataFrame(records)
+

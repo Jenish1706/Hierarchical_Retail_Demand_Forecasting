@@ -145,9 +145,764 @@
       "critical_difference": 0.24942856273812053
     }
   ],
+  "bootstrap": {
+    "adida": {
+      "wape": {
+        "point": 75.16136463492681,
+        "boot_mean": 75.20722824420149,
+        "ci_lower": 72.16237799166203,
+        "ci_upper": 78.22762140420693
+      },
+      "rmsse": {
+        "point": 0.7707235341580547,
+        "boot_mean": 0.7708102856502523,
+        "ci_lower": 0.7558329372003536,
+        "ci_upper": 0.7878309167049401
+      },
+      "delta_wape_vs_best": {
+        "ref_model": "adida",
+        "point": 0.0,
+        "boot_mean": 0.0,
+        "ci_lower": 0.0,
+        "ci_upper": 0.0,
+        "separable": false
+      },
+      "delta_rmsse_vs_best": {
+        "ref_model": "adida",
+        "point": 0.0,
+        "boot_mean": 0.0,
+        "ci_lower": 0.0,
+        "ci_upper": 0.0,
+        "separable": false
+      }
+    },
+    "croston_sba": {
+      "wape": {
+        "point": 77.80497715044271,
+        "boot_mean": 77.84841362182536,
+        "ci_lower": 74.6252542905451,
+        "ci_upper": 81.08818109012414
+      },
+      "rmsse": {
+        "point": 0.7928123306385811,
+        "boot_mean": 0.7929126804006418,
+        "ci_lower": 0.7772092889445914,
+        "ci_upper": 0.8104067195381558
+      },
+      "delta_wape_vs_best": {
+        "ref_model": "adida",
+        "point": 2.6436125155158976,
+        "boot_mean": 2.641185377623875,
+        "ci_lower": 2.0555161616571667,
+        "ci_upper": 3.300316707362803,
+        "separable": true
+      },
+      "delta_rmsse_vs_best": {
+        "ref_model": "adida",
+        "point": 0.022088796480526418,
+        "boot_mean": 0.022102394750389477,
+        "ci_lower": 0.01837243639895201,
+        "ci_upper": 0.026000470242415506,
+        "separable": true
+      }
+    },
+    "lightgbm": {
+      "wape": {
+        "point": 77.38840760486596,
+        "boot_mean": 77.43714608144364,
+        "ci_lower": 74.10816167139568,
+        "ci_upper": 80.59449534263837
+      },
+      "rmsse": {
+        "point": 0.7890150711300663,
+        "boot_mean": 0.7890641926606281,
+        "ci_lower": 0.7744719318724694,
+        "ci_upper": 0.8051411161165628
+      },
+      "delta_wape_vs_best": {
+        "ref_model": "adida",
+        "point": 2.2270429699391485,
+        "boot_mean": 2.2299178372421604,
+        "ci_lower": 1.5768972700883732,
+        "ci_upper": 2.897209534268064,
+        "separable": true
+      },
+      "delta_rmsse_vs_best": {
+        "ref_model": "adida",
+        "point": 0.01829153697201158,
+        "boot_mean": 0.01825390701037584,
+        "ci_lower": 0.013586894176153516,
+        "ci_upper": 0.023736604226028985,
+        "separable": true
+      }
+    },
+    "lightgbm_tweedie": {
+      "wape": {
+        "point": 77.25924100445248,
+        "boot_mean": 77.30308298215519,
+        "ci_lower": 74.0978628299749,
+        "ci_upper": 80.33890835009335
+      },
+      "rmsse": {
+        "point": 0.7859963150224439,
+        "boot_mean": 0.7860399436435227,
+        "ci_lower": 0.7705604009579663,
+        "ci_upper": 0.8028211728417325
+      },
+      "delta_wape_vs_best": {
+        "ref_model": "adida",
+        "point": 2.0978763695256646,
+        "boot_mean": 2.095854737953711,
+        "ci_lower": 1.4024675620343494,
+        "ci_upper": 2.842817797398207,
+        "separable": true
+      },
+      "delta_rmsse_vs_best": {
+        "ref_model": "adida",
+        "point": 0.015272780864389213,
+        "boot_mean": 0.015229657993270517,
+        "ci_lower": 0.00864422596758036,
+        "ci_upper": 0.023976262415780675,
+        "separable": true
+      }
+    },
+    "moving_average": {
+      "wape": {
+        "point": 75.47190453173111,
+        "boot_mean": 75.52192711294151,
+        "ci_lower": 72.39224944062882,
+        "ci_upper": 78.53881785151093
+      },
+      "rmsse": {
+        "point": 0.771855021549363,
+        "boot_mean": 0.7719292140716749,
+        "ci_lower": 0.7567949574263874,
+        "ci_upper": 0.7888367892947749
+      },
+      "delta_wape_vs_best": {
+        "ref_model": "adida",
+        "point": 0.3105398968043005,
+        "boot_mean": 0.3146988687400237,
+        "ci_lower": 0.04615167529565234,
+        "ci_upper": 0.5868195833287339,
+        "separable": true
+      },
+      "delta_rmsse_vs_best": {
+        "ref_model": "adida",
+        "point": 0.0011314873913083057,
+        "boot_mean": 0.0011189284214226643,
+        "ci_lower": -5.0721656298199906e-05,
+        "ci_upper": 0.0023389102832507137,
+        "separable": false
+      }
+    },
+    "naive": {
+      "wape": {
+        "point": 99.6499973793481,
+        "boot_mean": 99.70588488186509,
+        "ci_lower": 96.06135827254147,
+        "ci_upper": 103.27793471236957
+      },
+      "rmsse": {
+        "point": 1.004984324598932,
+        "boot_mean": 1.0050743323096083,
+        "ci_lower": 0.9840874684596169,
+        "ci_upper": 1.0265789309625608
+      },
+      "delta_wape_vs_best": {
+        "ref_model": "adida",
+        "point": 24.48863274442128,
+        "boot_mean": 24.49865663766362,
+        "ci_lower": 22.620774614629177,
+        "ci_upper": 26.27038909992905,
+        "separable": true
+      },
+      "delta_rmsse_vs_best": {
+        "ref_model": "adida",
+        "point": 0.23426079044087733,
+        "boot_mean": 0.23426404665935593,
+        "ci_lower": 0.22369599198867948,
+        "ci_upper": 0.24534879515359656,
+        "separable": true
+      }
+    },
+    "routed_ensemble": {
+      "wape": {
+        "point": 75.65671141194075,
+        "boot_mean": 75.70760264545828,
+        "ci_lower": 72.4012610624682,
+        "ci_upper": 78.8741366700643
+      },
+      "rmsse": {
+        "point": 0.7722894317038251,
+        "boot_mean": 0.7723501963515743,
+        "ci_lower": 0.7574090835934586,
+        "ci_upper": 0.7893235696278268
+      },
+      "delta_wape_vs_best": {
+        "ref_model": "adida",
+        "point": 0.4953467770139355,
+        "boot_mean": 0.5003744012567829,
+        "ci_lower": -0.013034328085828047,
+        "ci_upper": 1.036159461992439,
+        "separable": false
+      },
+      "delta_rmsse_vs_best": {
+        "ref_model": "adida",
+        "point": 0.0015658975457704116,
+        "boot_mean": 0.0015399107013221798,
+        "ci_lower": 0.0001484097069635565,
+        "ci_upper": 0.00300532483949296,
+        "separable": true
+      }
+    },
+    "seasonal_naive": {
+      "wape": {
+        "point": 98.92145615067001,
+        "boot_mean": 98.96118641966545,
+        "ci_lower": 95.10626016596314,
+        "ci_upper": 102.55312258670604
+      },
+      "rmsse": {
+        "point": 1.0876974892611824,
+        "boot_mean": 1.087824186035551,
+        "ci_lower": 1.070105744459063,
+        "ci_upper": 1.1060338684440936
+      },
+      "delta_wape_vs_best": {
+        "ref_model": "adida",
+        "point": 23.7600915157432,
+        "boot_mean": 23.753958175463964,
+        "ci_lower": 22.141267320906042,
+        "ci_upper": 25.411073734093513,
+        "separable": true
+      },
+      "delta_rmsse_vs_best": {
+        "ref_model": "adida",
+        "point": 0.31697395510312765,
+        "boot_mean": 0.31701390038529886,
+        "ci_lower": 0.30868901789355724,
+        "ci_upper": 0.32502901019693115,
+        "separable": true
+      }
+    },
+    "seasonal_naive_weekly": {
+      "wape": {
+        "point": 88.07952804971086,
+        "boot_mean": 88.12869692359523,
+        "ci_lower": 84.3662744123771,
+        "ci_upper": 91.78889326718829
+      },
+      "rmsse": {
+        "point": 1.0042174053928343,
+        "boot_mean": 1.0043041621500166,
+        "ci_lower": 0.9849790421603096,
+        "ci_upper": 1.024579646359371
+      },
+      "delta_wape_vs_best": {
+        "ref_model": "adida",
+        "point": 12.918163414784047,
+        "boot_mean": 12.921468679393744,
+        "ci_lower": 11.986331499430877,
+        "ci_upper": 13.772933512191097,
+        "separable": true
+      },
+      "delta_rmsse_vs_best": {
+        "ref_model": "adida",
+        "point": 0.2334938712347796,
+        "boot_mean": 0.23349387649976416,
+        "ci_lower": 0.22662174596290802,
+        "ci_upper": 0.24064218919220767,
+        "separable": true
+      }
+    },
+    "ses": {
+      "wape": {
+        "point": 76.99081900007889,
+        "boot_mean": 77.03823623097509,
+        "ci_lower": 74.19776322717631,
+        "ci_upper": 79.72476049058119
+      },
+      "rmsse": {
+        "point": 0.7747881206129199,
+        "boot_mean": 0.7748974137999562,
+        "ci_lower": 0.7595943937658889,
+        "ci_upper": 0.7922781901069634
+      },
+      "delta_wape_vs_best": {
+        "ref_model": "adida",
+        "point": 1.829454365152074,
+        "boot_mean": 1.8310079867736004,
+        "ci_lower": 1.1271727309324266,
+        "ci_upper": 2.6166214334103697,
+        "separable": true
+      },
+      "delta_rmsse_vs_best": {
+        "ref_model": "adida",
+        "point": 0.004064586454865182,
+        "boot_mean": 0.004087128149703923,
+        "ci_lower": 0.002146919173180445,
+        "ci_upper": 0.006291346172525558,
+        "separable": true
+      }
+    }
+  },
+  "pairwise_per_series": [
+    {
+      "model_a": "adida",
+      "model_b": "croston_sba",
+      "a_win_pct": 42.87,
+      "b_win_pct": 56.97,
+      "tie_pct": 0.17,
+      "dm_a_beats_b_pct": 2.97,
+      "dm_b_beats_a_pct": 3.23,
+      "dm_indistinguishable_pct": 93.8
+    },
+    {
+      "model_a": "adida",
+      "model_b": "lightgbm",
+      "a_win_pct": 59.77,
+      "b_win_pct": 40.23,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 11.57,
+      "dm_b_beats_a_pct": 1.3,
+      "dm_indistinguishable_pct": 87.13
+    },
+    {
+      "model_a": "adida",
+      "model_b": "lightgbm_tweedie",
+      "a_win_pct": 59.07,
+      "b_win_pct": 40.93,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 7.77,
+      "dm_b_beats_a_pct": 1.13,
+      "dm_indistinguishable_pct": 91.1
+    },
+    {
+      "model_a": "adida",
+      "model_b": "moving_average",
+      "a_win_pct": 51.47,
+      "b_win_pct": 48.33,
+      "tie_pct": 0.2,
+      "dm_a_beats_b_pct": 1.0,
+      "dm_b_beats_a_pct": 2.03,
+      "dm_indistinguishable_pct": 96.97
+    },
+    {
+      "model_a": "adida",
+      "model_b": "naive",
+      "a_win_pct": 60.57,
+      "b_win_pct": 39.27,
+      "tie_pct": 0.17,
+      "dm_a_beats_b_pct": 1.53,
+      "dm_b_beats_a_pct": 10.9,
+      "dm_indistinguishable_pct": 87.57
+    },
+    {
+      "model_a": "adida",
+      "model_b": "routed_ensemble",
+      "a_win_pct": 17.87,
+      "b_win_pct": 14.5,
+      "tie_pct": 67.63,
+      "dm_a_beats_b_pct": 1.3,
+      "dm_b_beats_a_pct": 0.57,
+      "dm_indistinguishable_pct": 98.13
+    },
+    {
+      "model_a": "adida",
+      "model_b": "seasonal_naive",
+      "a_win_pct": 73.97,
+      "b_win_pct": 25.9,
+      "tie_pct": 0.13,
+      "dm_a_beats_b_pct": 5.2,
+      "dm_b_beats_a_pct": 1.77,
+      "dm_indistinguishable_pct": 93.03
+    },
+    {
+      "model_a": "adida",
+      "model_b": "seasonal_naive_weekly",
+      "a_win_pct": 71.2,
+      "b_win_pct": 28.73,
+      "tie_pct": 0.07,
+      "dm_a_beats_b_pct": 2.83,
+      "dm_b_beats_a_pct": 2.5,
+      "dm_indistinguishable_pct": 94.67
+    },
+    {
+      "model_a": "adida",
+      "model_b": "ses",
+      "a_win_pct": 50.9,
+      "b_win_pct": 48.93,
+      "tie_pct": 0.17,
+      "dm_a_beats_b_pct": 1.2,
+      "dm_b_beats_a_pct": 2.13,
+      "dm_indistinguishable_pct": 96.67
+    },
+    {
+      "model_a": "croston_sba",
+      "model_b": "lightgbm",
+      "a_win_pct": 58.67,
+      "b_win_pct": 41.33,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 10.27,
+      "dm_b_beats_a_pct": 1.47,
+      "dm_indistinguishable_pct": 88.27
+    },
+    {
+      "model_a": "croston_sba",
+      "model_b": "lightgbm_tweedie",
+      "a_win_pct": 58.73,
+      "b_win_pct": 41.27,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 5.5,
+      "dm_b_beats_a_pct": 1.4,
+      "dm_indistinguishable_pct": 93.1
+    },
+    {
+      "model_a": "croston_sba",
+      "model_b": "moving_average",
+      "a_win_pct": 53.9,
+      "b_win_pct": 45.93,
+      "tie_pct": 0.17,
+      "dm_a_beats_b_pct": 1.6,
+      "dm_b_beats_a_pct": 3.57,
+      "dm_indistinguishable_pct": 94.83
+    },
+    {
+      "model_a": "croston_sba",
+      "model_b": "naive",
+      "a_win_pct": 58.73,
+      "b_win_pct": 41.1,
+      "tie_pct": 0.17,
+      "dm_a_beats_b_pct": 1.67,
+      "dm_b_beats_a_pct": 15.57,
+      "dm_indistinguishable_pct": 82.77
+    },
+    {
+      "model_a": "croston_sba",
+      "model_b": "routed_ensemble",
+      "a_win_pct": 54.4,
+      "b_win_pct": 45.43,
+      "tie_pct": 0.17,
+      "dm_a_beats_b_pct": 3.5,
+      "dm_b_beats_a_pct": 3.07,
+      "dm_indistinguishable_pct": 93.43
+    },
+    {
+      "model_a": "croston_sba",
+      "model_b": "seasonal_naive",
+      "a_win_pct": 71.63,
+      "b_win_pct": 28.23,
+      "tie_pct": 0.13,
+      "dm_a_beats_b_pct": 5.1,
+      "dm_b_beats_a_pct": 2.63,
+      "dm_indistinguishable_pct": 92.27
+    },
+    {
+      "model_a": "croston_sba",
+      "model_b": "seasonal_naive_weekly",
+      "a_win_pct": 68.13,
+      "b_win_pct": 31.8,
+      "tie_pct": 0.07,
+      "dm_a_beats_b_pct": 3.1,
+      "dm_b_beats_a_pct": 5.2,
+      "dm_indistinguishable_pct": 91.7
+    },
+    {
+      "model_a": "croston_sba",
+      "model_b": "ses",
+      "a_win_pct": 56.27,
+      "b_win_pct": 43.57,
+      "tie_pct": 0.17,
+      "dm_a_beats_b_pct": 1.87,
+      "dm_b_beats_a_pct": 3.43,
+      "dm_indistinguishable_pct": 94.7
+    },
+    {
+      "model_a": "lightgbm",
+      "model_b": "lightgbm_tweedie",
+      "a_win_pct": 44.57,
+      "b_win_pct": 55.43,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 1.4,
+      "dm_b_beats_a_pct": 10.03,
+      "dm_indistinguishable_pct": 88.57
+    },
+    {
+      "model_a": "lightgbm",
+      "model_b": "moving_average",
+      "a_win_pct": 42.3,
+      "b_win_pct": 57.7,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 1.13,
+      "dm_b_beats_a_pct": 8.67,
+      "dm_indistinguishable_pct": 90.2
+    },
+    {
+      "model_a": "lightgbm",
+      "model_b": "naive",
+      "a_win_pct": 58.4,
+      "b_win_pct": 41.6,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 1.7,
+      "dm_b_beats_a_pct": 14.57,
+      "dm_indistinguishable_pct": 83.73
+    },
+    {
+      "model_a": "lightgbm",
+      "model_b": "routed_ensemble",
+      "a_win_pct": 28.47,
+      "b_win_pct": 47.57,
+      "tie_pct": 23.97,
+      "dm_a_beats_b_pct": 0.77,
+      "dm_b_beats_a_pct": 10.5,
+      "dm_indistinguishable_pct": 88.73
+    },
+    {
+      "model_a": "lightgbm",
+      "model_b": "seasonal_naive",
+      "a_win_pct": 67.63,
+      "b_win_pct": 32.37,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 6.07,
+      "dm_b_beats_a_pct": 3.67,
+      "dm_indistinguishable_pct": 90.27
+    },
+    {
+      "model_a": "lightgbm",
+      "model_b": "seasonal_naive_weekly",
+      "a_win_pct": 62.23,
+      "b_win_pct": 37.77,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 3.5,
+      "dm_b_beats_a_pct": 6.53,
+      "dm_indistinguishable_pct": 89.97
+    },
+    {
+      "model_a": "lightgbm",
+      "model_b": "ses",
+      "a_win_pct": 41.63,
+      "b_win_pct": 58.37,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 0.93,
+      "dm_b_beats_a_pct": 8.6,
+      "dm_indistinguishable_pct": 90.47
+    },
+    {
+      "model_a": "lightgbm_tweedie",
+      "model_b": "moving_average",
+      "a_win_pct": 44.87,
+      "b_win_pct": 55.13,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 1.2,
+      "dm_b_beats_a_pct": 5.17,
+      "dm_indistinguishable_pct": 93.63
+    },
+    {
+      "model_a": "lightgbm_tweedie",
+      "model_b": "naive",
+      "a_win_pct": 58.4,
+      "b_win_pct": 41.6,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 1.37,
+      "dm_b_beats_a_pct": 12.57,
+      "dm_indistinguishable_pct": 86.07
+    },
+    {
+      "model_a": "lightgbm_tweedie",
+      "model_b": "routed_ensemble",
+      "a_win_pct": 40.07,
+      "b_win_pct": 59.93,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 1.33,
+      "dm_b_beats_a_pct": 6.97,
+      "dm_indistinguishable_pct": 91.7
+    },
+    {
+      "model_a": "lightgbm_tweedie",
+      "model_b": "seasonal_naive",
+      "a_win_pct": 69.93,
+      "b_win_pct": 30.07,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 5.57,
+      "dm_b_beats_a_pct": 2.53,
+      "dm_indistinguishable_pct": 91.9
+    },
+    {
+      "model_a": "lightgbm_tweedie",
+      "model_b": "seasonal_naive_weekly",
+      "a_win_pct": 63.23,
+      "b_win_pct": 36.77,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 3.1,
+      "dm_b_beats_a_pct": 4.67,
+      "dm_indistinguishable_pct": 92.23
+    },
+    {
+      "model_a": "lightgbm_tweedie",
+      "model_b": "ses",
+      "a_win_pct": 44.0,
+      "b_win_pct": 56.0,
+      "tie_pct": 0.0,
+      "dm_a_beats_b_pct": 1.0,
+      "dm_b_beats_a_pct": 6.2,
+      "dm_indistinguishable_pct": 92.8
+    },
+    {
+      "model_a": "moving_average",
+      "model_b": "naive",
+      "a_win_pct": 59.27,
+      "b_win_pct": 37.6,
+      "tie_pct": 3.13,
+      "dm_a_beats_b_pct": 1.43,
+      "dm_b_beats_a_pct": 4.9,
+      "dm_indistinguishable_pct": 93.67
+    },
+    {
+      "model_a": "moving_average",
+      "model_b": "routed_ensemble",
+      "a_win_pct": 47.83,
+      "b_win_pct": 51.97,
+      "tie_pct": 0.2,
+      "dm_a_beats_b_pct": 2.73,
+      "dm_b_beats_a_pct": 1.1,
+      "dm_indistinguishable_pct": 96.17
+    },
+    {
+      "model_a": "moving_average",
+      "model_b": "seasonal_naive",
+      "a_win_pct": 73.9,
+      "b_win_pct": 25.37,
+      "tie_pct": 0.73,
+      "dm_a_beats_b_pct": 5.1,
+      "dm_b_beats_a_pct": 0.83,
+      "dm_indistinguishable_pct": 94.07
+    },
+    {
+      "model_a": "moving_average",
+      "model_b": "seasonal_naive_weekly",
+      "a_win_pct": 68.83,
+      "b_win_pct": 28.07,
+      "tie_pct": 3.1,
+      "dm_a_beats_b_pct": 3.17,
+      "dm_b_beats_a_pct": 0.93,
+      "dm_indistinguishable_pct": 95.9
+    },
+    {
+      "model_a": "moving_average",
+      "model_b": "ses",
+      "a_win_pct": 49.8,
+      "b_win_pct": 49.83,
+      "tie_pct": 0.37,
+      "dm_a_beats_b_pct": 1.73,
+      "dm_b_beats_a_pct": 1.17,
+      "dm_indistinguishable_pct": 97.1
+    },
+    {
+      "model_a": "naive",
+      "model_b": "routed_ensemble",
+      "a_win_pct": 40.43,
+      "b_win_pct": 59.4,
+      "tie_pct": 0.17,
+      "dm_a_beats_b_pct": 11.2,
+      "dm_b_beats_a_pct": 1.53,
+      "dm_indistinguishable_pct": 87.27
+    },
+    {
+      "model_a": "naive",
+      "model_b": "seasonal_naive",
+      "a_win_pct": 56.23,
+      "b_win_pct": 40.47,
+      "tie_pct": 3.3,
+      "dm_a_beats_b_pct": 4.3,
+      "dm_b_beats_a_pct": 0.53,
+      "dm_indistinguishable_pct": 95.17
+    },
+    {
+      "model_a": "naive",
+      "model_b": "seasonal_naive_weekly",
+      "a_win_pct": 45.63,
+      "b_win_pct": 44.83,
+      "tie_pct": 9.53,
+      "dm_a_beats_b_pct": 1.97,
+      "dm_b_beats_a_pct": 0.6,
+      "dm_indistinguishable_pct": 97.43
+    },
+    {
+      "model_a": "naive",
+      "model_b": "ses",
+      "a_win_pct": 38.93,
+      "b_win_pct": 60.7,
+      "tie_pct": 0.37,
+      "dm_a_beats_b_pct": 6.67,
+      "dm_b_beats_a_pct": 1.57,
+      "dm_indistinguishable_pct": 91.77
+    },
+    {
+      "model_a": "routed_ensemble",
+      "model_b": "seasonal_naive",
+      "a_win_pct": 73.37,
+      "b_win_pct": 26.5,
+      "tie_pct": 0.13,
+      "dm_a_beats_b_pct": 5.53,
+      "dm_b_beats_a_pct": 1.77,
+      "dm_indistinguishable_pct": 92.7
+    },
+    {
+      "model_a": "routed_ensemble",
+      "model_b": "seasonal_naive_weekly",
+      "a_win_pct": 69.13,
+      "b_win_pct": 30.8,
+      "tie_pct": 0.07,
+      "dm_a_beats_b_pct": 3.1,
+      "dm_b_beats_a_pct": 3.27,
+      "dm_indistinguishable_pct": 93.63
+    },
+    {
+      "model_a": "routed_ensemble",
+      "model_b": "ses",
+      "a_win_pct": 51.4,
+      "b_win_pct": 48.43,
+      "tie_pct": 0.17,
+      "dm_a_beats_b_pct": 1.3,
+      "dm_b_beats_a_pct": 2.97,
+      "dm_indistinguishable_pct": 95.73
+    },
+    {
+      "model_a": "seasonal_naive",
+      "model_b": "seasonal_naive_weekly",
+      "a_win_pct": 40.73,
+      "b_win_pct": 55.83,
+      "tie_pct": 3.43,
+      "dm_a_beats_b_pct": 0.8,
+      "dm_b_beats_a_pct": 2.93,
+      "dm_indistinguishable_pct": 96.27
+    },
+    {
+      "model_a": "seasonal_naive",
+      "model_b": "ses",
+      "a_win_pct": 26.47,
+      "b_win_pct": 73.33,
+      "tie_pct": 0.2,
+      "dm_a_beats_b_pct": 1.47,
+      "dm_b_beats_a_pct": 5.6,
+      "dm_indistinguishable_pct": 92.93
+    },
+    {
+      "model_a": "seasonal_naive_weekly",
+      "model_b": "ses",
+      "a_win_pct": 30.07,
+      "b_win_pct": 69.7,
+      "tie_pct": 0.23,
+      "dm_a_beats_b_pct": 1.27,
+      "dm_b_beats_a_pct": 3.1,
+      "dm_indistinguishable_pct": 95.63
+    }
+  ],
   "diebold_mariano": {
     "n_pairs": 45,
     "n_separable_holm": 35,
+    "note": "Panel-pooled Diebold-Mariano stacks all series into a single long vector, ignoring cross-series correlation and inflating degrees of freedom. Per-series head-to-head tests and paired bootstrap intervals provide the defensible statistical evidence.",
     "indistinguishable_pairs": [
       {
         "model_a": "adida",
@@ -203,8 +958,12 @@
   },
   "verdict": {
     "best_by_rank": "croston_sba",
-    "indistinguishable_from_best": [
+    "indistinguishable_from_best_rank": [
       "adida",
+      "routed_ensemble"
+    ],
+    "best_by_wape": "adida",
+    "indistinguishable_from_best_wape": [
       "routed_ensemble"
     ],
     "ranking_is_separable": false

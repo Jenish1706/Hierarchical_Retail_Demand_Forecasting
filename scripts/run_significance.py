@@ -48,8 +48,11 @@ from src.evaluation.significance import (  # noqa: E402
     mcb_test,
     nemenyi_test,
     pairwise_dm,
+    paired_series_bootstrap,
+    pairwise_per_series_tests,
     per_series_scores,
 )
+from src.visualization.leaderboard_plots import plot_critical_difference  # noqa: E402
 
 log = get_logger("significance")
 
@@ -162,6 +165,20 @@ def main() -> int:
         "cliques": nem["cliques"],
     }
 
+    # Render Critical Difference Diagram
+    try:
+        plot_critical_difference(
+            average_ranks=ranks,
+            critical_difference=cd,
+            out_dir=out_dir,
+            cliques=nem["cliques"],
+            n_series=len(complete),
+            name="critical_difference",
+        )
+        print(f"    Saved critical difference plot to {out_dir / 'critical_difference.png'}")
+    except Exception as exc:
+        log.warning("failed_plotting_critical_difference", error=str(exc))
+
     # ---------------------------------------------------------------- 3. MCB
     print("\n--- 3. MULTIPLE COMPARISONS WITH THE BEST " + "-" * 40)
     mcb = mcb_test(complete, alpha=args.alpha)
@@ -183,8 +200,56 @@ def main() -> int:
     mcb.to_csv(out_dir / "mcb.csv", index=False)
     results["mcb"] = mcb.to_dict(orient="records")
 
-    # ---------------------------------------------------------------- 4. DM
-    print("\n--- 4. DIEBOLD-MARIANO (pairwise, Holm-corrected) " + "-" * 32)
+    # ---------------------------------------------------------------- 4. Paired Series Bootstrap
+    print("\n--- 4. PAIRED SERIES BOOTSTRAP (2,000 resamples, alpha=0.05) " + "-" * 22)
+    boot = paired_series_bootstrap(preds, n_bootstraps=2000, alpha=args.alpha, seed=42)
+    results["bootstrap"] = boot
+
+    boot_rows = []
+    print(f"    {'model':<22} {'WAPE (%)':>9} {'95% CI':>18} {'RMSSE':>8} {'95% CI':>16} {'dWAPE vs Best':>15} {'sep?':>6}")
+    for m, b in boot.items():
+        w = b["wape"]
+        r = b["rmsse"]
+        dw = b["delta_wape_vs_best"]
+        dr = b["delta_rmsse_vs_best"]
+        w_ci_str = f"[{w['ci_lower']:.2f}%, {w['ci_upper']:.2f}%]"
+        r_ci_str = f"[{r['ci_lower']:.3f}, {r['ci_upper']:.3f}]"
+        dw_str = f"{dw['point']:+6.2f}% [{dw['ci_lower']:+6.2f}%, {dw['ci_upper']:+6.2f}%]"
+        sep_str = "YES" if dw["separable"] else "no"
+        print(f"    {m:<22} {w['point']:8.2f}% {w_ci_str:>18} {r['point']:8.3f} {r_ci_str:>16} {dw_str:>15} {sep_str:>6}")
+
+        boot_rows.append({
+            "model": m,
+            "wape": w["point"],
+            "wape_ci_lower": w["ci_lower"],
+            "wape_ci_upper": w["ci_upper"],
+            "rmsse": r["point"],
+            "rmsse_ci_lower": r["ci_lower"],
+            "rmsse_ci_upper": r["ci_upper"],
+            "delta_wape_point": dw["point"],
+            "delta_wape_ci_lower": dw["ci_lower"],
+            "delta_wape_ci_upper": dw["ci_upper"],
+            "delta_wape_separable": dw["separable"],
+            "delta_rmsse_point": dr["point"],
+            "delta_rmsse_ci_lower": dr["ci_lower"],
+            "delta_rmsse_ci_upper": dr["ci_upper"],
+            "delta_rmsse_separable": dr["separable"],
+        })
+    df_boot = pd.DataFrame(boot_rows)
+    df_boot.to_csv(out_dir / "bootstrap_intervals.csv", index=False)
+
+    # ---------------------------------------------------------------- 5. Per-Series Pairwise Tests
+    print("\n--- 5. PER-SERIES HEAD-TO-HEAD WIN-RATES & TESTS " + "-" * 32)
+    df_h2h = pairwise_per_series_tests(preds, horizon=args.horizon, alpha=args.alpha)
+    df_h2h.to_csv(out_dir / "pairwise_per_series.csv", index=False)
+    results["pairwise_per_series"] = df_h2h.to_dict(orient="records")
+
+    print(f"    Computed per-series head-to-head metrics for {len(df_h2h)} pairs.")
+    for _, r in df_h2h.head(6).iterrows():
+        print(f"      {r['model_a']:<16} vs {r['model_b']:<16} | {r['model_a']} wins {r['a_win_pct']:.1f}%, {r['model_b']} wins {r['b_win_pct']:.1f}% (ties {r['tie_pct']:.1f}%) | indistinguishable: {r['dm_indistinguishable_pct']:.1f}%")
+
+    # ---------------------------------------------------------------- 6. Legacy Pooled DM (Documented Limitation)
+    print("\n--- 6. PANEL-POOLED DIEBOLD-MARIANO (Reference only) " + "-" * 28)
     errors = {
         str(model): (
             g.sort_values(["series_id", "date"])["y_true"].to_numpy(float)
@@ -198,25 +263,19 @@ def main() -> int:
     dm.to_csv(out_dir / "diebold_mariano.csv", index=False)
 
     n_sep = int(dm["significant_adjusted"].sum())
-    print(f"    {n_sep} of {len(dm)} pairs separable at alpha={args.alpha} after Holm correction")
+    print(f"    {n_sep} of {len(dm)} pairs separable at alpha={args.alpha} after Holm correction.")
+    print("    NOTE: Panel-pooled DM inflates sample size across series (N=2.52M) and is deprecated")
+    print("    in favor of series-level bootstrap CIs and per-series win-rates (Sections 4 & 5).")
 
     indistinguishable = dm[~dm["significant_adjusted"]]
-    if len(indistinguishable):
-        print(f"\n    INDISTINGUISHABLE pairs ({len(indistinguishable)}):")
-        for _, r in indistinguishable.iterrows():
-            print(f"      {r['model_a']:<22} vs {r['model_b']:<22} p_adj = {r['p_adjusted']:.4f}")
-
-    print("\n    Most significant separations:")
-    for _, r in dm.head(8).iterrows():
-        print(
-            f"      {r['model_a']:<22} vs {r['model_b']:<22} "
-            f"DM={r['dm_statistic']:+7.2f}  p_adj={r['p_adjusted']:.3g}  "
-            f"better: {r['better']}"
-        )
-
     results["diebold_mariano"] = {
         "n_pairs": int(len(dm)),
         "n_separable_holm": n_sep,
+        "note": (
+            "Panel-pooled Diebold-Mariano stacks all series into a single long vector, ignoring cross-series "
+            "correlation and inflating degrees of freedom. Per-series head-to-head tests and paired bootstrap "
+            "intervals provide the defensible statistical evidence."
+        ),
         "indistinguishable_pairs": indistinguishable[["model_a", "model_b", "p_adjusted"]].to_dict(
             orient="records"
         ),
@@ -227,30 +286,38 @@ def main() -> int:
     print("VERDICT")
     print("=" * 82)
 
-    best = str(ranks.index[0])
+    best_rank_model = str(ranks.index[0])
     tied_with_best = [
         str(r["model"])
         for _, r in mcb.iterrows()
         if r["indistinguishable_from_best"] and not r["is_best"]
     ]
 
-    if tied_with_best:
-        print(f"  Best by average rank: {best}")
-        print(f"  Statistically indistinguishable from it: {', '.join(tied_with_best)}")
-        print(f"  -> The ranking among {{{best}, {', '.join(tied_with_best)}}} is NOT a finding.")
-    else:
-        print(f"  {best} significantly outperforms every other model tested")
-        print(f"  (MCB, alpha={args.alpha}; CD={cd:.4f}).")
+    best_wape_model = min(pooled.items(), key=lambda x: x[1])[0]
+    tied_wape = [
+        m for m, b in boot.items()
+        if m != best_wape_model and not b["delta_wape_vs_best"]["separable"]
+    ]
+
+    print(f"  Best by average rank (Nemenyi / MCB) : {best_rank_model}")
+    print(f"  Indistinguishable rank clique        : {', '.join([best_rank_model] + tied_with_best)}")
+    print(f"  Best by pooled volume-weighted WAPE  : {best_wape_model} ({pooled[best_wape_model]:.2f}%)")
+    print(f"  Indistinguishable in bootstrap WAPE  : {', '.join([best_wape_model] + tied_wape)}")
 
     results["verdict"] = {
-        "best_by_rank": best,
-        "indistinguishable_from_best": tied_with_best,
+        "best_by_rank": best_rank_model,
+        "indistinguishable_from_best_rank": tied_with_best,
+        "best_by_wape": best_wape_model,
+        "indistinguishable_from_best_wape": tied_wape,
         "ranking_is_separable": not tied_with_best,
     }
 
     (out_dir / "significance_report.json").write_text(
         json.dumps(results, indent=2, default=str), encoding="utf-8"
     )
+    print(f"\n  Artefacts: {out_dir}")
+    print("=" * 82 + "\n")
+    return 0
     print(f"\n  Artefacts: {out_dir}")
     print("=" * 82 + "\n")
     return 0

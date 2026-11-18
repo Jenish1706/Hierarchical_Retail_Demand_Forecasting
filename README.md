@@ -1,13 +1,13 @@
 # M5 Retail Demand & Inventory Intelligence Platform
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-96%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-108%20passed-brightgreen.svg)]()
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![DVC Pipeline](https://img.shields.io/badge/pipeline-DVC%20v3-orange.svg)](https://dvc.org)
 [![Data Engine: Polars](https://img.shields.io/badge/engine-Polars%20lazy%20streaming-blueviolet.svg)](https://pola.rs)
 [![Streamlit Dashboard](https://img.shields.io/badge/dashboard-Streamlit-FF4B4B.svg)](streamlit_app.py)
 
-A production-grade, end-to-end demand intelligence and operations analytics platform built on **58.3 million daily panel observations** from Walmart retail sales (30,490 SKUs across 10 stores over 1,913 days).
+A modular, end-to-end demand forecasting and inventory analytics platform built on **58.3 million daily panel observations** from Walmart retail sales (30,490 SKUs across 10 stores over 1,913 days).
 
 The platform bridges the gap between raw statistical/machine learning forecasts and **actionable inventory decisions**—solving the fundamental supply chain trade-off: **Stockout Risk vs. Working Capital**.
 
@@ -23,23 +23,27 @@ flowchart TD
         B --> D["Horizon-Safe Lag/Rolling Features (28d+ Shift)"]
     end
 
-    subgraph S2["2. Multi-Tier Model Zoo"]
+    subgraph S2["2. Evaluated Forecasting Pipeline (10 Models)"]
         D --> E1["Tier 1: Statistical & Intermittent<br/>(ADIDA, Croston SBA, SES, Moving Avg)"]
         D --> E2["Tier 2: Global Gradient Boosting<br/>(LightGBM, LightGBM Tweedie)"]
-        D --> E3["Tier 3: Probabilistic & Hurdle<br/>(Two-Stage Classifier + Quantile Reg)"]
-        D --> E4["Tier 4: Reconciliation & Ensembles<br/>(SBT Segment Router, Naive Baselines)"]
+        D --> E3["Tier 4: Baselines & Ensembles<br/>(SBT Segment Router, Naive Baselines)"]
+    end
+
+    subgraph S2_UNEVAL["Implemented, Not Evaluated in Main Backtest"]
+        U1["Tier 3: Probabilistic & Hurdle<br/>(Two-Stage Classifier + Quantile Reg)"]
+        U2["Exploratory Deep Learning<br/>(PatchTST, TFT, DLinear, N-BEATS, DeepAR)"]
     end
 
     subgraph S3["3. Statistical Significance Engine"]
-        E1 & E2 & E3 & E4 --> F["Walk-Forward Rolling-Origin Backtest (3,000 Series x 3 Origins)"]
-        F --> G["Holm-Corrected Diebold-Mariano (35/45 Separable)"]
-        F --> H["Friedman Omnibus Test (chi-sq=2,461, p<1e-12)"]
-        H --> I["Nemenyi Critical Difference (CD=0.249)"]
-        G & I --> J["Champion Selection & Routing Verification"]
+        E1 & E2 & E3 --> F["Walk-Forward Rolling-Origin Backtest (3,000 Series x 3 Origins)"]
+        F --> G["Holm-Corrected Per-Series Win-Rates & DM"]
+        F --> H["Friedman Omnibus Test (chi-sq=2,429.30, p<1e-12)"]
+        H --> I["Nemenyi Critical Difference (CD=0.2494)"]
+        F --> J["Paired Series Bootstrap (2,000 Reps, 95% CIs)"]
     end
 
     subgraph S4["4. Inventory Decision Layer (Operations Analytics)"]
-        J --> K["3x3 ABC/XYZ Pareto Segmentation (CA_1 & CA_2)"]
+        I & J --> K["3x3 ABC/XYZ Pareto Segmentation (CA_1 & CA_2)"]
         K --> L["Parametric Normal Safety Stock (L=7d)"]
         L --> M["Service-Level Trade-offs (90% / 95% / 98% CSL)"]
         M --> N["Working Capital & Reorder Point Optimization"]
@@ -74,10 +78,14 @@ Analyzed all 30,490 series over 1,913 days to categorize demand dynamics under t
 - **Data Validation**: Pandera schema checks validate data inputs against strict type and range constraints.
 
 ### Pillar 3: Multi-Tier Forecasting Models
-1. **Tier 1 (Statistical & Intermittent)**: Naive, Seasonal Naive, Croston SBA, SES, ADIDA, Moving Average.
+**Evaluated in Cross-Tier Benchmark (10 Models)**:
+1. **Tier 1 (Statistical & Intermittent)**: Naive, Seasonal Naive (Weekly & 28d), Croston SBA, SES, ADIDA, Moving Average (28d).
 2. **Tier 2 (Global Gradient Boosters)**: LightGBM (L2 regression and Tweedie objectives) with calendar and lag features.
-3. **Tier 3 (Probabilistic & Hurdle)**: Two-stage Hurdle models (logistic zero classifier + continuous regression) and quantile regression.
-4. **Tier 4 (Segment Routing & Ensembles)**: SBT segment-based routing dynamically allocating series to intermittent estimators or global models.
+3. **Tier 4 (Segment Routing & Ensembles)**: SBT segment-based routing dynamically allocating series to intermittent estimators or global models.
+
+**Implemented, Not Evaluated in Main Backtest**:
+- **Tier 3 (Probabilistic & Hurdle)**: Two-stage Hurdle models (logistic zero classifier + continuous regression) and pinball-loss quantile regression (`src/models/probabilistic/`).
+- **Deep Learning Architectures**: Neural forecasting modules (`src/models/neural/`).
 
 ### Pillar 4: Statistical Testing & Model Selection Rigor
 <!-- BEGIN_STATISTICS_SECTION -->
@@ -97,9 +105,13 @@ Converts point and variance estimates into operational inventory policy recommen
    $$\text{Safety Stock (Normal)} = z \cdot \sigma_e \cdot \sqrt{L}$$
    $$\text{Reorder Point (ROP)} = \mu_L + \text{Safety Stock}$$
    where lead time $L = 7$ days and $\sigma_e$ is the forecast error standard deviation.
-3. **Service-Level Scenario Analysis**:
-   - Evaluated 90% ($z=1.28$), 95% ($z=1.65$), and 98% ($z=2.05$) Cycle Service Levels (CSL).
-   - **Policy Impact**: Differentiated replenishment policies (AX at 98% CSL, CZ at 90% CSL) evaluated on price-verified California stores (CA_1 and CA_2, 6,098 SKUs) released **$3,223.14 in trapped working capital** without increasing stockout risk on revenue drivers.
+3. **Service-Level Trade-Off Scenario Analysis**:
+   - **Operational Scenario**: Rather than applying a flat 95% service level across all catalog items, the platform evaluates a differentiated replenishment scenario on stores CA_1 and CA_2 (6,098 SKUs, 4,591 with verified price data):
+     - **Revenue Drivers (AX)**: Upgraded from 95% ($z=1.65$) to 98% CSL ($z=2.05$), committing an additional +$304.04 in safety buffer (+9.4% working capital) to reduce planned stockout cycles from 5% to 2% on high-turnover revenue drivers.
+     - **Core & Moderate Volume (AY, AZ, BX, BY, CX)**: Maintained at standard 95% CSL ($0.00 capital change).
+     - **Erratic & Slow-Moving Tail (BZ, CY, CZ)**: Reduced from 95% to 90% CSL ($z=1.28$), releasing +$2,197.62 (BZ), +$34.28 (CY), and +$1,295.28 (CZ) in working capital. This operational trade-off accepts an increase in theoretical stockout cycles (from 5% to 10% expected cycle stockouts) on low-velocity items to free liquidity.
+     - **Net Capital Impact**: Releases **+$3,223.14 in net working capital** across the portfolio ($72,426.36 current -> $69,203.22 recommended).
+   - **Methodological Limitation**: Normal-approximation safety stock ($z \cdot \sigma_e \cdot \sqrt{L}$) assumes symmetric, Gaussian lead-time errors. On zero-inflated, highly intermittent retail demand (where 68.2% of daily observations are zero), Gaussian tail assumptions have not yet been empirically validated against trace-driven stockout simulations or unit fill rates (empirical lead-time stockout validation is scheduled for Stage B).
 
 ---
 
@@ -110,20 +122,20 @@ Converts point and variance estimates into operational inventory policy recommen
 Evaluated across a representative sample of 3,000 series over 3 walk-forward rolling 28-day origins (84 evaluation days per series = 252,000 predictions per model):
 
 <!-- BEGIN_LEADERBOARD_TABLE -->
-| Rank | Model Name | Architecture Tier | WAPE (%) | RMSSE | Nemenyi Avg Rank | Statistical Verdict |
-|---|---|---|---|---|---|---|
-| **1** | **ADIDA** | Intermittent Statistical | **75.16%** | **0.768** | 4.77 | **Indistinguishable from Best** |
-| **2** | **Moving Average (28d)** | Simple Baseline | 75.47% | 0.769 | 4.94 | Significantly worse than best rank |
-| **3** | **Routed SBT Ensemble** | Hybrid (ADIDA + Global) | 75.66% | 0.769 | 4.79 | **Indistinguishable from Best** |
-| **4** | **SES** | Exponential Smoothing | 76.99% | 0.772 | 4.91 | Significantly worse than best rank |
-| **5** | **LightGBM (Tweedie)** | Global GBDT | 77.26% | 0.783 | 5.38 | Significantly worse than best rank |
-| **6** | **LightGBM** | Global GBDT | 77.39% | 0.786 | 5.56 | Significantly worse than best rank |
-| **7** | **Croston SBA** | Intermittent Statistical | 77.80% | 0.789 | **4.55** | **Best by Average Rank** |
-| **8** | **Seasonal Naive (Weekly)** | Baseline | 88.08% | 1.000 | 6.74 | Significantly worse than best rank |
-| **9** | **Seasonal Naive (28d)** | Baseline | 98.92% | 1.084 | 7.20 | Baseline |
-| **10** | **Naive** | Baseline | 99.65% | 1.002 | 6.16 | Baseline |
+| Rank | Model Name | Architecture Tier | Nemenyi Avg Rank | Top Clique? | WAPE (%) [95% CI] | RMSSE [95% CI] | $\Delta$WAPE vs Best [95% CI] | Statistical Verdict |
+|---|---|---|---|---|---|---|---|---|
+| **1** | **Croston SBA** | Intermittent Statistical | **4.55** | **Yes** | 77.80% [74.63%, 81.09%] | 0.789 [0.777, 0.810] | +2.64% [+2.06%, +3.30%] | **Rank Leader** |
+| **2** | **ADIDA** | Intermittent Statistical | 4.77 | **Yes** | **75.16% [72.16%, 78.23%]** | **0.768 [0.756, 0.788]** | **+0.00% [+0.00%, +0.00%]** | **WAPE Leader** (within CD of rank leader) |
+| **3** | **Routed SBT Ensemble** | Hybrid (ADIDA + Global) | 4.79 | **Yes** | 75.66% [72.40%, 78.87%] | 0.769 [0.757, 0.789] | +0.50% [-0.01%, +1.04%] | **Indistinguishable from Best** (rank & WAPE) |
+| **4** | **SES** | Exponential Smoothing | 4.91 | No | 76.99% [74.20%, 79.72%] | 0.772 [0.760, 0.792] | +1.83% [+1.13%, +2.62%] | Significantly worse than best rank |
+| **5** | **Moving Average (28d)** | Simple Baseline | 4.94 | No | 75.47% [72.39%, 78.54%] | 0.769 [0.757, 0.789] | +0.31% [+0.05%, +0.59%] | Significantly worse than best rank |
+| **6** | **LightGBM (Tweedie)** | Global GBDT | 5.38 | No | 77.26% [74.10%, 80.34%] | 0.783 [0.771, 0.803] | +2.10% [+1.40%, +2.84%] | Significantly worse than best rank |
+| **7** | **LightGBM** | Global GBDT | 5.56 | No | 77.39% [74.11%, 80.59%] | 0.786 [0.774, 0.805] | +2.23% [+1.58%, +2.90%] | Significantly worse than best rank |
+| **8** | **Naive** | Baseline | 6.16 | No | 99.65% [96.06%, 103.28%] | 1.002 [0.984, 1.027] | +24.49% [+22.62%, +26.27%] | Baseline |
+| **9** | **Seasonal Naive (Weekly)** | Baseline | 6.74 | No | 88.08% [84.37%, 91.79%] | 1.000 [0.985, 1.025] | +12.92% [+11.99%, +13.77%] | Baseline |
+| **10** | **Seasonal Naive (28d)** | Baseline | 7.20 | No | 98.92% [95.11%, 102.55%] | 1.084 [1.070, 1.106] | +23.76% [+22.14%, +25.41%] | Baseline |
 
-*Statistical significance: Omnibus Friedman test $\chi^2 = 2429.30$ ($p < 10^{-12}$, 10 models $\times$ 2,950 complete series). Post-hoc Nemenyi critical difference $CD = 0.2494$ ($\alpha = 0.05$). Holm-corrected Diebold-Mariano tests separated 35 of 45 model pairs.*
+*Statistical significance: Omnibus Friedman test $\chi^2 = 2429.30$ ($p < 10^{-12}$, 10 models $\times$ 2,950 complete series). Post-hoc Nemenyi critical difference $CD = 0.2494$ ($\alpha = 0.05$). Top rank clique $\{croston\_sba, adida, routed\_ensemble\}$ is statistically indistinguishable in average rank. Paired series bootstrap (2,000 resamples) demonstrates that Routed SBT Ensemble is indistinguishable from ADIDA in pooled WAPE ($\Delta\text{WAPE} = +0.50\%$, 95% CI [-0.01%, +1.04%]).*
 <!-- END_LEADERBOARD_TABLE -->
 
 ---

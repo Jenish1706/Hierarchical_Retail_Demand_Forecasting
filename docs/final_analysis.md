@@ -39,4 +39,4 @@ Across the 3,000 sampled series over 3 walk-forward rolling 28-day origins (84 t
 * Temporal recency and rolling statistics (`roll_mean_7`, `roll_mean_28`) provide the strongest feature importance for tree-based models, while horizon-safe shifting (minimum 28 days) ensures zero future information leaks into training.
 
 ## 10. Operational Impact: Forecasts to Working Capital
-* Connecting forecast error distributions to inventory policies via ABC/XYZ segmentation in stores CA_1 and CA_2 identified $3,223.14 in releasable working capital by differentiating service levels (e.g. 98% for high-value AX items vs 90% for erratic CZ items) without increasing stockout risk on revenue drivers.
+* Connecting forecast error distributions to inventory policies via ABC/XYZ segmentation in stores CA_1 and CA_2 identified $3,223.14 in releasable working capital by differentiating service levels (e.g. 98% for high-value AX items vs 90% for erratic CZ items; note that normal-approximation safety stock on intermittent demand remains an analytical baseline subject to empirical stockout validation in Stage B).

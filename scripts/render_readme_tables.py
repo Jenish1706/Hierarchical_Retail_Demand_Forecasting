@@ -59,46 +59,73 @@ def render_leaderboard_table() -> str:
     with open(SIGNIFICANCE_JSON, "r", encoding="utf-8") as f:
         sig = json.load(f)
 
-    # Sort models by WAPE ascending
-    df_sorted = df_acc.sort_values("wape").reset_index(drop=True)
-
-    # Extract significance info
+    # Extract significance & bootstrap info
     mcb_map = {m["model"]: m for m in sig.get("mcb", [])}
     ranks_map = sig.get("nemenyi", {}).get("average_ranks", {})
+    cliques = sig.get("nemenyi", {}).get("cliques", [])
+    top_clique = cliques[0] if cliques else []
+    boot = sig.get("bootstrap", {})
+
+    # Sort models by Nemenyi average rank ascending
+    df_acc["nemenyi_rank"] = df_acc["model"].map(lambda m: ranks_map.get(m, 99.0))
+    df_sorted = df_acc.sort_values("nemenyi_rank").reset_index(drop=True)
 
     min_wape = df_sorted["wape"].min()
     min_rmsse = df_sorted["rmsse"].min()
     best_rank = min(ranks_map.values()) if ranks_map else None
 
     lines = [
-        "| Rank | Model Name | Architecture Tier | WAPE (%) | RMSSE | Nemenyi Avg Rank | Statistical Verdict |",
-        "|---|---|---|---|---|---|---|",
+        "| Rank | Model Name | Architecture Tier | Nemenyi Avg Rank | Top Clique? | WAPE (%) [95% CI] | RMSSE [95% CI] | $\\Delta$WAPE vs Best [95% CI] | Statistical Verdict |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
 
     for idx, row in df_sorted.iterrows():
         model_key = row["model"]
         info = MODEL_INFO.get(model_key, {"name": f"**{model_key}**", "tier": "Model"})
+        b_info = boot.get(model_key, {})
 
-        # Format metrics
-        wape_val = row["wape"]
-        wape_str = f"**{wape_val:.2f}%**" if abs(wape_val - min_wape) < 1e-4 else f"{wape_val:.2f}%"
-
-        rmsse_val = row["rmsse"]
-        rmsse_str = f"**{rmsse_val:.3f}**" if abs(rmsse_val - min_rmsse) < 1e-4 else f"{rmsse_val:.3f}"
-
+        # Ranks
         avg_rank = ranks_map.get(model_key, float("nan"))
         if best_rank is not None and abs(avg_rank - best_rank) < 1e-4:
             rank_str = f"**{avg_rank:.2f}**"
         else:
             rank_str = f"{avg_rank:.2f}"
 
+        # Clique
+        in_top_clique = model_key in top_clique
+        clique_str = "**Yes**" if in_top_clique else "No"
+
+        # WAPE with CI
+        w_point = row["wape"]
+        w_ci = b_info.get("wape", {})
+        w_lo, w_hi = w_ci.get("ci_lower", w_point), w_ci.get("ci_upper", w_point)
+        w_body = f"{w_point:.2f}% [{w_lo:.2f}%, {w_hi:.2f}%]"
+        wape_str = f"**{w_body}**" if abs(w_point - min_wape) < 1e-4 else w_body
+
+        # RMSSE with CI
+        r_point = row["rmsse"]
+        r_ci = b_info.get("rmsse", {})
+        r_lo, r_hi = r_ci.get("ci_lower", r_point), r_ci.get("ci_upper", r_point)
+        r_body = f"{r_point:.3f} [{r_lo:.3f}, {r_hi:.3f}]"
+        rmsse_str = f"**{r_body}**" if abs(r_point - min_rmsse) < 1e-4 else r_body
+
+        # Delta WAPE vs best
+        dw_info = b_info.get("delta_wape_vs_best", {})
+        dw_pt = dw_info.get("point", 0.0)
+        dw_lo = dw_info.get("ci_lower", 0.0)
+        dw_hi = dw_info.get("ci_upper", 0.0)
+        dw_body = f"{dw_pt:+5.2f}% [{dw_lo:+5.2f}%, {dw_hi:+5.2f}%]"
+        dwape_str = f"**{dw_body}**" if abs(dw_pt) < 1e-4 else dw_body
+
         # Verdict
         mcb_info = mcb_map.get(model_key, {})
         if mcb_info.get("is_best", False):
-            verdict = "**Best by Average Rank**"
-        elif mcb_info.get("indistinguishable_from_best", False):
-            verdict = "**Indistinguishable from Best**"
-        elif model_key in ("seasonal_naive", "naive"):
+            verdict = "**Rank Leader**"
+        elif abs(w_point - min_wape) < 1e-4:
+            verdict = "**WAPE Leader** (within CD of rank leader)"
+        elif in_top_clique and not dw_info.get("separable", True):
+            verdict = "**Indistinguishable from Best** (rank & WAPE)"
+        elif model_key in ("seasonal_naive", "naive", "seasonal_naive_weekly"):
             verdict = "Baseline"
         else:
             verdict = "Significantly worse than best rank"
@@ -106,22 +133,22 @@ def render_leaderboard_table() -> str:
         rank_num = idx + 1
         rank_num_str = f"**{rank_num}**"
         lines.append(
-            f"| {rank_num_str} | {info['name']} | {info['tier']} | {wape_str} | {rmsse_str} | {rank_str} | {verdict} |"
+            f"| {rank_num_str} | {info['name']} | {info['tier']} | {rank_str} | {clique_str} | {wape_str} | {rmsse_str} | {dwape_str} | {verdict} |"
         )
 
     # Footnote
-    friedman_stat = sig.get("friedman", {}).get("statistic", 2460.79)
+    friedman_stat = sig.get("friedman", {}).get("statistic", 2429.30)
     n_models = sig.get("n_models", 10)
     n_series = sig.get("n_series_complete", 2950)
     cd = sig.get("nemenyi", {}).get("critical_difference", 0.2494)
-    dm_sep = sig.get("diebold_mariano", {}).get("n_separable_holm", 35)
-    dm_pairs = sig.get("diebold_mariano", {}).get("n_pairs", 45)
 
     footnote = (
         f"\n*Statistical significance: Omnibus Friedman test $\\chi^2 = {friedman_stat:.2f}$ "
         f"($p < 10^{{-12}}$, {n_models} models $\\times$ {n_series:,} complete series). "
         f"Post-hoc Nemenyi critical difference $CD = {cd:.4f}$ ($\\alpha = 0.05$). "
-        f"Holm-corrected Diebold-Mariano tests separated {dm_sep} of {dm_pairs} model pairs.*"
+        f"Top rank clique $\\{{croston\\_sba, adida, routed\\_ensemble\\}}$ is statistically indistinguishable in average rank. "
+        f"Paired series bootstrap (2,000 resamples) demonstrates that Routed SBT Ensemble is indistinguishable from ADIDA in pooled WAPE "
+        f"($\\Delta\\text{{WAPE}} = +0.50\\%$, 95% CI [-0.01%, +1.04%]).*"
     )
 
     return "\n".join(lines) + "\n" + footnote

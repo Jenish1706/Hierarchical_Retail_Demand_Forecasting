@@ -26,18 +26,18 @@ def get_project_root() -> Path:
 
 
 def read_table(rel_path_without_ext: str) -> pd.DataFrame:
-    """Read a table trying .parquet first, then .csv, returning empty DataFrame if missing."""
+    """Read canonical table (reads .csv as primary source of truth, falling back to .parquet)."""
     root = get_project_root()
-    parquet_path = root / f"{rel_path_without_ext}.parquet"
     csv_path = root / f"{rel_path_without_ext}.csv"
+    parquet_path = root / f"{rel_path_without_ext}.parquet"
 
-    if parquet_path.exists():
+    if csv_path.exists():
+        return pd.read_csv(csv_path)
+    elif parquet_path.exists():
         try:
             return pl.read_parquet(parquet_path).to_pandas()
         except Exception:
             return pd.read_parquet(parquet_path)
-    elif csv_path.exists():
-        return pd.read_csv(csv_path)
     return pd.DataFrame()
 
 

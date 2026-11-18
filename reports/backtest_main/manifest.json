@@ -1,0 +1,45 @@
+{
+  "run_at": "2026-11-19T02:48:45",
+  "elapsed_seconds": 451.2,
+  "protocol": "rolling-origin walk-forward, non-overlapping test windows",
+  "n_series": 3000,
+  "n_origins": 3,
+  "horizon_days": 28,
+  "history_days": 900,
+  "origins": [
+    {
+      "index": 2,
+      "train_end": "2016-01-31",
+      "test_start": "2016-02-01",
+      "test_end": "2016-02-28"
+    },
+    {
+      "index": 1,
+      "train_end": "2016-02-28",
+      "test_start": "2016-02-29",
+      "test_end": "2016-03-27"
+    },
+    {
+      "index": 0,
+      "train_end": "2016-03-27",
+      "test_start": "2016-03-28",
+      "test_end": "2016-04-24"
+    }
+  ],
+  "filters": {
+    "stores": null,
+    "states": null,
+    "categories": null,
+    "departments": null,
+    "sample_series": 3000
+  },
+  "n_features": 38,
+  "price_features_included": false,
+  "price_coverage_note": "sell_price present only for ['CA_1', 'CA_2'] (15.33% of the full M5 price table); the source workbook was truncated at Excel's row limit",
+  "champion": "adida",
+  "champion_wape": 75.16136463492705,
+  "champion_rmsse": 0.767789823476922,
+  "predictions_file": "predictions.parquet",
+  "predictions_sha256": "f974935ad084b64858767cbc9a8f9e0158b8adfd05aa73f18cd9a99342743ca0",
+  "regeneration_command": "python scripts/run_backtest.py --sample-series 3000 --n-origins 3 --history-days 900 --out-dir reports/backtest_main"
+}

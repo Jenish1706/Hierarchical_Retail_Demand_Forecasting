@@ -1,0 +1,3 @@
+# fig06_model_by_demand_class
+
+WAPE per model within each Syntetos-Boylan-Teunter demand class. Colour is normalised WITHIN each column, because absolute WAPE differs by roughly an order of magnitude between dense and sparse segments; a globally-scaled heatmap would only restate which segment is hard. Boxed cells are the best model in that class. Winners in the sparse quadrants: INTERMITTENT -> adida, LUMPY -> adida. This figure is the direct test of the routing rule: the router sends INTERMITTENT to Croston and LUMPY to ADIDA on the strength of a literature convention, and if a global learner wins those columns instead, the rule does not hold on M5.

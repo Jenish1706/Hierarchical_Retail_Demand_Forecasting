@@ -1,0 +1,57 @@
+{
+  "run_at": "2026-11-19T03:01:58",
+  "elapsed_seconds": 965.4,
+  "n_series": 3000,
+  "n_origins": 3,
+  "horizon": 28,
+  "models_requested": [
+    "autoets",
+    "sf_naive",
+    "sf_seasonal_naive",
+    "croston_sba",
+    "adida"
+  ],
+  "models_failed": {},
+  "origins": [
+    {
+      "name": "origin_0",
+      "train_start": "2013-11-07",
+      "train_end": "2016-01-31",
+      "test_start": "2016-02-01",
+      "test_end": "2016-02-28",
+      "horizon": 28,
+      "n_train_days": 816
+    },
+    {
+      "name": "origin_1",
+      "train_start": "2013-11-07",
+      "train_end": "2016-02-28",
+      "test_start": "2016-02-29",
+      "test_end": "2016-03-27",
+      "horizon": 28,
+      "n_train_days": 844
+    },
+    {
+      "name": "origin_2",
+      "train_start": "2013-11-07",
+      "train_end": "2016-03-27",
+      "test_start": "2016-03-28",
+      "test_end": "2016-04-24",
+      "horizon": 28,
+      "n_train_days": 872
+    }
+  ],
+  "autoets_rmsse_level12": 0.7674790629656376,
+  "published_reference": {
+    "Best of top-50 (wyzJack_STU)": 0.875,
+    "Competition winner (YJ_STU)": 0.884,
+    "ES_bu benchmark": 0.915,
+    "Croston": 0.926
+  },
+  "comparability_caveat": "Published level-12 figures are dollar-weighted WRMSSE over all 30,490 series on the true competition test window. This run is an unweighted mean RMSSE over a subsample on a shifted window (the published window has no actuals in this data release). A somewhat worse figure here is expected, not a defect.",
+  "arima_note": "AutoARIMA excluded at level 12: order selection across 95%-zero series is expensive and yields degenerate orders. Run with --with-arima, or at aggregated levels where series are continuous.",
+  "mlflow_logged": true,
+  "predictions_file": "predictions.parquet",
+  "predictions_sha256": "115b58186cbda957e1702dd4822cbf67bbe1849786226b39fb31fdce7c44e255",
+  "regeneration_command": "python scripts/run_tier1.py --sample-series 3000 --n-origins 3 --out-dir reports/tier1_esbu"
+}

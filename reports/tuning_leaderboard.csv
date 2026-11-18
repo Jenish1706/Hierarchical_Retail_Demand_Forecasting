@@ -1,0 +1,3 @@
+model,cv_wape,cv_rmsse
+lightgbm,71.6075,0.4499
+HurdleForecaster,71.3433,0.4496

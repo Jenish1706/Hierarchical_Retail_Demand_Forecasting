@@ -1,13 +1,27 @@
 import numpy as np
 import pandas as pd
+import pytest
 
+from src.config.settings import settings
 from src.data.loader import M5Loader
 from src.evaluation.point_metrics import metrics_by_group
 from src.features.base import FeaturePipeline
 from src.mlops.registry import PromotionGate
 from src.models.classical_ml.trainer import DemandTrainer, TrainingConfig
 
+pytestmark = pytest.mark.integration
 
+
+def _raw_data_available() -> bool:
+    raw = settings.raw_data_dir
+    return (
+        (raw / "sales_train_validation.parquet").exists()
+        and (raw / "calendar.parquet").exists()
+        and (raw / "sell_prices.parquet").exists()
+    )
+
+
+@pytest.mark.skipif(not _raw_data_available(), reason="requires extracted M5 raw parquet files in data/raw/")
 def test_end_to_end():
     # 1. Loader
     loader = M5Loader()

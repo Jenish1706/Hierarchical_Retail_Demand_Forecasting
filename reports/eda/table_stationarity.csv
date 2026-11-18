@@ -1,0 +1,5 @@
+level,adf_p,kpss_p,adf_says_stationary,kpss_says_stationary,verdict
+total,0.500960436179774,0.01,False,False,non-stationary
+state_CA,0.39303545897323805,0.01,False,False,non-stationary
+store_CA_1,0.27126689608170385,0.01,False,False,non-stationary
+cat_FOODS,0.35242398152701615,0.01,False,False,non-stationary

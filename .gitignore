@@ -1,6 +1,8 @@
 data/raw/*.parquet
 data/raw/*.json
-reports/
+# Reports: ignore parquet files except the canonical backtest predictions
+reports/**/*.parquet
+!reports/backtest_main/predictions.parquet
 mlruns/
 mlflow.db
 *.xlsx

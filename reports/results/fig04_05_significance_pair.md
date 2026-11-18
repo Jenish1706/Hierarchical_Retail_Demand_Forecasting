@@ -1,0 +1,3 @@
+# fig04_05_significance_pair
+
+Left: Nemenyi critical-difference diagram. Right: Multiple Comparisons with the Best. Both are rank-based and equal-weight every series, unlike a pooled loss metric which weights by volume. On this data they disagree: the volume-weighted pooled test names adida, while equal-weighted per-series ranks name routed_ensemble. This is a property of M5's structure, not a defect: Makridakis et al. (2022) found the same divergence inside the competition, where the winner ranked 1st on WRMSSE but 13th on MCB. N = 2,950 series. Two caveats apply to both panels: CD = 0.249 is small enough at this N that nearly any rank gap clears it, and the independence assumption is violated for hierarchically nested series.

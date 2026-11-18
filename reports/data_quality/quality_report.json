@@ -1,0 +1,98 @@
+{
+  "audit_timestamp": "2026-09-12",
+  "total_checks": 11,
+  "passed_checks": 11,
+  "warning_checks": 0,
+  "failed_checks": 0,
+  "overall_status": "PASSED",
+  "checks": [
+    {
+      "table_name": "sales_raw",
+      "check_name": "exact_series_count",
+      "status": "PASSED",
+      "details": "Expected 30490 series, found 30490",
+      "records_checked": 30490,
+      "anomalous_records": 0
+    },
+    {
+      "table_name": "sales_raw",
+      "check_name": "store_domain_invariant",
+      "status": "PASSED",
+      "details": "Stores matched M5 catalog: ['CA_1', 'CA_2', 'CA_3', 'CA_4', 'TX_1', 'TX_2', 'TX_3', 'WI_1', 'WI_2', 'WI_3']",
+      "records_checked": 30490,
+      "anomalous_records": 0
+    },
+    {
+      "table_name": "sales_raw",
+      "check_name": "category_domain_invariant",
+      "status": "PASSED",
+      "details": "Categories matched M5 catalog: ['FOODS', 'HOBBIES', 'HOUSEHOLD']",
+      "records_checked": 30490,
+      "anomalous_records": 0
+    },
+    {
+      "table_name": "sales_raw",
+      "check_name": "non_negative_sales",
+      "status": "PASSED",
+      "details": "Checked 100 day columns; 0 negative sales entries found",
+      "records_checked": 3049000,
+      "anomalous_records": 0
+    },
+    {
+      "table_name": "calendar",
+      "check_name": "calendar_row_count",
+      "status": "PASSED",
+      "details": "Calendar holds 1969 days (expected 1,969 through 2016-06-19)",
+      "records_checked": 1969,
+      "anomalous_records": 0
+    },
+    {
+      "table_name": "calendar",
+      "check_name": "date_continuity_no_gaps",
+      "status": "PASSED",
+      "details": "Verified consecutive daily calendar continuity without temporal gaps (0 gaps)",
+      "records_checked": 1969,
+      "anomalous_records": 0
+    },
+    {
+      "table_name": "calendar",
+      "check_name": "valid_snap_flags_CA",
+      "status": "PASSED",
+      "details": "snap_CA contains valid binary flags",
+      "records_checked": 1969,
+      "anomalous_records": 0
+    },
+    {
+      "table_name": "calendar",
+      "check_name": "valid_snap_flags_TX",
+      "status": "PASSED",
+      "details": "snap_TX contains valid binary flags",
+      "records_checked": 1969,
+      "anomalous_records": 0
+    },
+    {
+      "table_name": "calendar",
+      "check_name": "valid_snap_flags_WI",
+      "status": "PASSED",
+      "details": "snap_WI contains valid binary flags",
+      "records_checked": 1969,
+      "anomalous_records": 0
+    },
+    {
+      "table_name": "sell_prices",
+      "check_name": "positive_sell_prices",
+      "status": "PASSED",
+      "details": "Checked 1048575 price rows; 0 non-positive prices found",
+      "records_checked": 1048575,
+      "anomalous_records": 0
+    },
+    {
+      "table_name": "sell_prices",
+      "check_name": "store_coverage_contract",
+      "status": "PASSED",
+      "details": "Stores present in prices: ['CA_1', 'CA_2'] (matches known 15.3% workbook truncation)",
+      "records_checked": 1048575,
+      "anomalous_records": 0
+    }
+  ]
+}

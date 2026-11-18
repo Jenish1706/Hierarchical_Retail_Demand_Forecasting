@@ -1,0 +1,212 @@
+{
+  "metric": "wape",
+  "alpha": 0.05,
+  "n_models": 10,
+  "n_series_complete": 2950,
+  "n_observations": 2520000,
+  "pooled_wape": {
+    "adida": 75.1614,
+    "moving_average": 75.4719,
+    "routed_ensemble": 75.6567,
+    "ses": 76.9908,
+    "lightgbm_tweedie": 77.2592,
+    "lightgbm": 77.3884,
+    "croston_sba": 77.805,
+    "seasonal_naive_weekly": 88.0795,
+    "seasonal_naive": 98.9215,
+    "naive": 99.65
+  },
+  "friedman": {
+    "statistic": 2429.2994156985296,
+    "p_value": 0.0,
+    "significant": true
+  },
+  "nemenyi": {
+    "critical_difference": 0.24942856273812053,
+    "average_ranks": {
+      "croston_sba": 4.5537,
+      "adida": 4.7681,
+      "routed_ensemble": 4.7936,
+      "ses": 4.9108,
+      "moving_average": 4.9353,
+      "lightgbm_tweedie": 5.378,
+      "lightgbm": 5.5566,
+      "naive": 6.1576,
+      "seasonal_naive_weekly": 6.7432,
+      "seasonal_naive": 7.2031
+    },
+    "cliques": [
+      [
+        "croston_sba",
+        "adida",
+        "routed_ensemble"
+      ],
+      [
+        "adida",
+        "routed_ensemble",
+        "ses",
+        "moving_average"
+      ],
+      [
+        "lightgbm_tweedie",
+        "lightgbm"
+      ]
+    ]
+  },
+  "mcb": [
+    {
+      "model": "croston_sba",
+      "average_rank": 4.553728813559322,
+      "ci_lower": 4.429014532190261,
+      "ci_upper": 4.678443094928382,
+      "indistinguishable_from_best": true,
+      "is_best": true,
+      "critical_difference": 0.24942856273812053
+    },
+    {
+      "model": "adida",
+      "average_rank": 4.768135593220339,
+      "ci_lower": 4.643421311851278,
+      "ci_upper": 4.892849874589399,
+      "indistinguishable_from_best": true,
+      "is_best": false,
+      "critical_difference": 0.24942856273812053
+    },
+    {
+      "model": "routed_ensemble",
+      "average_rank": 4.793559322033898,
+      "ci_lower": 4.668845040664838,
+      "ci_upper": 4.918273603402959,
+      "indistinguishable_from_best": true,
+      "is_best": false,
+      "critical_difference": 0.24942856273812053
+    },
+    {
+      "model": "ses",
+      "average_rank": 4.910847457627119,
+      "ci_lower": 4.786133176258058,
+      "ci_upper": 5.035561738996179,
+      "indistinguishable_from_best": false,
+      "is_best": false,
+      "critical_difference": 0.24942856273812053
+    },
+    {
+      "model": "moving_average",
+      "average_rank": 4.935254237288135,
+      "ci_lower": 4.810539955919075,
+      "ci_upper": 5.059968518657196,
+      "indistinguishable_from_best": false,
+      "is_best": false,
+      "critical_difference": 0.24942856273812053
+    },
+    {
+      "model": "lightgbm_tweedie",
+      "average_rank": 5.377966101694915,
+      "ci_lower": 5.253251820325855,
+      "ci_upper": 5.502680383063976,
+      "indistinguishable_from_best": false,
+      "is_best": false,
+      "critical_difference": 0.24942856273812053
+    },
+    {
+      "model": "lightgbm",
+      "average_rank": 5.556610169491526,
+      "ci_lower": 5.431895888122465,
+      "ci_upper": 5.681324450860586,
+      "indistinguishable_from_best": false,
+      "is_best": false,
+      "critical_difference": 0.24942856273812053
+    },
+    {
+      "model": "naive",
+      "average_rank": 6.157627118644068,
+      "ci_lower": 6.032912837275007,
+      "ci_upper": 6.282341400013128,
+      "indistinguishable_from_best": false,
+      "is_best": false,
+      "critical_difference": 0.24942856273812053
+    },
+    {
+      "model": "seasonal_naive_weekly",
+      "average_rank": 6.7432203389830505,
+      "ci_lower": 6.61850605761399,
+      "ci_upper": 6.867934620352111,
+      "indistinguishable_from_best": false,
+      "is_best": false,
+      "critical_difference": 0.24942856273812053
+    },
+    {
+      "model": "seasonal_naive",
+      "average_rank": 7.203050847457627,
+      "ci_lower": 7.078336566088566,
+      "ci_upper": 7.327765128826687,
+      "indistinguishable_from_best": false,
+      "is_best": false,
+      "critical_difference": 0.24942856273812053
+    }
+  ],
+  "diebold_mariano": {
+    "n_pairs": 45,
+    "n_separable_holm": 35,
+    "indistinguishable_pairs": [
+      {
+        "model_a": "adida",
+        "model_b": "moving_average",
+        "p_adjusted": 0.21297294037574188
+      },
+      {
+        "model_a": "adida",
+        "model_b": "routed_ensemble",
+        "p_adjusted": 0.4403248244168809
+      },
+      {
+        "model_a": "croston_sba",
+        "model_b": "ses",
+        "p_adjusted": 0.6254412776397924
+      },
+      {
+        "model_a": "croston_sba",
+        "model_b": "lightgbm_tweedie",
+        "p_adjusted": 0.8946968365512948
+      },
+      {
+        "model_a": "croston_sba",
+        "model_b": "lightgbm",
+        "p_adjusted": 0.8959094351694237
+      },
+      {
+        "model_a": "moving_average",
+        "model_b": "routed_ensemble",
+        "p_adjusted": 1.0
+      },
+      {
+        "model_a": "lightgbm_tweedie",
+        "model_b": "ses",
+        "p_adjusted": 1.0
+      },
+      {
+        "model_a": "lightgbm",
+        "model_b": "lightgbm_tweedie",
+        "p_adjusted": 1.0
+      },
+      {
+        "model_a": "lightgbm",
+        "model_b": "ses",
+        "p_adjusted": 1.0
+      },
+      {
+        "model_a": "naive",
+        "model_b": "seasonal_naive",
+        "p_adjusted": 1.0
+      }
+    ]
+  },
+  "verdict": {
+    "best_by_rank": "croston_sba",
+    "indistinguishable_from_best": [
+      "adida",
+      "routed_ensemble"
+    ],
+    "ranking_is_separable": false
+  }
+}

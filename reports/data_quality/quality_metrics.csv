@@ -1,0 +1,12 @@
+table_name,check_name,status,details,records_checked,anomalous_records
+sales_raw,exact_series_count,PASSED,"Expected 30490 series, found 30490",30490,0
+sales_raw,store_domain_invariant,PASSED,"Stores matched M5 catalog: ['CA_1', 'CA_2', 'CA_3', 'CA_4', 'TX_1', 'TX_2', 'TX_3', 'WI_1', 'WI_2', 'WI_3']",30490,0
+sales_raw,category_domain_invariant,PASSED,"Categories matched M5 catalog: ['FOODS', 'HOBBIES', 'HOUSEHOLD']",30490,0
+sales_raw,non_negative_sales,PASSED,Checked 100 day columns; 0 negative sales entries found,3049000,0
+calendar,calendar_row_count,PASSED,"Calendar holds 1969 days (expected 1,969 through 2016-06-19)",1969,0
+calendar,date_continuity_no_gaps,PASSED,Verified consecutive daily calendar continuity without temporal gaps (0 gaps),1969,0
+calendar,valid_snap_flags_CA,PASSED,snap_CA contains valid binary flags,1969,0
+calendar,valid_snap_flags_TX,PASSED,snap_TX contains valid binary flags,1969,0
+calendar,valid_snap_flags_WI,PASSED,snap_WI contains valid binary flags,1969,0
+sell_prices,positive_sell_prices,PASSED,Checked 1048575 price rows; 0 non-positive prices found,1048575,0
+sell_prices,store_coverage_contract,PASSED,"Stores present in prices: ['CA_1', 'CA_2'] (matches known 15.3% workbook truncation)",1048575,0

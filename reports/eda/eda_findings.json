@@ -1,0 +1,145 @@
+{
+  "generated_at": "2026-11-16T06:21:39",
+  "n_series_analysed": 30490,
+  "is_subsample": false,
+  "data_limitations": {
+    "sell_prices": "Source workbook truncated at Excel's row limit: 15.33% of the true price table, covering ['CA_1', 'CA_2'] only. \u00a73.6 price analysis is therefore restricted to those stores and is omitted here."
+  },
+  "3.1_structure": {
+    "n_series": 30490,
+    "n_days": 1913,
+    "long_format_rows": 58327370,
+    "wide_memory_mb": 129.0,
+    "hierarchy_cardinality": {
+      "total": 1,
+      "state": 3,
+      "store": 10,
+      "category": 3,
+      "department": 7,
+      "item": 3049,
+      "cat_store": 30,
+      "dept_store": 70,
+      "item_store": 30490
+    },
+    "total_units_sold": 65695409,
+    "series_never_sold": 0,
+    "median_first_sale_day": 160,
+    "series_starting_after_day_1": 23511,
+    "series_starting_after_day_365": 13420,
+    "series_with_no_sale_in_final_28d": 1587,
+    "median_active_length_days": 1738
+  },
+  "3.2_demand": {
+    "overall_zero_rate": 0.682,
+    "mean_daily_units_per_series": 1.1263,
+    "median_daily_units_per_series": 0.4433,
+    "pct_series_overdispersed": 0.9961,
+    "median_variance_mean_ratio": 1.7447,
+    "zero_rate_by_category": {
+      "FOODS": 0.6202,
+      "HOBBIES": 0.7728,
+      "HOUSEHOLD": 0.7177
+    },
+    "top_decile_volume_share": 0.5455
+  },
+  "3.3_intermittency": {
+    "counts": {
+      "INTERMITTENT": 22138,
+      "LUMPY": 5598,
+      "SMOOTH": 1895,
+      "ERRATIC": 859
+    },
+    "pct_of_series": {
+      "INTERMITTENT": 72.61,
+      "LUMPY": 18.36,
+      "SMOOTH": 6.22,
+      "ERRATIC": 2.82
+    },
+    "pct_of_volume": {
+      "INTERMITTENT": 34.03,
+      "LUMPY": 23.74,
+      "SMOOTH": 28.45,
+      "ERRATIC": 13.78
+    },
+    "intermittent_or_lumpy_pct": 90.97
+  },
+  "3.4_temporal": {
+    "dow_index": {
+      "Mon": 0.9569,
+      "Tue": 0.8845,
+      "Wed": 0.8741,
+      "Thu": 0.8797,
+      "Fri": 0.9968,
+      "Sat": 1.2101,
+      "Sun": 1.1979
+    },
+    "weekend_uplift_pct": 20.4,
+    "acf_lag_1": 0.6734,
+    "acf_lag_7": 0.8082,
+    "acf_lag_28": 0.8164,
+    "yearly_total_units": {
+      "2011": 8856585,
+      "2012": 12061837,
+      "2013": 13135753,
+      "2014": 13089776,
+      "2015": 13800811,
+      "2016": 4750647
+    }
+  },
+  "3.5_events_snap": {
+    "snap_lift_by_category_pct": {
+      "FOODS": 18.6,
+      "HOBBIES": 2.26,
+      "HOUSEHOLD": 3.48
+    },
+    "snap_lift_overall_pct": 8.12,
+    "event_lift_by_type_pct": {
+      "National": -14.59,
+      "Religious": -2.11,
+      "Cultural": -0.74,
+      "Sporting": 3.79
+    },
+    "note": "Descriptive contrasts only. SNAP figures are a raw day-type difference, not a causal estimate; a causal reading requires the Double ML treatment in Appendix A."
+  },
+  "3.8_stationarity_distributions": {
+    "stationarity": [
+      {
+        "level": "total",
+        "adf_p": 0.500960436179774,
+        "kpss_p": 0.01,
+        "adf_says_stationary": false,
+        "kpss_says_stationary": false,
+        "verdict": "non-stationary"
+      },
+      {
+        "level": "state_CA",
+        "adf_p": 0.39303545897323805,
+        "kpss_p": 0.01,
+        "adf_says_stationary": false,
+        "kpss_says_stationary": false,
+        "verdict": "non-stationary"
+      },
+      {
+        "level": "store_CA_1",
+        "adf_p": 0.27126689608170385,
+        "kpss_p": 0.01,
+        "adf_says_stationary": false,
+        "kpss_says_stationary": false,
+        "verdict": "non-stationary"
+      },
+      {
+        "level": "cat_FOODS",
+        "adf_p": 0.35242398152701615,
+        "kpss_p": 0.01,
+        "adf_says_stationary": false,
+        "kpss_says_stationary": false,
+        "verdict": "non-stationary"
+      }
+    ],
+    "n_series_fitted": 400,
+    "pct_overdispersed": 98.5,
+    "pct_negbinom_beats_poisson": 91.5,
+    "implication": "Overdispersion is the norm, so Poisson is the wrong default. Tier 3 should use Negative Binomial or Tweedie; the large zero mass alongside continuous-positive behaviour favours Tweedie for the gradient-boosted models."
+  },
+  "elapsed_seconds": 11.1
+}

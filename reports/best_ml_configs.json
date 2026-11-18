@@ -1,0 +1,13 @@
+{
+    "lightgbm": {
+        "n_estimators": 800,
+        "learning_rate": 0.01059375979649264,
+        "num_leaves": 81,
+        "min_child_samples": 9,
+        "subsample": 0.8184200828646881,
+        "colsample_bytree": 0.7210550935832627,
+        "reg_alpha": 9.566382087720338,
+        "reg_lambda": 0.9357765151733084
+    },
+    "HurdleForecaster": {}
+}

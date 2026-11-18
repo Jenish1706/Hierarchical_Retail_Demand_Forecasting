@@ -1,0 +1,16 @@
+model,group,fit_predict_seconds,n_series,seconds_per_1k_series,origin
+autoets,exponential_smoothing,289.82,3000,96.605,origin_0
+sf_naive,naive,0.18,3000,0.059,origin_0
+sf_seasonal_naive,naive,0.18,3000,0.06,origin_0
+croston_sba,intermittent,0.23,3000,0.076,origin_0
+adida,intermittent,0.32,3000,0.107,origin_0
+autoets,exponential_smoothing,294.49,3000,98.162,origin_1
+sf_naive,naive,0.19,3000,0.063,origin_1
+sf_seasonal_naive,naive,0.18,3000,0.06,origin_1
+croston_sba,intermittent,0.23,3000,0.078,origin_1
+adida,intermittent,0.32,3000,0.108,origin_1
+autoets,exponential_smoothing,305.88,3000,101.959,origin_2
+sf_naive,naive,0.2,3000,0.067,origin_2
+sf_seasonal_naive,naive,0.18,3000,0.059,origin_2
+croston_sba,intermittent,0.22,3000,0.073,origin_2
+adida,intermittent,0.3,3000,0.101,origin_2

@@ -47,8 +47,8 @@ from src.evaluation.significance import (  # noqa: E402
     friedman_test,
     mcb_test,
     nemenyi_test,
-    pairwise_dm,
     paired_series_bootstrap,
+    pairwise_dm,
     pairwise_per_series_tests,
     per_series_scores,
 )

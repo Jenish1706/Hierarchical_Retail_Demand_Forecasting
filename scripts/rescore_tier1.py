@@ -7,11 +7,13 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 import sys
+
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.evaluation.point_metrics import metrics_by_group
@@ -29,13 +31,13 @@ def rescore_tier1_directory(
 
     print(f"\n--- Rescoring {target_dir.name} ---")
     preds = pd.read_parquet(preds_path)
-    
+
     # Map canonical scale by (series_id, date)
     assert preds.set_index(["series_id", "date"]).index.isin(canonical_scale_map.index).all(), (
         "Some (series_id, date) pairs missing in canonical scale map!"
     )
     preds["scale"] = preds.set_index(["series_id", "date"]).index.map(canonical_scale_map).values
-    
+
     # Save updated predictions.parquet
     preds.to_parquet(preds_path, index=False)
     print(f"Updated {preds_path} with canonical scales")
@@ -77,9 +79,8 @@ def rescore_tier1_directory(
         item_level_rows = overall.copy()
         item_level_rows["level"] = "item_store"
         item_level_rows["n_aggregated_series"] = np.nan
-        
+
         # Align columns
-        cols = [c for c in existing_level.columns if c in item_level_rows.columns]
         new_by_level = pd.concat([item_level_rows, higher_levels], ignore_index=True)
         # Ensure consistent column ordering
         new_by_level = new_by_level[[c for c in existing_level.columns if c in new_by_level.columns]]
@@ -91,11 +92,11 @@ def rescore_tier1_directory(
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         manifest["run_at"] = datetime.now().isoformat(timespec="seconds")
-        
+
         ets_row = overall[overall["model"] == "autoets"]
         if len(ets_row):
             manifest["autoets_rmsse_level12"] = float(ets_row["rmsse"].iloc[0])
-            
+
         manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         print(f"Wrote {manifest_path} (autoets_rmsse_level12 = {manifest.get('autoets_rmsse_level12')})")
 

@@ -56,7 +56,7 @@ POLICY_METADATA = {
 def render_leaderboard_table() -> str:
     """Generate Markdown leaderboard table and significance footnote."""
     df_acc = pd.read_csv(BACKTEST_CSV)
-    with open(SIGNIFICANCE_JSON, "r", encoding="utf-8") as f:
+    with open(SIGNIFICANCE_JSON, encoding="utf-8") as f:
         sig = json.load(f)
 
     # Extract significance & bootstrap info
@@ -223,7 +223,7 @@ def render_inventory_table() -> str:
 def render_statistics_section(sig: dict | None = None) -> str:
     """Generate Markdown statistics summary from significance report."""
     if sig is None:
-        with open(SIGNIFICANCE_JSON, "r", encoding="utf-8") as f:
+        with open(SIGNIFICANCE_JSON, encoding="utf-8") as f:
             sig = json.load(f)
 
     friedman = sig.get("friedman", {})

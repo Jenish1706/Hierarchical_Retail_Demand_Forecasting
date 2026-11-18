@@ -74,7 +74,7 @@ Provides weekly unit retail selling prices per store and item.
 
 Melting the full $30,490 \times 1,913$ matrix into a long panel produces **58,327,370 rows**. In unoptimized pandas, storing this table in float/object types requires over **6 GB of RAM**, causing Out-Of-Memory (OOM) crashes on standard developer workstations.
 
-The platform solves this with a two-phase lazy ingestion design in [`src/data/loader.py`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/data/loader.py):
+The platform solves this with a two-phase lazy ingestion design in [`src/data/loader.py`](../../src/data/loader.py):
 
 1. **Downcasting at Rest**: Daily unit sales are stored as `int16` on disk (sufficient since the maximum recorded single-day sales quantity for any item in M5 is 763 units, well within the 32,767 `int16` limit). Categorical identifiers (`item_id`, `store_id`, `dept_id`) are mapped to dictionary-encoded categories.
 2. **Narrow-Before-Melt Filtering**: Subsetting filters (e.g., selecting stores `CA_1` and `CA_2`, or selecting a 900-day evaluation window) are executed on the **wide** dataframe before melting. Filtering 30,490 wide rows takes less than 20 milliseconds, avoiding the generation of tens of millions of unused rows.

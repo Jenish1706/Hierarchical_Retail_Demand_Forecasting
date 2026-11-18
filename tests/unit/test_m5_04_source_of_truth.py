@@ -7,11 +7,10 @@ Verifies that:
 """
 from __future__ import annotations
 
-import re
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
-import pytest
 
 from src.dashboard import data_loader as dl
 
@@ -48,8 +47,8 @@ def test_every_report_csv_and_parquet_agree():
                     f"Numeric value mismatch in {csv_path.name} column '{col}'"
                 )
             else:
-                s_csv = df_csv[col].fillna("").astype(str)
-                s_pq = df_parquet[col].fillna("").astype(str)
+                s_csv = df_csv[col].astype("object").fillna("").astype(str)
+                s_pq = df_parquet[col].astype("object").fillna("").astype(str)
                 assert (s_csv == s_pq).all(), (
                     f"String value mismatch in {csv_path.name} column '{col}'"
                 )

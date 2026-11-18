@@ -64,7 +64,7 @@ To run the full research and evaluation pipeline from raw inputs to verified rep
 ### Complete Reproduction Workflow
 ```powershell
 # Step 1: Execute walk-forward backtest (generates accuracy_overall.csv & predictions.parquet)
-& .venv\Scripts\python.exe scripts/run_backtest.py --n-series 3000 --origins 3
+& .venv\Scripts\python.exe scripts/run_backtest.py --sample-series 3000 --n-origins 3
 
 # Step 2: Run significance tests (generates critical difference plot, paired bootstrap, per-series DM)
 & .venv\Scripts\python.exe scripts/run_significance.py --backtest-dir reports/backtest_main

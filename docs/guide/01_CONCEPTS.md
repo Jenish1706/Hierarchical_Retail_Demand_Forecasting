@@ -42,7 +42,7 @@ $$y = [0, 2, 0, 0, 4, 0, 0, 0, 2, 0]$$
 - Since $ADI = 3.50 \ge 1.32$ and $CV^2 = 0.187 < 0.49$, the series is classified as **INTERMITTENT**.
 
 ### Code Link
-Implemented in [`src/models/statistical/intermittent.py:classify_demand()`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/models/statistical/intermittent.py#L40-L105).
+Implemented in [`src/models/statistical/intermittent.py:classify_demand()`](../../src/models/statistical/intermittent.py#L40-L105).
 
 ---
 
@@ -102,11 +102,11 @@ Suppose active $ADI = 3.8 \approx 4$. We aggregate daily data into $K=4$-day buc
   $$\hat{y}_{t} = \frac{2.8}{4} = 0.70 \text{ units/day}$$
 
 ### Code Links
-Implemented in [`src/models/statistical/intermittent.py`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/models/statistical/intermittent.py):
-- `croston()`: [Line 115](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/models/statistical/intermittent.py#L115)
-- `croston_sba()`: [Line 160](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/models/statistical/intermittent.py#L160)
-- `tsb()`: [Line 200](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/models/statistical/intermittent.py#L200)
-- `adida()`: [Line 250](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/models/statistical/intermittent.py#L250)
+Implemented in [`src/models/statistical/intermittent.py`](../../src/models/statistical/intermittent.py):
+- `croston()`: [Line 115](../../src/models/statistical/intermittent.py#L115)
+- `croston_sba()`: [Line 160](../../src/models/statistical/intermittent.py#L160)
+- `tsb()`: [Line 200](../../src/models/statistical/intermittent.py#L200)
+- `adida()`: [Line 250](../../src/models/statistical/intermittent.py#L250)
 
 ---
 
@@ -152,11 +152,11 @@ The official M5 ranking metric weights each series' RMSSE by its dollar sales vo
 $$\text{WRMSSE} = \sum_{i=1}^{30,490} w_i \cdot \text{RMSSE}_i$$
 
 ### Code Links
-Implemented in [`src/evaluation/point_metrics.py`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/evaluation/point_metrics.py):
-- `naive_scale()`: [Line 35](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/evaluation/point_metrics.py#L35)
-- `rmsse()`: [Line 80](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/evaluation/point_metrics.py#L80)
-- `wape()`: [Line 110](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/evaluation/point_metrics.py#L110)
-- `metrics_by_group()`: [Line 160](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/evaluation/point_metrics.py#L160)
+Implemented in [`src/evaluation/point_metrics.py`](../../src/evaluation/point_metrics.py):
+- `naive_scale()`: [Line 35](../../src/evaluation/point_metrics.py#L35)
+- `rmsse()`: [Line 80](../../src/evaluation/point_metrics.py#L80)
+- `wape()`: [Line 110](../../src/evaluation/point_metrics.py#L110)
+- `metrics_by_group()`: [Line 160](../../src/evaluation/point_metrics.py#L160)
 
 ---
 
@@ -199,11 +199,11 @@ and compares against Student's $t_{n-1}$.
 Concatenating 3,000 series into a 252,000-observation vector creates an artificially huge $N$, driving $\sqrt{\hat{V}/N} \to 0$ and yielding $p < 10^{-12}$ on practically irrelevant differences while ignoring cross-series spatial correlation. The platform therefore replaces pooled DM with **per-series testing** (computing $DM$ per series, adjusting $p$-values with Holm's step-down method) and **paired series bootstrap confidence intervals**.
 
 ### Code Links
-Implemented in [`src/evaluation/significance.py`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/evaluation/significance.py):
-- `friedman_test()`: [Line 346](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/evaluation/significance.py#L346)
-- `nemenyi_test()`: [Line 471](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/evaluation/significance.py#L471)
-- `paired_series_bootstrap()`: [Line 660](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/evaluation/significance.py#L660)
-- `pairwise_per_series_tests()`: [Line 815](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/evaluation/significance.py#L815)
+Implemented in [`src/evaluation/significance.py`](../../src/evaluation/significance.py):
+- `friedman_test()`: [Line 346](../../src/evaluation/significance.py#L346)
+- `nemenyi_test()`: [Line 471](../../src/evaluation/significance.py#L471)
+- `paired_series_bootstrap()`: [Line 660](../../src/evaluation/significance.py#L660)
+- `pairwise_per_series_tests()`: [Line 815](../../src/evaluation/significance.py#L815)
 
 ---
 
@@ -219,7 +219,7 @@ $$\text{Safe rolling mean: } \bar{y}_{t, w} = \frac{1}{w}\sum_{j=0}^{w-1} y_{t -
 At inference time for any day $t+1 \le \tau \le t+28$, all conditioning inputs are strictly historical observations ($t \le 0$).
 
 ### Code Link
-Implemented in [`src/features/polars_engine.py`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/features/polars_engine.py#L75-L160) with runtime assertion `assert_no_temporal_leakage()`.
+Implemented in [`src/features/polars_engine.py`](../../src/features/polars_engine.py#L75-L160) with runtime assertion `assert_no_temporal_leakage()`.
 
 ---
 
@@ -258,7 +258,7 @@ Item has mean daily forecast $\hat{\mu} = 10$ units, forecast root-mean-squared 
 Because retail sales have a discrete point mass at zero and heavy positive tails, the Gaussian normal approximation underestimates tail risk on erratic items and overestimates buffer on zero-heavy items. It serves as an analytical baseline in Stage A, pending empirical trace-driven stockout simulation in Stage B.
 
 ### Code Link
-Implemented in [`src/inventory/safety_stock.py:calculate_safety_stock()`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/inventory/safety_stock.py#L45-L95).
+Implemented in [`src/inventory/safety_stock.py:calculate_safety_stock()`](../../src/inventory/safety_stock.py#L45-L95).
 
 ---
 
@@ -283,4 +283,4 @@ Combining ABC and XYZ yields 9 distinct replenishment strategies:
 - **CZ**: Low revenue, erratic demand -> Minimized buffer, periodic batch replenishment, relaxed CSL (90%) to release locked working capital.
 
 ### Code Link
-Implemented in [`src/inventory/abc_xyz.py:classify_abc_xyz()`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/inventory/abc_xyz.py#L30-L110).
+Implemented in [`src/inventory/abc_xyz.py:classify_abc_xyz()`](../../src/inventory/abc_xyz.py#L30-L110).

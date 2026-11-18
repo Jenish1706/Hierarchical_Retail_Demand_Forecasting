@@ -1,6 +1,6 @@
 # M5 Retail Demand Intelligence Platform
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-110%20passed-brightgreen.svg)]()
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![DVC Pipeline](https://img.shields.io/badge/pipeline-DVC%20v3-orange.svg)](https://dvc.org)
@@ -94,7 +94,7 @@ pip install -e ".[dev]"
 pytest
 
 # 3. Regenerate backtest, significance, and inventory analysis
-python scripts/run_backtest.py --n-series 3000 --origins 3
+python scripts/run_backtest.py --sample-series 3000 --n-origins 3
 python scripts/run_significance.py --backtest-dir reports/backtest_main
 python scripts/run_inventory_analysis.py
 

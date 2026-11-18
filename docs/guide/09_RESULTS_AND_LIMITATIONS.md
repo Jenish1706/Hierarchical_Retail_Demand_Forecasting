@@ -11,7 +11,7 @@ All quantitative rankings and statistical intervals are backed by committed arti
 ### Q1: Which model wins overall, and is the margin statistically significant?
 - **Finding**: There is no single, uncontested "best" model across all criteria.
   - **By Volume-Weighted Aggregate Error (WAPE)**: `adida` achieves the lowest aggregate WAPE (**75.16%**), closely followed by `moving_average` (75.47%) and `routed_ensemble` (75.66%).
-  - **By Equal-Weighted Series Rank (Nemenyi)**: `croston_sba` achieves the best average rank (**4.55**), followed by `adida` (4.71) and `routed_ensemble` (4.73).
+  - **By Equal-Weighted Series Rank (Nemenyi)**: `croston_sba` achieves the best average rank (**4.55**), followed by `adida` (4.77) and `routed_ensemble` (4.79).
 - **Omnibus Hypothesis Test**: The Friedman test decisively rejects equal performance across the 10 models ($\chi^2 = 2429.30, p < 10^{-12}$).
 - **Top Clique**: Post-hoc Nemenyi testing with Critical Difference $CD = 0.2494$ identifies a top statistical clique comprising **`croston_sba`**, **`adida`**, and **`routed_ensemble`**. Within this clique, average rank differences are statistically indistinguishable.
 - **Bootstrap Confidence Intervals**: Paired series bootstrap (2,000 resamples) demonstrates that:
@@ -47,9 +47,9 @@ All quantitative rankings and statistical intervals are backed by committed arti
 
 ### Q6: Does segment routing beat a single global model?
 - **Finding**: **Yes.** Dynamically routing series based on Syntetos-Boylan demand classification (routing intermittent series to `adida` and continuous series to `lightgbm`) consistently improved forecast accuracy over a single global model across all three walk-forward origins:
-  - **Origin 2 (2016-02-01)**: 77.08% routed vs 77.93% global (+1.10% improvement)
-  - **Origin 1 (2016-02-29)**: 77.20% routed vs 78.83% global (+2.07% improvement)
-  - **Origin 0 (2016-03-28)**: 75.30% routed vs 75.38% global (+0.11% improvement)
+  - **Origin 2 (2016-02-01)**: 75.82% routed vs 77.87% global (+2.63% improvement)
+  - **Origin 1 (2016-02-29)**: 76.72% routed vs 78.81% global (+2.64% improvement)
+  - **Origin 0 (2016-03-28)**: 74.44% routed vs 75.51% global (+1.42% improvement)
 - **Artifact Backing**: `reports/backtest_main/routing_benefit.csv`.
 
 ---

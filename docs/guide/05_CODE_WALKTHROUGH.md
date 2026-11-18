@@ -189,7 +189,7 @@ This document provides a comprehensive, file-by-file walkthrough of the codebase
 - **Non-Obvious Lines / Gotchas**:
   - In `naive_scale(y_train, trim_pre_launch=True)`:
     $$\text{scale} = \frac{1}{T - d_{\text{start}}} \sum_{t=d_{\text{start}}+1}^{T} (y_t - y_{t-1})^2$$
-    If $y_{\text{train}}$ contains only zeros, `scale` returns $1.0$ (or a minimum epsilon) to avoid zero division.
+    If $y_{\text{train}}$ contains only zeros or never changes value in-sample, the naive one-step MSE is 0. Rather than substituting an arbitrary $1.0$ (which would silently invent an artificial scale), the function returns `NaN` and honestly excludes the series from RMSSE aggregation.
   - In `rmsse()`, evaluation is strictly per-(series, origin) before aggregation. Pooling squared errors across multiple series into an overall root-mean-square artificially distorts high-variance items and breaks canonical M5 competition parity.
 
 ### `src/evaluation/splits.py`

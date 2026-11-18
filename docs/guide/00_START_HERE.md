@@ -26,14 +26,14 @@ Every metric reported in this guide is generated directly from committed artifac
 
 | Metric / Question | Verified Empirical Result | Backing Committed Artifact |
 | :--- | :--- | :--- |
-| **Lowest Pooled WAPE** | **ADIDA** leads at **75.16%** (95% bootstrap CI: [72.16%, 78.23%]) | [`reports/backtest_main/accuracy_overall.csv`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/reports/backtest_main/accuracy_overall.csv) |
-| **Lowest Mean RMSSE** | **ADIDA** leads at **0.768** (95% bootstrap CI: [0.756, 0.788]) | [`reports/backtest_main/accuracy_overall.csv`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/reports/backtest_main/accuracy_overall.csv) |
-| **Best Nemenyi Average Rank** | **Croston SBA** leads with average rank **4.55** | [`reports/backtest_main/significance/significance_report.json`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/reports/backtest_main/significance/significance_report.json) |
-| **Top Rank Clique** | `croston_sba`, `adida`, and `routed_ensemble` form a single indistinguishable clique ($CD = 0.2494, \alpha=0.05$) | [`reports/backtest_main/significance/critical_difference.png`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/reports/backtest_main/significance/critical_difference.png) |
-| **WAPE Equivalence** | **Routed SBT Ensemble** is statistically indistinguishable from ADIDA ($\Delta\text{WAPE} = +0.50\%$, 95% CI [-0.01%, +1.04%]) | [`reports/backtest_main/significance/bootstrap_intervals.csv`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/reports/backtest_main/significance/bootstrap_intervals.csv) |
-| **RMSSE Equivalence** | **Moving Average (28d)** is statistically indistinguishable from ADIDA on RMSSE ($\Delta\text{RMSSE} = +0.0011$, 95% CI [-0.0001, +0.0023]) | [`reports/backtest_main/significance/bootstrap_intervals.csv`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/reports/backtest_main/significance/bootstrap_intervals.csv) |
-| **Global GBDT Comparison** | **LightGBM (Tweedie)** scores 77.26% WAPE (rank 5.38), significantly worse in average rank across the panel | [`reports/backtest_main/accuracy_overall.csv`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/reports/backtest_main/accuracy_overall.csv) |
-| **Inventory Capital Impact** | Differentiating CSL (98% for AX, 90% for CZ) across stores CA_1 & CA_2 releases **+$3,223.14 in working capital** ($72,426.36 -> $69,203.22) | [`reports/inventory/portfolio_summary.csv`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/reports/inventory/portfolio_summary.csv) |
+| **Lowest Pooled WAPE** | **ADIDA** leads at **75.16%** (95% bootstrap CI: [72.16%, 78.23%]) | [`reports/backtest_main/accuracy_overall.csv`](../../reports/backtest_main/accuracy_overall.csv) |
+| **Lowest Mean RMSSE** | **ADIDA** leads at **0.768** (95% bootstrap CI: [0.756, 0.788]) | [`reports/backtest_main/accuracy_overall.csv`](../../reports/backtest_main/accuracy_overall.csv) |
+| **Best Nemenyi Average Rank** | **Croston SBA** leads with average rank **4.55** | [`reports/backtest_main/significance/significance_report.json`](../../reports/backtest_main/significance/significance_report.json) |
+| **Top Rank Clique** | `croston_sba`, `adida`, and `routed_ensemble` form a single indistinguishable clique ($CD = 0.2494, \alpha=0.05$) | [`reports/backtest_main/significance/critical_difference.png`](../../reports/backtest_main/significance/critical_difference.png) |
+| **WAPE Equivalence** | **Routed SBT Ensemble** is statistically indistinguishable from ADIDA ($\Delta\text{WAPE} = +0.50\%$, 95% CI [-0.01%, +1.04%]) | [`reports/backtest_main/significance/bootstrap_intervals.csv`](../../reports/backtest_main/significance/bootstrap_intervals.csv) |
+| **RMSSE Equivalence** | **Moving Average (28d)** is statistically indistinguishable from ADIDA on RMSSE ($\Delta\text{RMSSE} = +0.0011$, 95% CI [-0.0001, +0.0023]) | [`reports/backtest_main/significance/bootstrap_intervals.csv`](../../reports/backtest_main/significance/bootstrap_intervals.csv) |
+| **Global GBDT Comparison** | **LightGBM (Tweedie)** scores 77.26% WAPE (rank 5.38), significantly worse in average rank across the panel | [`reports/backtest_main/accuracy_overall.csv`](../../reports/backtest_main/accuracy_overall.csv) |
+| **Inventory Capital Impact** | Differentiating CSL (98% for AX, 90% for CZ) across stores CA_1 & CA_2 releases **+$3,223.14 in working capital** ($72,426.36 -> $69,203.22) | [`reports/inventory/portfolio_summary.csv`](../../reports/inventory/portfolio_summary.csv) |
 
 ---
 
@@ -41,17 +41,17 @@ Every metric reported in this guide is generated directly from committed artifac
 
 This documentation is written for an engineer, technical reviewer, or interviewer who wants to understand and falsify every component of the system:
 
-1. [**00_START_HERE.md**](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/docs/guide/00_START_HERE.md) *(this file)*: Orientation, headline results, and 10-minute quickstart.
-2. [**01_CONCEPTS.md**](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/docs/guide/01_CONCEPTS.md): Core mathematical formulations explained from scratch with intuition and small numerical examples.
-3. [**02_ARCHITECTURE.md**](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/docs/guide/02_ARCHITECTURE.md): Component diagrams, responsibility matrices, and the complete life of a data record.
-4. [**03_DATA.md**](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/docs/guide/03_DATA.md): M5 dataset schema, memory-efficient Polars transformations, data quality safeguards, and price truncation limitations.
-5. [**04_METHODOLOGY.md**](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/docs/guide/04_METHODOLOGY.md): Rolling-origin walk-forward backtesting, metric scaling semantics, paired bootstrap protocol, and hypothesis testing gates.
-6. [**05_CODE_WALKTHROUGH.md**](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/docs/guide/05_CODE_WALKTHROUGH.md): Tour of critical pipeline scripts, model implementations, and routing logic.
-7. [**06_RUNBOOK.md**](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/docs/guide/06_RUNBOOK.md): Exact step-by-step reproduction commands on Windows PowerShell.
-8. [**07_TESTING.md**](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/docs/guide/07_TESTING.md): Test suite architecture, regression guarantees, and fresh clone validation.
-9. [**08_DESIGN_DECISIONS.md**](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/docs/guide/08_DESIGN_DECISIONS.md): Architectural Decision Records (ADRs) explaining key design trade-offs and alternatives rejected.
-10. [**09_RESULTS_AND_LIMITATIONS.md**](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/docs/guide/09_RESULTS_AND_LIMITATIONS.md): Deep-dive into empirical results, threats to validity, and scope boundaries.
-11. [**GLOSSARY.md**](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/docs/guide/GLOSSARY.md): Alphabetical reference of terms, acronyms, and operational metrics.
+1. [**00_START_HERE.md**](00_START_HERE.md) *(this file)*: Orientation, headline results, and 10-minute quickstart.
+2. [**01_CONCEPTS.md**](01_CONCEPTS.md): Core mathematical formulations explained from scratch with intuition and small numerical examples.
+3. [**02_ARCHITECTURE.md**](02_ARCHITECTURE.md): Component diagrams, responsibility matrices, and the complete life of a data record.
+4. [**03_DATA.md**](03_DATA.md): M5 dataset schema, memory-efficient Polars transformations, data quality safeguards, and price truncation limitations.
+5. [**04_METHODOLOGY.md**](04_METHODOLOGY.md): Rolling-origin walk-forward backtesting, metric scaling semantics, paired bootstrap protocol, and hypothesis testing gates.
+6. [**05_CODE_WALKTHROUGH.md**](05_CODE_WALKTHROUGH.md): Tour of critical pipeline scripts, model implementations, and routing logic.
+7. [**06_RUNBOOK.md**](06_RUNBOOK.md): Exact step-by-step reproduction commands on Windows PowerShell.
+8. [**07_TESTING.md**](07_TESTING.md): Test suite architecture, regression guarantees, and fresh clone validation.
+9. [**08_DESIGN_DECISIONS.md**](08_DESIGN_DECISIONS.md): Architectural Decision Records (ADRs) explaining key design trade-offs and alternatives rejected.
+10. [**09_RESULTS_AND_LIMITATIONS.md**](09_RESULTS_AND_LIMITATIONS.md): Deep-dive into empirical results, threats to validity, and scope boundaries.
+11. [**GLOSSARY.md**](GLOSSARY.md): Alphabetical reference of terms, acronyms, and operational metrics.
 
 ---
 

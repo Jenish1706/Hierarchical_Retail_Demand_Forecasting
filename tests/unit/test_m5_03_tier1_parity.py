@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+
 import pandas as pd
 import pytest
 
@@ -58,6 +59,7 @@ def test_tier1_manifest_autoets_rmsse_consistency():
     t1_ets = m_t1.get("autoets_rmsse_level12")
     esbu_ets = m_esbu.get("autoets_rmsse_level12")
 
-    assert t1_ets is not None and esbu_ets is not None
+    assert t1_ets is not None
+    assert esbu_ets is not None
     assert t1_ets == pytest.approx(esbu_ets, abs=1e-3)
     assert t1_ets == pytest.approx(0.7675, abs=1e-2)

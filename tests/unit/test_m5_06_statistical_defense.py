@@ -12,18 +12,19 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
 
+from scripts.render_readme_tables import (
+    SIGNIFICANCE_JSON,
+    check_readme_tables,
+    render_statistics_section,
+)
 from src.evaluation.significance import (
     paired_series_bootstrap,
     pairwise_per_series_tests,
-)
-from scripts.render_readme_tables import (
-    render_statistics_section,
-    check_readme_tables,
-    SIGNIFICANCE_JSON,
 )
 
 
@@ -33,8 +34,7 @@ def synthetic_predictions() -> pd.DataFrame:
     rng = np.random.default_rng(123)
     n_series = 20
     n_days = 28
-    models = ["model_best", "model_tie", "model_worse"]
-    
+
     rows = []
     for s in range(n_series):
         sid = f"FOODS_1_{s:03d}_CA_1"
@@ -81,15 +81,15 @@ def test_paired_series_bootstrap_structure(synthetic_predictions):
         alpha=0.05,
         seed=42,
     )
-    
+
     assert set(boot.keys()) == {"model_best", "model_tie", "model_worse"}
-    
-    for m, stats in boot.items():
+
+    for _m, stats in boot.items():
         wape = stats["wape"]
         assert wape["ci_lower"] <= wape["boot_mean"] <= wape["ci_upper"]
         rmsse = stats["rmsse"]
         assert rmsse["ci_lower"] <= rmsse["boot_mean"] <= rmsse["ci_upper"]
-        
+
     best_m = boot["model_best"]["delta_wape_vs_best"]["ref_model"]
     assert best_m in {"model_best", "model_tie"}
     # The reference model delta vs itself must be exactly 0
@@ -102,7 +102,7 @@ def test_paired_series_bootstrap_structure(synthetic_predictions):
 
 def test_pairwise_per_series_tests(synthetic_predictions):
     df_h2h = pairwise_per_series_tests(synthetic_predictions, horizon=28, alpha=0.05)
-    
+
     # 3 models => 3 pairs
     assert len(df_h2h) == 3
     expected_cols = {
@@ -116,7 +116,7 @@ def test_pairwise_per_series_tests(synthetic_predictions):
         "dm_indistinguishable_pct",
     }
     assert expected_cols <= set(df_h2h.columns)
-    
+
     for _, row in df_h2h.iterrows():
         total_win = row["a_win_pct"] + row["b_win_pct"] + row["tie_pct"]
         assert total_win == pytest.approx(100.0, abs=1e-3)
@@ -130,22 +130,22 @@ def test_pairwise_per_series_tests(synthetic_predictions):
 
 def test_significance_report_json_schema():
     assert SIGNIFICANCE_JSON.exists(), f"Missing {SIGNIFICANCE_JSON}"
-    with open(SIGNIFICANCE_JSON, "r", encoding="utf-8") as f:
+    with open(SIGNIFICANCE_JSON, encoding="utf-8") as f:
         data = json.load(f)
-        
+
     assert "friedman" in data
     assert "nemenyi" in data
     assert "mcb" in data
     assert "bootstrap" in data
     assert "pairwise_per_series" in data
     assert "verdict" in data
-    
+
     # Check bootstrap contents
     boot = data["bootstrap"]
     assert "adida" in boot
     assert "croston_sba" in boot
     assert "routed_ensemble" in boot
-    
+
     # Check verdict contents
     verdict = data["verdict"]
     assert "best_by_rank" in verdict
@@ -159,13 +159,13 @@ def test_critical_difference_figure_exists():
 
 
 def test_readme_statistics_rendered_from_artifacts():
-    with open(SIGNIFICANCE_JSON, "r", encoding="utf-8") as f:
+    with open(SIGNIFICANCE_JSON, encoding="utf-8") as f:
         sig = json.load(f)
     stats_text = render_statistics_section(sig)
     assert len(stats_text) > 100
     assert "Friedman" in stats_text
     assert "Nemenyi" in stats_text
     assert "Bootstrap" in stats_text or "bootstrap" in stats_text
-    
+
     is_synced, msg = check_readme_tables()
     assert is_synced, f"README out of sync: {msg}"

@@ -12,6 +12,7 @@ __pycache__/
 .coverage
 htmlcov/
 .pytest_cache/
+.ruff_cache/
 .idea/
 lightning_logs/
 prompt.txt

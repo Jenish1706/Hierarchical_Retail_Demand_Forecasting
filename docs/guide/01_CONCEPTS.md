@@ -283,4 +283,4 @@ Combining ABC and XYZ yields 9 distinct replenishment strategies:
 - **CZ**: Low revenue, erratic demand -> Minimized buffer, periodic batch replenishment, relaxed CSL (90%) to release locked working capital.
 
 ### Code Link
-Implemented in [`src/inventory/abc_xyz.py:classify_abc_xyz()`](file:///d:/Placements/Projects/M5%20RetailDemand%20Intelligence%20Platform/src/inventory/abc_xyz.py#L30-L110).
+Implemented in [`src/inventory/abc_xyz.py:classify_abc_xyz()`](file:///d:/Placements/Projects/M5%20Retail%20Demand%20Intelligence%20Platform/src/inventory/abc_xyz.py#L30-L110).

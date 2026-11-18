@@ -99,7 +99,11 @@ class DemandClassification:
         return self.pattern in (DemandPattern.INTERMITTENT, DemandPattern.LUMPY)
 
 
-def classify_demand(y: np.ndarray, trim_pre_launch: bool = True) -> DemandClassification:
+def classify_demand(
+    y: np.ndarray,
+    trim_pre_launch: bool = True,
+    first_sale_idx: int | None = None,
+) -> DemandClassification:
     """
     Assign a series to an SBT quadrant.
 
@@ -110,9 +114,16 @@ def classify_demand(y: np.ndarray, trim_pre_launch: bool = True) -> DemandClassi
     would conflate the two axes -- a sparse series would automatically look
     size-variable, and the quadrants would collapse onto one diagonal.
 
-    When `trim_pre_launch=True` (default per M5 protocol), leading zeros before
-    the first non-zero sale are trimmed so pre-launch inactive days do not
-    inflate ADI or artificial zero fractions.
+    When `first_sale_idx` is provided:
+      - If first_sale_idx <= 0: series launched on or before the start of
+        this training window. In-window leading zeros are retained as genuine
+        demand observations.
+      - If 0 < first_sale_idx < len(y): series launched within this window.
+        Days prior to first_sale_idx are trimmed.
+      - If first_sale_idx >= len(y): series has not launched yet during this
+        window, returning DemandPattern.NO_DEMAND.
+    When `first_sale_idx is None` and `trim_pre_launch=True` (default per M5 protocol),
+    leading zeros before the first non-zero sale are trimmed as fallback.
     """
     y = np.asarray(y, dtype=float).ravel()
     n = int(y.size)
@@ -120,7 +131,25 @@ def classify_demand(y: np.ndarray, trim_pre_launch: bool = True) -> DemandClassi
     if n == 0:
         raise ValueError("cannot classify an empty series")
 
-    if trim_pre_launch:
+    if first_sale_idx is not None:
+        if first_sale_idx <= 0:
+            # Series launched at or before the start of the window: keep in-window zeros
+            pass
+        elif first_sale_idx < len(y):
+            # Series launched within this window: trim pre-launch zeros
+            y = y[first_sale_idx:]
+            n = int(y.size)
+        else:
+            return DemandClassification(
+                pattern=DemandPattern.NO_DEMAND,
+                adi=float("inf"),
+                cv2=0.0,
+                n_periods=n,
+                n_nonzero=0,
+                zero_fraction=1.0,
+                mean_demand=0.0,
+            )
+    elif trim_pre_launch:
         nonzero_indices = np.where(y > _EPS)[0]
         if len(nonzero_indices) > 0:
             y = y[nonzero_indices[0]:]

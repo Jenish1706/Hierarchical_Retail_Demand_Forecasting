@@ -168,7 +168,11 @@ class SegmentRouter:
 
     # -- fit -----------------------------------------------------------------
 
-    def fit(self, history: Mapping[str, np.ndarray]) -> SegmentRouter:
+    def fit(
+        self,
+        history: Mapping[str, np.ndarray],
+        first_sale_indices: Mapping[str, int] | None = None,
+    ) -> SegmentRouter:
         """
         Classify every series and fit the local models it needs.
 
@@ -177,6 +181,9 @@ class SegmentRouter:
                      Must contain TRAINING data only. Classifying on data
                      that includes the evaluation window would leak the very
                      information the holdout is meant to withhold.
+            first_sale_indices: Optional mapping of series_id -> first sale index.
+                     When provided, allows demand classification to trim only
+                     true pre-launch zeros and preserve genuine mid-life zero demand.
         """
         if not history:
             raise ValueError("history is empty; nothing to route")
@@ -187,7 +194,8 @@ class SegmentRouter:
         self._history = {k: np.asarray(v, dtype=float).ravel() for k, v in history.items()}
 
         for sid, y in self._history.items():
-            cls = classify_demand(y)
+            fs_idx = first_sale_indices.get(sid) if first_sale_indices is not None else None
+            cls = classify_demand(y, first_sale_idx=fs_idx)
             method = self.routing.get(cls.pattern, "global")
 
             self.classifications_[sid] = cls
@@ -203,7 +211,8 @@ class SegmentRouter:
 
             # "global" needs no local fit -- its forecast is supplied later.
             if method != "global":
-                self._local_models[sid] = self._build(method).fit(y)
+                fit_y = y[fs_idx:] if (fs_idx is not None and 0 < fs_idx < len(y)) else y
+                self._local_models[sid] = self._build(method).fit(fit_y)
 
         self._fitted = True
         # Log the quadrant mix. `segment_counts` is indexed by

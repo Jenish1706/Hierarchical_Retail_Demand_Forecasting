@@ -142,6 +142,7 @@ def naive_scale(
     y_insample: np.ndarray,
     seasonality: int = 1,
     trim_pre_launch: bool = True,
+    first_sale_idx: int | None = None,
 ) -> float:
     """
     Denominator of the scaled error: in-sample MSE of a seasonal naive forecast.
@@ -151,12 +152,29 @@ def naive_scale(
     with m = `seasonality` (m=1 is the random walk used by the M5 rules).
 
     The M5 guidelines specify this be computed on the TRAINING window only.
-    When `trim_pre_launch=True` (canonical M5 rule), the evaluation window starts
-    from the first non-zero sale rather than day 1, preventing pre-introduction
-    zeros from diluting the scale.
+    When `first_sale_idx` is provided:
+      - If first_sale_idx <= 0: the series launched on or before the start of
+        this training window, so all leading zeros in the window are genuine
+        zero-demand days and are kept (never trim a mid-life window).
+      - If 0 < first_sale_idx < len(y): the series launched within this window,
+        so days prior to first_sale_idx are pre-launch zeros and are trimmed.
+      - If first_sale_idx >= len(y): the series had not launched yet during
+        this window, returning NaN.
+    When `first_sale_idx is None` and `trim_pre_launch=True` (canonical M5 rule
+    on full history), the window starts from the first non-zero sale rather than
+    day 1.
     """
     y = np.asarray(y_insample, dtype=float).ravel()
-    if trim_pre_launch:
+    if first_sale_idx is not None:
+        if first_sale_idx <= 0:
+            # Series launched at or before the start of the window: keep in-window zeros
+            pass
+        elif first_sale_idx < len(y):
+            # Series launched within the window: trim pre-launch zeros
+            y = y[first_sale_idx:]
+        else:
+            return float("nan")
+    elif trim_pre_launch:
         nonzero_indices = np.where(y > _EPS)[0]
         if len(nonzero_indices) > 0:
             y = y[nonzero_indices[0]:]
@@ -208,6 +226,7 @@ def rmsse(
     y_pred: np.ndarray,
     y_insample: np.ndarray,
     seasonality: int = 1,
+    first_sale_idx: int | None = None,
 ) -> float:
     """
     Root Mean Squared Scaled Error -- the official M5 accuracy metric.
@@ -227,7 +246,7 @@ def rmsse(
     meaningful scaling exists. Callers aggregate with nan-aware means so such
     series are excluded rather than defaulted.
     """
-    scale = naive_scale(y_insample, seasonality=seasonality)
+    scale = naive_scale(y_insample, seasonality=seasonality, first_sale_idx=first_sale_idx)
     if not np.isfinite(scale) or scale < _EPS:
         return float("nan")
 
@@ -302,6 +321,7 @@ def compute_metrics(
     y_insample: np.ndarray | None = None,
     seasonality: int = 1,
     clip_negative: bool = True,
+    first_sale_idx: int | None = None,
 ) -> dict[str, float]:
     """
     Standard metric bundle for a single evaluation window.
@@ -317,6 +337,7 @@ def compute_metrics(
                     output is clipped to 0 before scoring. This is a genuine
                     improvement, not a metric trick -- a negative order
                     quantity is not actionable.
+        first_sale_idx: Optional index of the first non-zero sale in full history.
 
     Returns:
         Metric name -> value. Values may be NaN where undefined; callers
@@ -343,7 +364,9 @@ def compute_metrics(
     }
 
     if y_insample is not None:
-        out["rmsse"] = rmsse(y_true, y_pred, y_insample, seasonality=seasonality)
+        out["rmsse"] = rmsse(
+            y_true, y_pred, y_insample, seasonality=seasonality, first_sale_idx=first_sale_idx
+        )
         out["mase"] = mase(y_true, y_pred, y_insample, seasonality=seasonality)
     else:
         out["rmsse"] = float("nan")
@@ -387,17 +410,29 @@ def metrics_by_group(
     scale_col: str | None = None,
     weight_col: str | None = None,
     series_id_col: str = "series_id",
+    origin_col: str | None = "origin",
 ) -> pd.DataFrame:
     """
     Per-segment accuracy table -- the shape wanted for a backtest report.
+
+    RMSSE Aggregation Semantics:
+    ----------------------------
+    RMSSE is evaluated per (series, origin) unit with that origin's own
+    in-sample naive scale. Scoring each evaluation window with its origin-specific
+    scale prevents scale contamination across rolling walk-forward origins.
+    The group-level RMSSE is then computed as the unweighted mean (or weighted
+    mean if `weight_col` is provided) across all (series, origin) evaluation units.
 
     Args:
         df:          Long-format predictions, one row per (series, date).
         group_cols:  Segmentation, e.g. ["model", "cat_id"] or ["model", "store_id"].
         scale_col:   Optional per-row RMSSE scale (in-sample naive MSE for that
-                     series). Supplying it lets RMSSE be aggregated correctly:
-                     the scale is a property of the SERIES, so it must be
-                     carried per row rather than recomputed on the group.
+                     series and origin). Supplying it lets RMSSE be aggregated correctly:
+                     the scale is a property of the (series, origin) unit.
+        weight_col:  Optional column specifying weighting for evaluation units.
+        series_id_col: Column identifying the series.
+        origin_col:  Optional column identifying the backtest origin. When present,
+                     evaluates RMSSE per (series, origin).
 
     Returns:
         One row per group with the standard metric bundle plus observation
@@ -415,34 +450,39 @@ def metrics_by_group(
         row.update(compute_metrics(yt, yp))
 
         if scale_col is not None and scale_col in g.columns and series_id_col in g.columns:
-            # Aggregate RMSSE per series, then take the mean (or weighted mean) across series.
-            series_rmsse = []
-            series_weights = []
+            # Aggregate RMSSE per (series, origin) unit, then average across units.
+            unit_cols = (
+                [series_id_col, origin_col]
+                if (origin_col is not None and origin_col in g.columns)
+                else [series_id_col]
+            )
 
-            # Using numpy operations is faster, but for exactness we group by series
-            for _sid, s_group in g.groupby(series_id_col):
-                s_yt = s_group[y_true_col].to_numpy(dtype=float)
-                s_yp = np.clip(s_group[y_pred_col].to_numpy(dtype=float), 0.0, None)
-                s_scale = s_group[scale_col].iloc[0]
+            unit_rmsse = []
+            unit_weights = []
 
-                if np.isfinite(s_scale) and s_scale > _EPS:
-                    mse_forecast = float(np.mean((s_yt - s_yp) ** 2))
-                    series_rmsse.append(np.sqrt(mse_forecast / s_scale))
-                    if weight_col is not None and weight_col in s_group.columns:
-                        series_weights.append(s_group[weight_col].iloc[0])
+            for _uid, u_group in g.groupby(unit_cols, observed=True):
+                u_yt = u_group[y_true_col].to_numpy(dtype=float)
+                u_yp = np.clip(u_group[y_pred_col].to_numpy(dtype=float), 0.0, None)
+                u_scale = u_group[scale_col].iloc[0]
+
+                if np.isfinite(u_scale) and u_scale > _EPS:
+                    mse_forecast = float(np.mean((u_yt - u_yp) ** 2))
+                    unit_rmsse.append(np.sqrt(mse_forecast / u_scale))
+                    if weight_col is not None and weight_col in u_group.columns:
+                        unit_weights.append(u_group[weight_col].iloc[0])
                     else:
-                        series_weights.append(1.0)
+                        unit_weights.append(1.0)
 
-            if series_rmsse:
-                series_rmsse = np.array(series_rmsse)
-                series_weights = np.array(series_weights)
+            if unit_rmsse:
+                unit_rmsse = np.array(unit_rmsse)
+                unit_weights = np.array(unit_weights)
 
-                w_sum = series_weights.sum()
+                w_sum = unit_weights.sum()
                 if w_sum > 0:
-                    series_weights = series_weights / w_sum
-                    row["rmsse"] = float(np.sum(series_rmsse * series_weights))
+                    unit_weights = unit_weights / w_sum
+                    row["rmsse"] = float(np.sum(unit_rmsse * unit_weights))
                 else:
-                    row["rmsse"] = float(np.mean(series_rmsse))
+                    row["rmsse"] = float(np.mean(unit_rmsse))
 
         records.append(row)
 

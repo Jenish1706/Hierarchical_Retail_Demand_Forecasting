@@ -130,6 +130,39 @@ class M5Loader:
         )
         return cal
 
+    # -- first sale dates ---------------------------------------------------
+
+    def load_first_sale_dates(self) -> dict[str, pd.Timestamp]:
+        """
+        Determine the date of the first non-zero sale for every series from full history (d_1 onward).
+
+        Returns:
+            dict mapping series_id (e.g. 'HOBBIES_1_001_CA_1') -> pd.Timestamp of first non-zero sale.
+        """
+        sales = pl.read_parquet(self._path("sales_train"))
+        day_cols = [c for c in sales.columns if c.startswith("d_")]
+        mat = sales.select(day_cols).to_numpy()
+        has_sales = (mat > 0).any(axis=1)
+        first_nz_idx = np.where(has_sales, np.argmax(mat > 0, axis=1), -1)
+
+        cal = self.load_calendar()
+        d_to_date = dict(zip(cal["d"].astype(str), cal["date"]))
+
+        series_ids = (sales["item_id"].cast(pl.Utf8) + "_" + sales["store_id"].cast(pl.Utf8)).to_list()
+        first_sale_dates: dict[str, pd.Timestamp] = {}
+        for sid, idx, hs in zip(series_ids, first_nz_idx, has_sales):
+            if hs:
+                first_sale_dates[sid] = pd.to_datetime(d_to_date[day_cols[idx]])
+            else:
+                first_sale_dates[sid] = pd.NaT
+
+        self._log.info(
+            "first_sale_dates_loaded",
+            n_series=len(first_sale_dates),
+            n_active=int(has_sales.sum()),
+        )
+        return first_sale_dates
+
     # -- prices -------------------------------------------------------------
 
     def load_prices(self) -> pd.DataFrame:

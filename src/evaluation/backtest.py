@@ -130,6 +130,7 @@ def run_series_models(
     panel: pd.DataFrame,
     origin: Origin,
     horizon: int,
+    first_sale_dates: dict[str, pd.Timestamp] | None = None,
 ) -> tuple[pd.DataFrame, dict[str, float], SegmentRouter]:
     """
     Fit and score every per-series model at one origin.
@@ -143,14 +144,31 @@ def run_series_models(
     history: dict[str, np.ndarray] = {}
     actuals: dict[str, np.ndarray] = {}
     scales: dict[str, float] = {}
+    first_sale_indices: dict[str, int] = {}
     meta: dict[str, dict[str, Any]] = {}
 
     for sid, g in train.groupby("series_id", observed=True):
         g = g.sort_values("date")
         y = g["sales"].to_numpy(dtype=float)
         history[sid] = y
+
+        fs_idx = None
+        if first_sale_dates is not None and sid in first_sale_dates:
+            fs_date = first_sale_dates[sid]
+            if pd.isna(fs_date):
+                fs_idx = len(y)
+            else:
+                train_dates = pd.to_datetime(g["date"].values)
+                if fs_date <= train_dates[0]:
+                    fs_idx = 0  # Launched at or before start of window -> keep in-window zeros
+                elif fs_date <= train_dates[-1]:
+                    fs_idx = int(np.searchsorted(train_dates, fs_date))  # Launched in window -> trim pre-launch
+                else:
+                    fs_idx = len(y)  # Not yet launched
+            first_sale_indices[sid] = fs_idx
+
         # RMSSE denominator: in-sample naive MSE on the TRAINING window only.
-        scales[sid] = naive_scale(y, seasonality=1)
+        scales[sid] = naive_scale(y, seasonality=1, first_sale_idx=fs_idx)
         meta[sid] = {
             "item_id": g["item_id"].iloc[0],
             "store_id": g["store_id"].iloc[0],
@@ -198,7 +216,15 @@ def run_series_models(
                 )
             )
 
-    router = SegmentRouter().fit({sid: history[sid] for sid in common})
+    router_fs_indices = (
+        {sid: first_sale_indices[sid] for sid in common if sid in first_sale_indices}
+        if first_sale_indices
+        else None
+    )
+    router = SegmentRouter().fit(
+        {sid: history[sid] for sid in common},
+        first_sale_indices=router_fs_indices,
+    )
     return pd.DataFrame(rows), scales, router
 
 
@@ -444,6 +470,13 @@ def main() -> int:
         stores=sorted(stores_present),
     )
 
+    # Determine each series' first non-zero sale from full history (d_1 onward)
+    first_sale_dates = (
+        loader.load_first_sale_dates()
+        if loader.available().get("sales_train", False)
+        else None
+    )
+
     # --- run every origin ---
     all_preds: list[pd.DataFrame] = []
     routing_reports: list[pd.DataFrame] = []
@@ -452,7 +485,9 @@ def main() -> int:
     for origin in origins:
         log.info("running_origin", **{"detail": origin.describe()})
 
-        series_preds, scales, router = run_series_models(panel, origin, args.horizon)
+        series_preds, scales, router = run_series_models(
+            panel, origin, args.horizon, first_sale_dates=first_sale_dates
+        )
         all_preds.append(series_preds)
 
         for gm in ("lightgbm", "lightgbm_tweedie"):

@@ -139,7 +139,7 @@ class M5Loader:
         Returns:
             dict mapping series_id (e.g. 'HOBBIES_1_001_CA_1') -> pd.Timestamp of first non-zero sale.
         """
-        sales = pl.read_parquet(self._path("sales_train"))
+        sales = pl.read_parquet(self._path("sales"))
         day_cols = [c for c in sales.columns if c.startswith("d_")]
         mat = sales.select(day_cols).to_numpy()
         has_sales = (mat > 0).any(axis=1)

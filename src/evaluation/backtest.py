@@ -473,7 +473,7 @@ def main() -> int:
     # Determine each series' first non-zero sale from full history (d_1 onward)
     first_sale_dates = (
         loader.load_first_sale_dates()
-        if loader.available().get("sales_train", False)
+        if loader.available().get("sales", False)
         else None
     )
 

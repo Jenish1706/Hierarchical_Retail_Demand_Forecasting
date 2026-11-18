@@ -110,18 +110,18 @@ Evaluated across a representative sample of 3,000 series over 3 walk-forward rol
 <!-- BEGIN_LEADERBOARD_TABLE -->
 | Rank | Model Name | Architecture Tier | WAPE (%) | RMSSE | Nemenyi Avg Rank | Statistical Verdict |
 |---|---|---|---|---|---|---|
-| **1** | **ADIDA** | Intermittent Statistical | **75.17%** | **0.844** | 4.83 | Significantly worse than best rank |
-| **2** | **Moving Average (28d)** | Simple Baseline | 75.47% | 0.845 | 4.97 | Significantly worse than best rank |
-| **3** | **Routed SBT Ensemble** | Hybrid (ADIDA + Global) | 76.52% | 0.854 | **4.54** | **Best by Average Rank** |
-| **4** | **SES** | Exponential Smoothing | 76.99% | 0.848 | 4.96 | Significantly worse than best rank |
-| **5** | **LightGBM** | Global GBDT | 77.37% | 0.850 | 5.59 | Significantly worse than best rank |
-| **6** | **LightGBM (Tweedie)** | Global GBDT | 77.46% | 0.851 | 5.41 | Significantly worse than best rank |
-| **7** | **Croston SBA** | Intermittent Statistical | 77.80% | 0.858 | 4.61 | **Indistinguishable from Best** |
-| **8** | **Seasonal Naive (Weekly)** | Baseline | 88.08% | 1.102 | 6.74 | Significantly worse than best rank |
-| **9** | **Seasonal Naive (28d)** | Baseline | 98.92% | 1.172 | 7.19 | Baseline |
-| **10** | **Naive** | Baseline | 99.65% | 1.137 | 6.16 | Baseline |
+| **1** | **ADIDA** | Intermittent Statistical | **75.16%** | **0.768** | 4.77 | **Indistinguishable from Best** |
+| **2** | **Moving Average (28d)** | Simple Baseline | 75.47% | 0.769 | 4.94 | Significantly worse than best rank |
+| **3** | **Routed SBT Ensemble** | Hybrid (ADIDA + Global) | 75.66% | 0.769 | 4.79 | **Indistinguishable from Best** |
+| **4** | **SES** | Exponential Smoothing | 76.99% | 0.772 | 4.91 | Significantly worse than best rank |
+| **5** | **LightGBM (Tweedie)** | Global GBDT | 77.26% | 0.783 | 5.38 | Significantly worse than best rank |
+| **6** | **LightGBM** | Global GBDT | 77.39% | 0.786 | 5.56 | Significantly worse than best rank |
+| **7** | **Croston SBA** | Intermittent Statistical | 77.80% | 0.789 | **4.55** | **Best by Average Rank** |
+| **8** | **Seasonal Naive (Weekly)** | Baseline | 88.08% | 1.000 | 6.74 | Significantly worse than best rank |
+| **9** | **Seasonal Naive (28d)** | Baseline | 98.92% | 1.084 | 7.20 | Baseline |
+| **10** | **Naive** | Baseline | 99.65% | 1.002 | 6.16 | Baseline |
 
-*Statistical significance: Omnibus Friedman test $\chi^2 = 2460.79$ ($p < 10^{-12}$, 10 models $\times$ 2,950 complete series). Post-hoc Nemenyi critical difference $CD = 0.2494$ ($\alpha = 0.05$). Holm-corrected Diebold-Mariano tests separated 35 of 45 model pairs.*
+*Statistical significance: Omnibus Friedman test $\chi^2 = 2429.30$ ($p < 10^{-12}$, 10 models $\times$ 2,950 complete series). Post-hoc Nemenyi critical difference $CD = 0.2494$ ($\alpha = 0.05$). Holm-corrected Diebold-Mariano tests separated 35 of 45 model pairs.*
 <!-- END_LEADERBOARD_TABLE -->
 
 ---

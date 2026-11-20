@@ -1,0 +1,4 @@
+policy,label,n_skus,working_capital,holding_cost_annual,stockout_cost_annual,total_cost_annual,wc_change_vs_current,holding_cost_change,stockout_cost_change,total_cost_change
+uniform_current,Uniform current service level,4591,81264.53,20315.77,34613.61,54929.8,0.0,0.0,0.0,0.0
+capital_release_rule,ABC/XYZ capital-release rule,4591,78094.92,19523.35,47850.58,67374.29,-3169.61,-792.42,13236.97,12444.49
+cost_minimising,Cost-minimising level per segment,4591,92719.86,23179.6,13066.42,36245.86,11455.33,2863.83,-21547.19,-18683.94

@@ -71,9 +71,10 @@ All quantitative rankings and statistical intervals are backed by committed arti
 ---
 
 ### Q10: Operational Impact: Working Capital Optimization
-- **Finding**: Translating forecast uncertainty distributions into safety stock requirements via ABC/XYZ segmentation across California stores (`CA_1`, `CA_2`) identified **$3,223.14** in releasable working capital.
-- **Operational Trade-Off**: Releasing this capital requires explicitly trading off planned stockout risk on low-velocity, erratic CZ items (reducing Cycle Service Level from 95% to 90%) in order to upgrade critical revenue-driving AX items (increasing CSL from 95% to 98%).
-- **Artifact Backing**: `reports/inventory/portfolio_summary.csv`.
+- **Finding**: Translating forecast uncertainty into safety stock via ABC/XYZ segmentation across California stores (`CA_1`, `CA_2`), the capital-release rule frees **$3,170** of working capital but raises total annual cost by **+$12,444/yr** under the project's cost model (holding -$792/yr, expected stockout cost +$13,237/yr). It is a capital-for-risk trade, not a saving.
+- **Operational Trade-Off**: The rule cuts BZ/CY/CZ items from 95% to 90% CSL and upgrades AX from 95% to 98%. The cheapest level on the 90/95/98% menu is 98% in every optimised segment (-$18,684/yr for +$11,455 of working capital); the unconstrained optimum is 99.5% to 99.7%, because a lost unit of margin costs far more than a week of holding it.
+- **Decisions versus scoring**: classes are decided on the 84 days before the first test day (ending 2016-01-31), planning demand is ADIDA's mean forecast, and $\sigma_e$ is a forecast-error size measured on the backtest days, not a realised inventory outcome.
+- **Artifact Backing**: `reports/inventory/policy_comparison.csv`, `reports/inventory/segment_cost_optimum.csv`, `reports/inventory/portfolio_summary.csv`.
 
 ---
 

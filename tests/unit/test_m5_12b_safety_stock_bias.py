@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from scipy.stats import norm
 
 from scripts.run_inventory_analysis import compute_safety_stock_by_model
 from src.inventory.safety_stock import (
@@ -183,9 +184,12 @@ def test_service_level_layer_uses_rmse_not_std_for_stockout_risk():
         [{"item_id": "ITEM_BIASED", "store_id": "CA_1", "abc_xyz_class": "AX", "abc_class": "A", "xyz_class": "X"}]
     )
     out = ServiceLevelAnalyzer().analyze(ss_df, abc_xyz)
-    # SS was sized for 95% on RMSE, so the stockout probability is 5%, not 0%.
+    # SS was sized for 95% on RMSE (z = 1.645), so shortage is sigma_L * G(z) per cycle, not zero.
+    # M5-10: units short per cycle x (365 / L) cycles a year x unit margin.
     unit_margin = 2.0 * DEFAULT_COST_MARGINS["FOODS"]
-    expected = 0.05 * 5.0 * 365.0 * unit_margin
+    sigma_l = 2.0 * SQRT_L
+    units_short = sigma_l * (norm.pdf(z) - z * norm.sf(z))
+    expected = units_short * (365.0 / LEAD_TIME) * unit_margin
     assert out.iloc[0]["stockout_cost_annual"] == pytest.approx(expected, rel=1e-2)
     assert out.iloc[0]["stockout_cost_annual"] > 0.0
 
@@ -264,7 +268,8 @@ def test_readme_prose_quotes_only_numbers_from_the_by_model_csv():
     assert f"{df.loc['historical_mean', 'mean_bias']:.2f} units per SKU per day" in section
 
     portfolio = pd.read_csv(INVENTORY_DIR / "portfolio_summary.csv")
-    assert f"+{money(portfolio['capital_released_total'].sum())} in net working capital" in section
+    # M5-10: the capital-released figure appears only in the table row that also states its annual cost.
+    assert f"{money(portfolio['capital_released_total'].sum())} Net Working Capital Released" in section
 
     # The stale pre-M5-12b headline must be gone.
     assert "13,453" not in section

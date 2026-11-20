@@ -20,6 +20,8 @@ SIGNIFICANCE_JSON = PROJECT_ROOT / "reports" / "backtest_main" / "significance" 
 INVENTORY_CSV = PROJECT_ROOT / "reports" / "inventory" / "portfolio_summary.csv"
 SAFETY_STOCK_MODEL_CSV = PROJECT_ROOT / "reports" / "inventory" / "safety_stock_by_model.csv"
 ABC_XYZ_CSV = PROJECT_ROOT / "reports" / "inventory" / "abc_xyz_classification.csv"
+POLICY_COMPARISON_CSV = PROJECT_ROOT / "reports" / "inventory" / "policy_comparison.csv"
+DEMAND_BASES_CSV = PROJECT_ROOT / "reports" / "inventory" / "working_capital_demand_bases.csv"
 README_PATH = PROJECT_ROOT / "README.md"
 
 LEADERBOARD_START = "<!-- BEGIN_LEADERBOARD_TABLE -->"
@@ -30,6 +32,25 @@ STATISTICS_START = "<!-- BEGIN_STATISTICS_SECTION -->"
 STATISTICS_END = "<!-- END_STATISTICS_SECTION -->"
 SAFETY_STOCK_MODEL_START = "<!-- BEGIN_SAFETY_STOCK_MODEL_TABLE -->"
 SAFETY_STOCK_MODEL_END = "<!-- END_SAFETY_STOCK_MODEL_TABLE -->"
+POLICY_COMPARISON_START = "<!-- BEGIN_POLICY_COMPARISON_TABLE -->"
+POLICY_COMPARISON_END = "<!-- END_POLICY_COMPARISON_TABLE -->"
+DEMAND_BASIS_START = "<!-- BEGIN_DEMAND_BASIS_TABLE -->"
+DEMAND_BASIS_END = "<!-- END_DEMAND_BASIS_TABLE -->"
+
+DEMAND_BASIS_LABELS = {
+    "forecast": "ADIDA mean forecast on the scored days",
+    "actual_backtest_days": "Mean actual sales on the scored days (look-ahead)",
+    "full_history_mean": "Full-history mean (the earlier figure)",
+}
+
+
+def _signed_money(x: float, decimals: int = 0) -> str:
+    """+$1,234 / -$1,234 / $0 (signed so a cost increase is never mistaken for a saving)."""
+    if round(x, decimals) > 0:
+        return f"+${x:,.{decimals}f}"
+    if round(x, decimals) < 0:
+        return f"-${abs(x):,.{decimals}f}"
+    return "$0"
 
 MODEL_INFO = {
     "historical_mean": {"name": "**Historical Mean (Baseline)**", "tier": "Simple Baseline"},
@@ -168,16 +189,15 @@ def render_inventory_table() -> str:
     df_port = pd.read_csv(INVENTORY_CSV)
 
     lines = [
-        "| ABC/XYZ Cell | SKU Count | Current Working Capital ($) | Recommended Working Capital ($) | Capital Released ($) | Target Service Level (CSL) | Policy Impact |",
-        "|---|---|---|---|---|---|---|",
+        "| ABC/XYZ Cell | SKU Count | Current Working Capital ($) | Recommended Working Capital ($) | Capital Released ($) | Annual Cost Change ($/yr) | Target Service Level (CSL) | Policy Impact |",
+        "|---|---|---|---|---|---|---|---|",
     ]
 
     total_skus = 0
     total_current_wc = 0.0
     total_rec_wc = 0.0
     total_released = 0.0
-
-    unpriced_skus = 0
+    total_cost_change = 0.0
 
     cell_order = ["AX", "AY", "AZ", "BX", "BY", "BZ", "CX", "CY", "CZ"]
     port_dict = {row["abc_xyz_class"]: row for _, row in df_port.iterrows()}
@@ -190,11 +210,13 @@ def render_inventory_table() -> str:
         cur_wc = float(row["current_wc_total"])
         rec_wc = float(row["recommended_wc_total"])
         rel_wc = float(row["capital_released_total"])
+        cost_chg = float(row["total_cost_delta_total"])
 
         total_skus += n_skus
         total_current_wc += cur_wc
         total_rec_wc += rec_wc
         total_released += rel_wc
+        total_cost_change += cost_chg
 
         meta = POLICY_METADATA.get(cell, {"csl": "95%", "impact": "Maintained"})
 
@@ -208,7 +230,8 @@ def render_inventory_table() -> str:
             rel_str = "$0.00"
 
         lines.append(
-            f"| **{cell}** | {n_skus:,} | {cur_str} | {rec_str} | {rel_str} | {meta['csl']} | {meta['impact']} |"
+            f"| **{cell}** | {n_skus:,} | {cur_str} | {rec_str} | {rel_str} | {_signed_money(cost_chg)}/yr | "
+            f"{meta['csl']} | {meta['impact']} |"
         )
 
     # Priced SKUs with no sales in the XYZ window (AN/BN/CN): not "stable", held, not differentiated.
@@ -219,30 +242,43 @@ def render_inventory_table() -> str:
         nd_cur = sum(float(port_dict[c]["current_wc_total"]) for c in no_demand_cells)
         nd_rec = sum(float(port_dict[c]["recommended_wc_total"]) for c in no_demand_cells)
         nd_rel = sum(float(port_dict[c]["capital_released_total"]) for c in no_demand_cells)
+        nd_cost = sum(float(port_dict[c]["total_cost_delta_total"]) for c in no_demand_cells)
         total_skus += nd_skus
         total_current_wc += nd_cur
         total_rec_wc += nd_rec
         total_released += nd_rel
+        total_cost_change += nd_cost
         nd_rel_str = f"+${nd_rel:,.2f}" if nd_rel > 0 else (f"-${abs(nd_rel):,.2f}" if nd_rel < 0 else "$0.00")
         lines.append(
             f"| **No recent demand (AN/BN/CN)** | {nd_skus:,} | ${nd_cur:,.2f} | ${nd_rec:,.2f} | {nd_rel_str} | "
-            f"95% (held) | Zero sales in the {window_days}-day window; not stable, no differentiated policy, "
-            f"review for delisting or stock-outs |"
+            f"{_signed_money(nd_cost)}/yr | 95% (held) | Zero sales in the {window_days}-day window before the "
+            f"first test day; not stable, no differentiated policy, review (launches, intermittent items, stock-outs) |"
         )
 
-    # Accumulate unpriced
-    for cell, row in port_dict.items():
-        if cell.startswith("?"):
-            unpriced_skus += int(row["n_skus"])
-
-    total_skus += unpriced_skus
+    # No ABC class: SKUs without priced sales before the decision cutoff (mostly CA_2 items lacking price coverage)
+    unclassified = {c: r for c, r in port_dict.items() if c.startswith("?")}
+    uc_skus = sum(int(r["n_skus"]) for r in unclassified.values())
+    uc_cur = sum(float(r["current_wc_total"]) for r in unclassified.values())
+    uc_rec = sum(float(r["recommended_wc_total"]) for r in unclassified.values())
+    uc_rel = sum(float(r["capital_released_total"]) for r in unclassified.values())
+    uc_cost = sum(float(r["total_cost_delta_total"]) for r in unclassified.values())
+    total_skus += uc_skus
+    total_current_wc += uc_cur
+    total_rec_wc += uc_rec
+    total_released += uc_rel
+    total_cost_change += uc_cost
+    uc_rel_str = f"+${uc_rel:,.2f}" if uc_rel > 0 else (f"-${abs(uc_rel):,.2f}" if uc_rel < 0 else "$0.00")
     lines.append(
-        f"| **Unpriced (?X/?Y/?Z/?N)** | {unpriced_skus:,} | $0.00 | $0.00 | $0.00 | — | CA_2 items lacking price coverage |"
+        f"| **No ABC class (?X/?Y/?Z/?N)** | {uc_skus:,} | ${uc_cur:,.2f} | ${uc_rec:,.2f} | {uc_rel_str} | "
+        f"{_signed_money(uc_cost)}/yr | — | CA_2 items lacking price coverage, plus SKUs with no priced sales "
+        f"before the cutoff |"
     )
 
     tot_rel_str = f"+${total_released:,.2f}" if total_released >= 0 else f"-${abs(total_released):,.2f}"
     lines.append(
-        f"| **Total Portfolio** | **{total_skus:,}** | **${total_current_wc:,.2f}** | **${total_rec_wc:,.2f}** | **{tot_rel_str}** | — | **${total_released:,.2f} Net Working Capital Released** |"
+        f"| **Total Portfolio** | **{total_skus:,}** | **${total_current_wc:,.2f}** | **${total_rec_wc:,.2f}** | "
+        f"**{tot_rel_str}** | **{_signed_money(total_cost_change)}/yr** | — | "
+        f"**${total_released:,.2f} Net Working Capital Released, at {_signed_money(total_cost_change)}/yr total annual cost** |"
     )
 
     return "\n".join(lines)
@@ -287,6 +323,39 @@ def render_safety_stock_by_model_table() -> str:
             f"| {name} | {tier} | {mean_rmse} | {mean_bias} | {ss_units} | {ss_cap} | {red_str} | {pct_str} |"
         )
 
+    return "\n".join(lines)
+
+
+def render_policy_comparison_table() -> str:
+    """Markdown table: three policies side by side, working capital next to annual cost."""
+    df = pd.read_csv(POLICY_COMPARISON_CSV)
+    lines = [
+        "| Policy | SKUs | Working Capital ($) | Change in Working Capital ($) | Change in Holding Cost ($/yr) | Change in Stockout Cost ($/yr) | Change in Total Annual Cost ($/yr) |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for _, r in df.iterrows():
+        lines.append(
+            f"| **{r['label']}** | {int(r['n_skus']):,} | ${float(r['working_capital']):,.0f} | "
+            f"{_signed_money(float(r['wc_change_vs_current']))} | {_signed_money(float(r['holding_cost_change']))} | "
+            f"{_signed_money(float(r['stockout_cost_change']))} | **{_signed_money(float(r['total_cost_change']))}** |"
+        )
+    return "\n".join(lines)
+
+
+def render_demand_basis_table() -> str:
+    """Markdown table: current working capital under three mean-demand bases."""
+    df = pd.read_csv(DEMAND_BASES_CSV)
+    lines = [
+        "| Mean-demand basis | Used for | Mean demand (units/day) | Cycle-Stock Capital ($) | Safety-Stock Capital ($) | Current Working Capital ($) |",
+        "|---|---|---|---|---|---|",
+    ]
+    for _, r in df.iterrows():
+        label = DEMAND_BASIS_LABELS.get(r["basis"], r["basis"])
+        lines.append(
+            f"| {label} | {r['used_for']} | {float(r['mean_daily_demand_total']):,.1f} | "
+            f"${float(r['cycle_stock_capital']):,.0f} | ${float(r['safety_stock_capital']):,.0f} | "
+            f"${float(r['working_capital']):,.0f} |"
+        )
     return "\n".join(lines)
 
 
@@ -401,19 +470,31 @@ def check_readme_tables(readme_path: Path = README_PATH) -> tuple[bool, str]:
         return False, f"Statistics markers missing in {readme_path}"
     if SAFETY_STOCK_MODEL_START not in content or SAFETY_STOCK_MODEL_END not in content:
         return False, f"Safety stock model comparison markers missing in {readme_path}"
+    if POLICY_COMPARISON_START not in content or POLICY_COMPARISON_END not in content:
+        return False, f"Policy comparison markers missing in {readme_path}"
+    if DEMAND_BASIS_START not in content or DEMAND_BASIS_END not in content:
+        return False, f"Demand basis markers missing in {readme_path}"
 
     leaderboard_expected = render_leaderboard_table().strip()
     inventory_expected = render_inventory_table().strip()
     statistics_expected = render_statistics_section().strip()
     ss_model_expected = render_safety_stock_by_model_table().strip()
+    policy_expected = render_policy_comparison_table().strip()
+    basis_expected = render_demand_basis_table().strip()
 
     # Extract current tables
     lb_part = content.split(LEADERBOARD_START)[1].split(LEADERBOARD_END)[0].strip()
     inv_part = content.split(INVENTORY_START)[1].split(INVENTORY_END)[0].strip()
     stat_part = content.split(STATISTICS_START)[1].split(STATISTICS_END)[0].strip()
     ss_model_part = content.split(SAFETY_STOCK_MODEL_START)[1].split(SAFETY_STOCK_MODEL_END)[0].strip()
+    policy_part = content.split(POLICY_COMPARISON_START)[1].split(POLICY_COMPARISON_END)[0].strip()
+    basis_part = content.split(DEMAND_BASIS_START)[1].split(DEMAND_BASIS_END)[0].strip()
 
     diffs = []
+    if policy_part != policy_expected:
+        diffs.append("Policy comparison table in README does not match artifact outputs.")
+    if basis_part != basis_expected:
+        diffs.append("Demand basis table in README does not match artifact outputs.")
     if lb_part != leaderboard_expected:
         diffs.append("Leaderboard table in README does not match artifact outputs.")
     if inv_part != inventory_expected:
@@ -436,6 +517,20 @@ def update_readme_tables(readme_path: Path = README_PATH) -> None:
     inventory_str = render_inventory_table().strip()
     statistics_str = render_statistics_section().strip()
     ss_model_str = render_safety_stock_by_model_table().strip()
+    policy_str = render_policy_comparison_table().strip()
+    basis_str = render_demand_basis_table().strip()
+
+    # Replace policy comparison and demand basis
+    for start, end, body, name in (
+        (POLICY_COMPARISON_START, POLICY_COMPARISON_END, policy_str, "policy comparison"),
+        (DEMAND_BASIS_START, DEMAND_BASIS_END, basis_str, "demand basis"),
+    ):
+        if start in content and end in content:
+            before = content.split(start)[0]
+            after = content.split(end)[1]
+            content = f"{before}{start}\n{body}\n{end}{after}"
+        else:
+            print(f"Warning: {start} not found, skipping {name} replacement.")
 
     # Replace leaderboard
     if LEADERBOARD_START in content and LEADERBOARD_END in content:

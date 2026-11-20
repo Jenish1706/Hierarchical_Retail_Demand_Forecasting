@@ -1,0 +1,4 @@
+basis,used_for,n_skus,mean_daily_demand_total,cycle_stock_capital,safety_stock_capital,working_capital
+forecast,planning,4591,5888.53,33354.36,47908.96,81263.32
+actual_backtest_days,reference only,4591,5894.73,33463.25,47908.96,81372.21
+full_history_mean,reference only,4591,5141.02,26486.99,47908.96,74395.94

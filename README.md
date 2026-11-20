@@ -82,25 +82,60 @@ Evaluating required safety stock capital at a fixed 95% Cycle Service Level (CSL
 
 ### Differentiated Service Levels & ABC/XYZ Optimization
 
-Feeding champion **ADIDA** forecast errors ($\sigma_e$ = RMSE) into 3x3 ABC/XYZ Pareto segmentation across California stores `CA_1` and `CA_2` (6,098 SKUs, 4,591 with verified price data). ADIDA is the inventory champion because it leads the main 3,000-series benchmark; on these 6,098 CA series alone **Moving Average (28d)** has the lower WAPE (76.73% vs 77.23%), and the two differ by under 0.1% in safety stock capital:
+Feeding champion **ADIDA** forecast errors ($\sigma_e$ = RMSE) into 3x3 ABC/XYZ Pareto segmentation across California stores `CA_1` and `CA_2` (6,098 SKUs, 4,591 with verified price data). ADIDA is the inventory champion because it leads the main 3,000-series benchmark; on these 6,098 CA series alone **Moving Average (28d)** has the lower WAPE (76.73% vs 77.23%), and the two differ by under 0.1% in safety stock capital.
+
+**Decisions and scoring use different days.** A planner decides before the test days, so the policy is built only from what is known then:
+
+- **Decision window (ends 2016-01-31)**: ABC revenue comes from the history up to that day, and the XYZ coefficient of variation, the mean demand behind the classes and the no-sales check (class **N**) from its last 84 days. The class decides who gets 98% or 90%, so it is never chosen with knowledge of the test days.
+- **Planning demand**: ADIDA's mean *forecast* on the 84 scored days (2016-02-01 to 2016-04-24) sets cycle stock and the reorder point. Actual sales on those days are used only for scoring.
+- **$\sigma_e$ is a forecast-error size measured on the backtest days** (the same 84 days). It is the standard way a backtest compares models, not a realised inventory outcome.
+
+#### Two policies, side by side
+
+Capital released only means something next to what it costs. Holding cost uses a 25% annual rate and a unit short costs its lost margin (FOODS 60%, HOUSEHOLD 50%, HOBBIES 45%). Expected shortage per replenishment cycle is $\sigma_L \cdot G(z)$ (the normal loss function), there are $365/L$ cycles a year (each order covers one lead time, as the cycle-stock term assumes), and shortage cost is units short $\times$ cycles $\times$ unit margin. All three policies are summed over the same priced SKUs:
+
+<!-- BEGIN_POLICY_COMPARISON_TABLE -->
+| Policy | SKUs | Working Capital ($) | Change in Working Capital ($) | Change in Holding Cost ($/yr) | Change in Stockout Cost ($/yr) | Change in Total Annual Cost ($/yr) |
+|---|---|---|---|---|---|---|
+| **Uniform current service level** | 4,591 | $81,265 | $0 | $0 | $0 | **$0** |
+| **ABC/XYZ capital-release rule** | 4,591 | $78,095 | -$3,170 | -$792 | +$13,237 | **+$12,444** |
+| **Cost-minimising level per segment** | 4,591 | $92,720 | +$11,455 | +$2,864 | -$21,547 | **-$18,684** |
+<!-- END_POLICY_COMPARISON_TABLE -->
+
+- **Capital-release rule** (AX 98%, BZ/CY/CZ 90%, the rest held at 95%): frees $3,170 of working capital but raises total annual cost by **+$12,444/yr**. Holding cost falls by $792/yr while expected stockout cost rises by $13,237/yr. Under the project's own cost model it is not a saving; it is a capital-for-risk trade, worth taking only if working capital is the binding constraint.
+- **Cost-minimising level**: on the 90/95/98% menu it is **98% in every optimised segment**, for **-$18,684/yr** at **+$11,455** of working capital. The unconstrained optimum $SL^* = 1 - hcL/(365m)$ is 99.5% to 99.7% (`closed_form_sl_star` in `segment_cost_optimum.csv`), above the whole menu, because a lost unit of margin costs far more than a week of holding it. Class N segments are held at the current level in both policies.
+- **Limits of this result**: the cost model charges only lost margin per unit short (no churn or substitution) and assumes normal errors on zero-heavy demand, so it is an analytical baseline; empirical lead-time stockout simulation is scheduled for Stage B.
+
+Per-segment detail of the capital-release rule, with capital released always shown next to its annual cost change:
 
 <!-- BEGIN_INVENTORY_TABLE -->
-| ABC/XYZ Cell | SKU Count | Current Working Capital ($) | Recommended Working Capital ($) | Capital Released ($) | Target Service Level (CSL) | Policy Impact |
-|---|---|---|---|---|---|---|
-| **AX** | 43 | $3,764.55 | $4,092.52 | -$327.97 | **98%** | High-turnover revenue drivers; upgraded buffer |
-| **AY** | 739 | $27,625.29 | $27,625.29 | $0.00 | **95%** | Moderate volume; maintained standard buffer |
-| **AZ** | 1,057 | $23,948.63 | $23,948.63 | $0.00 | **95%** | High volatility; guarded safety buffer |
-| **BY** | 128 | $2,113.59 | $2,113.59 | $0.00 | **95%** | Moderate secondary volume; maintained |
-| **BZ** | 1,210 | $15,077.67 | $12,843.43 | +$2,234.24 | **90%** | Volatile secondary; working capital released |
-| **CY** | 33 | $357.28 | $314.50 | +$42.78 | **90%** | Slow-moving; conservative buffer |
-| **CZ** | 1,303 | $8,437.33 | $7,101.14 | +$1,336.19 | **90%** | Erratic low volume; working capital released |
-| **No recent demand (AN/BN/CN)** | 78 | $46.24 | $46.24 | $0.00 | 95% (held) | Zero sales in the 84-day window; not stable, no differentiated policy, review for delisting or stock-outs |
-| **Unpriced (?X/?Y/?Z/?N)** | 1,507 | $0.00 | $0.00 | $0.00 | — | CA_2 items lacking price coverage |
-| **Total Portfolio** | **6,098** | **$81,370.58** | **$78,085.34** | **+$3,285.24** | — | **$3,285.24 Net Working Capital Released** |
+| ABC/XYZ Cell | SKU Count | Current Working Capital ($) | Recommended Working Capital ($) | Capital Released ($) | Annual Cost Change ($/yr) | Target Service Level (CSL) | Policy Impact |
+|---|---|---|---|---|---|---|---|
+| **AX** | 36 | $3,195.44 | $3,475.42 | -$279.98 | -$526/yr | **98%** | High-turnover revenue drivers; upgraded buffer |
+| **AY** | 636 | $25,186.16 | $25,186.16 | $0.00 | $0/yr | **95%** | Moderate volume; maintained standard buffer |
+| **AZ** | 1,085 | $24,916.55 | $24,916.55 | $0.00 | $0/yr | **95%** | High volatility; guarded safety buffer |
+| **BY** | 157 | $2,817.09 | $2,817.09 | $0.00 | $0/yr | **95%** | Moderate secondary volume; maintained |
+| **BZ** | 1,113 | $13,749.84 | $11,704.96 | +$2,044.88 | +$7,778/yr | **90%** | Volatile secondary; working capital released |
+| **CY** | 32 | $398.01 | $351.12 | +$46.89 | +$197/yr | **90%** | Slow-moving; conservative buffer |
+| **CZ** | 1,307 | $8,666.22 | $7,308.40 | +$1,357.82 | +$4,996/yr | **90%** | Erratic low volume; working capital released |
+| **No recent demand (AN/BN/CN)** | 222 | $2,291.13 | $2,291.13 | $0.00 | $0/yr | 95% (held) | Zero sales in the 84-day window before the first test day; not stable, no differentiated policy, review (launches, intermittent items, stock-outs) |
+| **No ABC class (?X/?Y/?Z/?N)** | 1,510 | $44.09 | $44.09 | $0.00 | $0/yr | — | CA_2 items lacking price coverage, plus SKUs with no priced sales before the cutoff |
+| **Total Portfolio** | **6,098** | **$81,264.53** | **$78,094.92** | **+$3,169.61** | **+$12,444/yr** | — | **$3,169.61 Net Working Capital Released, at +$12,444/yr total annual cost** |
 <!-- END_INVENTORY_TABLE -->
 
-- **One window, and items with no demand**: the XYZ coefficient of variation, mean daily demand and $\sigma_e$ are all measured on the same 84-day backtest window (2016-02-01 to 2016-04-24); only ABC revenue uses the full history. A SKU with no sales in that window has an undefined CV, so it is not "stable": it gets its own class **N** and its own row, held at the current service level, because zero sales can be a stock-out rather than absent demand.
-- **Operational Trade-Off**: Releasing **+$3,285.24 in net working capital** requires an explicit trade-off: accepting an increase in theoretical stockout probability (CSL 95% $\to$ 90%) on slow-moving tail items (BZ, CY, CZ) to fund higher safety stock (CSL 95% $\to$ 98%) on revenue-driving AX items. Note that under the project's current total relevant cost model, stockout penalty trade-offs are evaluated in detail (see Limitations).
+- **Items with no recent demand (class N)**: a SKU with no sales in the decision window has an undefined CV, so it is not "stable": it gets its own class and row and is held at the current service level. Decided on pre-test days, 322 SKUs are class N, and 291 of them sold during the scored days, so N is a review flag (launches, intermittent items, stock-outs), not a delisting verdict.
+
+#### Why working capital moved from $74,396 to $81,263
+
+<!-- BEGIN_DEMAND_BASIS_TABLE -->
+| Mean-demand basis | Used for | Mean demand (units/day) | Cycle-Stock Capital ($) | Safety-Stock Capital ($) | Current Working Capital ($) |
+|---|---|---|---|---|---|
+| ADIDA mean forecast on the scored days | planning | 5,888.5 | $33,354 | $47,909 | $81,263 |
+| Mean actual sales on the scored days (look-ahead) | reference only | 5,894.7 | $33,463 | $47,909 | $81,372 |
+| Full-history mean (the earlier figure) | reference only | 5,141.0 | $26,487 | $47,909 | $74,396 |
+<!-- END_DEMAND_BASIS_TABLE -->
+
+- **Current working capital is $81,263** on the planning basis (ADIDA's mean forecast). The earlier **$74,396** used the full-history mean, which still includes the 84 test days at about 4% weight; mean actual sales on the scored days (look-ahead, reference only) would give $81,372. The rise is the recent demand level (5,141 to 5,889 units a day across the priced SKUs), which the forecast also sees: ADIDA's portfolio mean forecast is within about 0.1% of the actuals, so planning on the forecast instead of the actuals moves capital by only $109. Safety-stock capital is identical ($47,909) in all three rows.
 
 ---
 
@@ -147,7 +182,7 @@ The full engineering guide is available in `docs/guide/`:
 
 1. **Truncated Pricing History & Global Model Handicaps**: The raw price table originated from a workbook truncated at Excel's 1,048,575-row limit (covering only 15.3% of M5 price records, CA_1 and CA_2 only), leaving 1,507 California series without price data. Consequently, global models (LightGBM) ran under three major handicaps: (a) **no price or promotion features** (`price_features_included: false` in the backtest manifest), (b) trained on a **3,000-series sample** rather than the full 30,490-series catalog, and (c) trained on a **900-day window** rather than the full 1,913-day history. In the M5 competition, price momentum and catalog-wide cross-series learning were decisive drivers of GBDT performance; our finding that specialized intermittent methods match or outperform global GBDTs carries this essential qualification.
 2. **Bottom-Level Evaluation**: The benchmark evaluates bottom-level series (Level 12) across California stores rather than full 12-level WRMSSE competition aggregation.
-3. **Parametric Normal Safety Stock**: Analytical safety stock ($z \cdot \sigma_e \cdot \sqrt{L}$, with $\sigma_e$ the RMSE so that bias is paid for) serves as an operational baseline. The $\sqrt{L}$ scaling treats daily errors as independent, so a persistent bias, which accumulates linearly over the lead time, is still understated; RMSE also charges over-forecast bias. Empirical lead-time stockout simulations are scheduled for Stage B.
+3. **Parametric Normal Safety Stock**: Analytical safety stock ($z \cdot \sigma_e \cdot \sqrt{L}$, with $\sigma_e$ the RMSE so that bias is paid for) and the loss-function shortage cost ($\sigma_L \cdot G(z)$ per cycle) serve as an operational baseline; $\sigma_e$ is a forecast-error size measured on the backtest days, not a realised inventory outcome. The $\sqrt{L}$ scaling treats daily errors as independent, so a persistent bias, which accumulates linearly over the lead time, is still understated; RMSE also charges over-forecast bias. Empirical lead-time stockout simulations are scheduled for Stage B.
 4. **Unevaluated Architectures**: Deep learning architectures and two-stage hurdle models were implemented but not scored in the main cross-tier walk-forward backtest.
 
 ---

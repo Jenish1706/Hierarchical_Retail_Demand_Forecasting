@@ -54,7 +54,7 @@ To run the full research and evaluation pipeline from raw inputs to verified rep
 | **2. Baseline Tier 1** | `python scripts/run_tier1.py` | ~45s | `reports/tier1/` | Evaluates baselines on 3k series |
 | **3. Walk-Forward Backtest** | `python scripts/run_backtest.py` | ~450s (7.5 min) | `reports/backtest_main/` | 3,000 series $\times$ 3 origins $\times$ 10 models |
 | **4. Hypothesis Battery** | `python scripts/run_significance.py` | ~20s | `reports/backtest_main/significance/` | Bootstrap CIs, DM, Nemenyi plot |
-| **5. Inventory Analysis** | `python scripts/run_inventory_analysis.py` | ~15s | `reports/inventory/` | ABC/XYZ classification, capital released |
+| **5. Inventory Analysis** | `python scripts/run_inventory_analysis.py` | ~15s | `reports/inventory/` | ABC/XYZ classification, policy comparison (capital released next to annual cost) |
 | **6. Sync Documentation** | `python scripts/render_readme_tables.py` | ~2s | `README.md` | Injects verified artifact tables |
 
 ---

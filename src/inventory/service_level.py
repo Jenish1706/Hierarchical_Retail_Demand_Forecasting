@@ -12,7 +12,11 @@ For each (SKU segment, service level) combination it computes:
     Safety Stock (units)      -- from SafetyStockCalculator
     Average Inventory (units) -- avg_demand × L/2 + safety_stock
     Holding Cost              -- avg_inventory × unit_cost × holding_rate
-    Expected Stockout Cost    -- (1 - SL) × avg_demand × L × unit_margin
+    Expected Units Short      -- sigma_L × G(z) per replenishment cycle, where
+                                 sigma_L = sigma_e × sqrt(L), z = SS / sigma_L and
+                                 G is the unit normal loss function
+    Expected Stockout Cost    -- units short per cycle × (365 / L) cycles a year
+                                 × unit_margin
     Total Relevant Cost       -- holding + stockout
 
 The key deliverable is a **scenario comparison table** per ABC/XYZ segment
@@ -33,6 +37,22 @@ Assumptions and limitations
 3. Stockout cost is estimated as lost margin per unit.  The true cost
    (including customer churn and substitution) is higher but unobservable
    in M5.
+
+4. Cycle length (M5-10).  The cycle-stock term D × L / 2 assumes each order
+   covers one lead time of demand (Q = D × L), so a replenishment cycle is
+   L days and there are 365 / L cycles a year.  Expected shortage per cycle is
+   the standard sigma_L × G(z).  The earlier formula,
+   ``(1 - SL) × avg_demand × 365 × margin``, charged every stockout cycle the
+   *whole* lead-time demand and so overstated shortages about 3-4x.  Because
+   sigma_L × G(z) depends on error size and stock, not on the demand level, the
+   shortage cost no longer scales with mean demand.
+
+5. Unconstrained optimum.  Minimising h·c·sigma_L·z + (365/L)·m·sigma_L·G(z) over z
+   gives 1 - Phi(z*) = h·c·L / (365·m), i.e. SL* = 1 - h·c·L / (365·m) with unit
+   cost c and unit margin m.  Lost margin per unit short is large against a week
+   of holding, so SL* is above 99% for every M5 category: the cost-minimising
+   level lies above the 90/95/98% menu, which is why ``unconstrained_optimal_sl``
+   is reported alongside the scenarios.
 
 References
 ----------
@@ -60,6 +80,18 @@ DEFAULT_COST_MARGINS: dict[str, float] = {
 }
 
 _EPS = 1e-12
+
+
+def normal_loss(z):
+    """Unit normal loss function G(z) = phi(z) - z * (1 - Phi(z)).
+
+    G(z) is the expected shortage, in standard deviations of lead-time demand,
+    when the stock covers ``z`` of them: E[(Z - z)+] for Z ~ N(0, 1).
+    G(1.2816) = 0.0473 (the 90% cycle service level).  Accepts a scalar or an array.
+    """
+    z = np.asarray(z, dtype=float)
+    out = np.exp(-0.5 * z * z) / np.sqrt(2.0 * np.pi) - z * ndtr(-z)
+    return float(out) if out.ndim == 0 else out
 
 
 class ServiceLevelAnalyzer:
@@ -193,25 +225,29 @@ class ServiceLevelAnalyzer:
                 # Same sigma_e that sized the safety stock (RMSE, bias included). Reading the
                 # bias-free std here would pair a bias-inflated SS with a too-small sigma_L.
                 sigma_e = row.get("forecast_error_rmse", np.nan)
-                if pd.isna(ss):
-                    # sigma_e was missing, so the stock could not be sized (M5-09): do not
-                    # invent a stockout cost for it; it is excluded and counted downstream.
+                units_short = cycles = stockout_prob = np.nan
+                if pd.isna(ss) or pd.isna(sigma_e) or lt <= 0:
+                    # sigma_e was missing, so the stock could not be sized (M5-09), or there is
+                    # no error estimate to turn stock into a shortage: do not invent a cost.
                     stockout_cost = np.nan
                 else:
-                    if pd.notna(sigma_e) and sigma_e <= 1e-4:
+                    # Expected units short per cycle = sigma_L * G(z); cycles a year = 365 / L
+                    # (each order covers one lead time, as the cycle-stock term assumes).
+                    cycles = 365.0 / lt
+                    if sigma_e <= 1e-4:
+                        units_short = 0.0
                         stockout_prob = 0.0
-                    elif pd.notna(sigma_e) and sigma_e > 1e-4 and lt > 0:
-                        sigma_l = sigma_e * np.sqrt(lt)
-                        z_eff = max(0.0, ss / sigma_l)
-                        stockout_prob = float(1.0 - ndtr(z_eff))
                     else:
-                        stockout_prob = float(1.0 - sl)
-
-                    # Annualized stockout cost: cycle stockout margin * (365 / lt)
-                    # = stockout_prob * (avg_demand * lt) * unit_margin * (365 / lt)
-                    # = stockout_prob * avg_demand * 365 * unit_margin
-                    stockout_cost = stockout_prob * avg_demand * 365.0 * unit_margin
+                        sigma_l = sigma_e * np.sqrt(lt)
+                        z_eff = ss / sigma_l
+                        units_short = sigma_l * normal_loss(z_eff)
+                        stockout_prob = float(1.0 - ndtr(z_eff))
+                    stockout_cost = units_short * cycles * unit_margin
                 total_cost = holding_cost + stockout_cost
+                # Closed-form unconstrained optimum: SL* = 1 - h*c*L / (365*m).
+                optimal_sl = float(np.clip(
+                    1.0 - self.holding_cost_rate * unit_cost * lt / (365.0 * unit_margin), 0.0, 1.0
+                ))
             else:
                 unit_cost = np.nan
                 unit_margin = np.nan
@@ -219,6 +255,7 @@ class ServiceLevelAnalyzer:
                 holding_cost = np.nan
                 stockout_cost = np.nan
                 total_cost = np.nan
+                units_short = cycles = stockout_prob = optimal_sl = np.nan
 
             results.append({
                 "item_id": row["item_id"],
@@ -234,8 +271,13 @@ class ServiceLevelAnalyzer:
                 "cycle_stock_units": round(float(cycle_stock), 2),
                 "avg_inventory_units": round(float(avg_inventory), 2),
                 "unit_cost": round(float(unit_cost), 4) if pd.notna(unit_cost) else np.nan,
+                "unit_margin": round(float(unit_margin), 4) if pd.notna(unit_margin) else np.nan,
                 "inventory_value": round(float(inventory_value), 2) if pd.notna(inventory_value) else np.nan,
                 "holding_cost_annual": round(float(holding_cost), 2) if pd.notna(holding_cost) else np.nan,
+                "cycles_per_year": round(float(cycles), 4) if pd.notna(cycles) else np.nan,
+                "cycle_stockout_prob": round(float(stockout_prob), 4) if pd.notna(stockout_prob) else np.nan,
+                "expected_units_short_per_cycle": round(float(units_short), 4) if pd.notna(units_short) else np.nan,
+                "unconstrained_optimal_sl": round(float(optimal_sl), 4) if pd.notna(optimal_sl) else np.nan,
                 "stockout_cost_annual": round(float(stockout_cost), 2) if pd.notna(stockout_cost) else np.nan,
                 "total_relevant_cost": round(float(total_cost), 2) if pd.notna(total_cost) else np.nan,
             })

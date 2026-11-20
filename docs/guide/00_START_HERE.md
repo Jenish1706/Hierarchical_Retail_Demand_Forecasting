@@ -33,7 +33,7 @@ Every metric reported in this guide is generated directly from committed artifac
 | **WAPE Equivalence** | **Routed SBT Ensemble** is statistically indistinguishable from ADIDA ($\Delta\text{WAPE} = +0.50\%$, 95% CI [-0.01%, +1.04%]) | [`reports/backtest_main/significance/bootstrap_intervals.csv`](../../reports/backtest_main/significance/bootstrap_intervals.csv) |
 | **RMSSE Equivalence** | **Moving Average (28d)** is statistically indistinguishable from ADIDA on RMSSE ($\Delta\text{RMSSE} = +0.0011$, 95% CI [-0.0001, +0.0023]) | [`reports/backtest_main/significance/bootstrap_intervals.csv`](../../reports/backtest_main/significance/bootstrap_intervals.csv) |
 | **Global GBDT Comparison** | **LightGBM (Tweedie)** scores 77.26% WAPE (rank 5.38), significantly worse in average rank across the panel | [`reports/backtest_main/accuracy_overall.csv`](../../reports/backtest_main/accuracy_overall.csv) |
-| **Inventory Capital Impact** | Differentiating CSL (98% for AX, 90% for CZ) across stores CA_1 & CA_2 releases **+$3,223.14 in working capital** ($72,426.36 -> $69,203.22) | [`reports/inventory/portfolio_summary.csv`](../../reports/inventory/portfolio_summary.csv) |
+| **Inventory Capital Impact** | The ABC/XYZ capital-release rule (98% for AX, 90% for BZ/CY/CZ) across CA_1 & CA_2 frees **$3,170 of working capital** but raises total annual cost by **+$12,444/yr** (holding -$792, stockout +$13,237); the cheapest level on the 90/95/98% menu (98% everywhere) lowers cost by $18,684/yr for +$11,455 of capital | [`reports/inventory/policy_comparison.csv`](../../reports/inventory/policy_comparison.csv) |
 
 ---
 

@@ -75,6 +75,11 @@ DEFAULT_LEAD_TIME_DAYS: int = 7
 # forecast horizon.  With fewer, the estimate is "missing", not "small" (M5-09).
 MIN_ERROR_OBS: int = 28
 
+# Below this many units a day an item has no material demand.  A dormant item's forecast can decay to
+# ~1e-13; that is floating-point residue, not demand, so it must not trip the "zero error on
+# positive demand" rule.  1e-6 units a day is about one unit every 3,000 years.
+MIN_MATERIAL_DEMAND: float = 1e-6
+
 # error_estimate_status values.
 STATUS_OK = "ok"
 STATUS_INSUFFICIENT_OBS = "insufficient_obs"
@@ -215,10 +220,12 @@ class SafetyStockCalculator:
             Must contain ``item_id``, ``store_id``, ``date``, ``sales`` if ``forecasts``
             does not already contain actuals (``y_true``).
         panel : pd.DataFrame | None
-            Panel for mean daily demand computation.  Pass it restricted to the
-            **same days as the residuals** (the backtest window) so that mean
-            demand and sigma_e describe one window.  If None, daily demand is
-            estimated from the provided forecasts/actuals.
+            Optional panel of *actual* sales for the mean daily demand.  Leave it
+            ``None`` when planning (M5-10): mean daily demand is then the mean
+            **forecast** (``y_pred`` / ``forecast``) over the same days as the
+            residuals, which a planner could have known.  A panel of actuals over
+            the scored days would credit the planner with knowing future demand;
+            use one only for scoring or for benchmarks.
         model : str | None
             Specific model to filter for, or name to record in the output table.
         min_obs : int
@@ -280,12 +287,15 @@ class SafetyStockCalculator:
                 )
                 demand_stats = demand_stats.merge(dept_map, on=["item_id", "store_id"], how="left")
         else:
-            sales_col = "sales" if "sales" in merged.columns else "y_true"
+            # Planning demand is the mean *forecast* over the window: what a planner could have
+            # had.  Actual sales on these days are scoring-only (they are what the policy is
+            # judged against), so they must not size cycle stock or the reorder point.
+            demand_col = "y_pred" if "y_pred" in merged.columns else "forecast"
             demand_stats = (
-                merged.groupby(["item_id", "store_id"], observed=True)[sales_col]
+                merged.groupby(["item_id", "store_id"], observed=True)[demand_col]
                 .mean()
                 .reset_index()
-                .rename(columns={sales_col: "avg_daily_demand"})
+                .rename(columns={demand_col: "avg_daily_demand"})
             )
             if "dept_id" in merged.columns:
                 dept_map = merged[["item_id", "store_id", "dept_id"]].drop_duplicates()
@@ -299,7 +309,7 @@ class SafetyStockCalculator:
         flat_but_selling = (
             (base["error_estimate_status"] == STATUS_OK)
             & (base["forecast_error_rmse"] <= 1e-9)
-            & (base["avg_daily_demand"] > 0)
+            & (base["avg_daily_demand"] > MIN_MATERIAL_DEMAND)
         )
         base.loc[flat_but_selling, "error_estimate_status"] = STATUS_ZERO_ERROR_WITH_DEMAND
 

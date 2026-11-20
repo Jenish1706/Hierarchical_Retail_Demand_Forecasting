@@ -37,7 +37,7 @@ flowchart TD
         SIG --> ABC_XYZ["3x3 ABC/XYZ Pareto Segmentation<br/>(Revenue Pareto x CV Volatility)"]
         ABC_XYZ --> SAFETY["Parametric Safety Stock Engine<br/>(Lead Time L=7d, Normal ROP)"]
         SAFETY --> SCENARIO["Trade-Off Policy Allocation<br/>(AX 98% CSL vs. CZ 90% CSL)"]
-        SCENARIO --> CAP_REPORT["Working Capital & Waterfall Analysis<br/>(+$3,223.14 Released across CA_1 & CA_2)"]
+        SCENARIO --> CAP_REPORT["Working Capital & Waterfall Analysis<br/>($3,170 released at +$12,444/yr total cost, CA_1 & CA_2)"]
     end
 
     subgraph PRESENTATION["6. Reporting & Verification Layer"]
@@ -88,10 +88,10 @@ To see how the platform functions in practice, consider the lifecycle of one sin
    - The SKU's 84 evaluation days across 3 origins are logged into `predictions.parquet`.
    - In the paired bootstrap engine, the entire block of `FOODS_1_001_CA_1` is resampled with replacement, contributing to the 95% confidence intervals on model gaps.
 7. **Inventory Optimization & Policy Output**:
-   - Historical unit sales and store price place the SKU in **Class B** (secondary volume) and **Class Z** (erratic, CV = 1.12): cell **BZ** in `abc_xyz_classification.csv`.
-   - Champion (ADIDA) forecast error over the 84 evaluation days: RMSE $\sigma_e = 1.0594$ units per day (standard deviation 1.0418; mean error +0.2233, so the forecast ran slightly low, which the RMSE pays for and the standard deviation does not). With lead time $L = 7$ days:
+   - Decided on the 84 days before the first test day (2015-11-09 to 2016-01-31), the SKU is **Class B** (secondary volume) and **Class Z** (erratic, CV = 1.52): cell **BZ** in `abc_xyz_classification.csv`. The test days are never used to choose the class.
+   - Champion (ADIDA) forecast error measured on the 84 backtest days: RMSE $\sigma_e = 1.0594$ units per day (standard deviation 1.0418; mean error +0.2233, so the forecast ran slightly low, which the RMSE pays for and the standard deviation does not). Planning demand is ADIDA's mean forecast, 0.6934 units per day, not the actual sales. With lead time $L = 7$ days:
      $$\text{Safety Stock} = 1.645 \times 1.0594 \times \sqrt{7} \approx 4.61 \text{ units}$$
-     $$\text{Reorder Point (ROP)} = (0.7857 \times 7) + 4.61 \approx 5.50 + 4.61 \approx 10.11 \text{ units}$$
-   - At 95% CSL (unit cost $0.8677) that buffer ties up $4.61 \times \$0.8677 \approx \$4.00$; the BZ segment policy lowers it to 90% CSL (3.59 units, about $3.12). Source row: `reports/inventory/safety_stock.csv`.
+     $$\text{Reorder Point (ROP)} = (0.6934 \times 7) + 4.61 \approx 4.85 + 4.61 \approx 9.46 \text{ units}$$
+   - Cost at 95% CSL (unit cost \$0.8677, unit margin \$1.3016): holding is $25\% \times (2.43 + 4.61) \times \$0.8677 \approx \$1.53$ a year, and expected shortage is $\sigma_L G(z) = 1.0594 \times \sqrt{7} \times 0.0209 \approx 0.0586$ units per cycle, so $0.0586 \times (365/7) \times \$1.3016 \approx \$3.98$ a year. The BZ capital-release rule lowers the SKU to 90% CSL (3.59 units): holding falls to \$1.31 but shortage rises to \$9.02, so total cost rises from \$5.51 to \$10.33 a year. Source rows: `safety_stock.csv`, `inventory_kpis.csv`.
 8. **Dashboard & Report Synchronization**:
    - Streamlit overview binds the resulting inventory KPI card dynamically, while `render_readme_tables.py` updates the public README without human intervention.

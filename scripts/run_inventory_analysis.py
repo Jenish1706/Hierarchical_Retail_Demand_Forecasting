@@ -42,8 +42,14 @@ from src.visualization.inventory_plots import (  # noqa: E402
 log = get_logger("inventory_pipeline")
 
 # The backtest evaluation window: N_ORIGINS consecutive HORIZON-day test blocks ending at the
-# panel's last date.  Mean demand, the XYZ coefficient of variation and sigma_e are all measured
-# on these same days (M5-09); only ABC revenue uses the full history.
+# panel's last date.  These are the *scoring* days (M5-10).  Decisions are made without them:
+#   decision window : everything up to the day before the first test day.  ABC revenue uses that
+#                     history; XYZ, mean demand for the classes and the no-sales (N) check use its
+#                     last EVAL_WINDOW_DAYS days (ending 2016-01-31 on M5).
+#   planning demand : the champion's mean forecast over the scoring days (a planner has forecasts,
+#                     not future sales).
+#   sigma_e         : out-of-sample forecast-error size measured on the scoring days, the standard
+#                     backtest proxy; it is not a realised inventory outcome.
 N_ORIGINS = 3
 HORIZON = 28
 EVAL_WINDOW_DAYS = N_ORIGINS * HORIZON
@@ -179,13 +185,22 @@ def ensure_ca_backtest_predictions(
     return df_preds
 
 
-def evaluation_window_panel(panel: pd.DataFrame, predictions: pd.DataFrame) -> pd.DataFrame:
-    """Return the panel rows on the backtest evaluation days, after checking they are the
-    last ``EVAL_WINDOW_DAYS`` days of the panel.
+def decision_panel_cutoff(panel: pd.DataFrame) -> pd.Timestamp:
+    """The last day a decision may use: the day before the first scoring day."""
+    panel_dates = pd.DatetimeIndex(sorted(pd.to_datetime(panel["date"]).unique()))
+    return panel_dates[-(EVAL_WINDOW_DAYS + 1)]
 
-    The XYZ classifier looks at the last ``EVAL_WINDOW_DAYS`` days; sigma_e comes from the
-    prediction days.  If cached predictions cover other days the two would silently describe
-    different windows, so this raises instead.
+
+def split_panel_for_decisions(
+    panel: pd.DataFrame, predictions: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Split the panel into (decision, scoring) rows and check the predictions are the scoring days.
+
+    The scoring days are the last ``EVAL_WINDOW_DAYS`` panel days, which the backtest predictions
+    must cover exactly; the decision rows are everything before them.  Segmentation is built from
+    the decision rows only, so a class (which decides who gets 98% or 90%) is never chosen with
+    knowledge of the sales it will be scored on.  Cached predictions that cover other days would
+    break that split silently, so this raises instead.
     """
     pred_dates = pd.DatetimeIndex(sorted(pd.to_datetime(predictions["date"]).unique()))
     panel_dates = pd.DatetimeIndex(sorted(pd.to_datetime(panel["date"]).unique()))
@@ -197,7 +212,30 @@ def evaluation_window_panel(panel: pd.DataFrame, predictions: pd.DataFrame) -> p
             f"evaluation window is the last {EVAL_WINDOW_DAYS} panel days "
             f"({expected.min().date()}..{expected.max().date()}). Re-run with --rerun-backtest."
         )
-    return panel[panel["date"].isin(expected)]
+    scoring = panel[panel["date"].isin(expected)]
+    decision = panel[panel["date"] <= decision_panel_cutoff(panel)]
+    return decision, scoring
+
+
+def demand_bases(
+    panel: pd.DataFrame, scoring: pd.DataFrame, predictions: pd.DataFrame, champion: str
+) -> dict[str, pd.DataFrame]:
+    """Mean daily demand per SKU under three bases, for the working-capital comparison.
+
+    ``forecast``        the champion's mean forecast on the scoring days (the planning basis)
+    ``actual_backtest_days``  mean actual sales on the scoring days (look-ahead; reference only)
+    ``full_history_mean``     mean over the whole panel, the figure the README used before M5-10
+                              (it includes the scoring days, at about 4% weight)
+    """
+    key = ["item_id", "store_id"]
+    champ = predictions[predictions["model"] == champion].copy()
+    sids = champ["series_id"].astype(str)
+    champ["item_id"] = sids.str.rsplit("_", n=2).str[0]
+    champ["store_id"] = sids.str.rsplit("_", n=2).str[1] + "_" + sids.str.rsplit("_", n=2).str[2]
+    forecast = champ.groupby(key, observed=True)["y_pred"].mean().rename("demand").reset_index()
+    actual = scoring.groupby(key, observed=True)["sales"].mean().rename("demand").reset_index()
+    full = panel.groupby(key, observed=True)["sales"].mean().rename("demand").reset_index()
+    return {"forecast": forecast, "actual_backtest_days": actual, "full_history_mean": full}
 
 
 def compute_safety_stock_by_model(
@@ -316,9 +354,14 @@ def main() -> None:
     # 2. ABC/XYZ classification
     # ---------------------------------------------------------------
     log.info("running_abc_xyz")
-    # XYZ (CV, mean demand) uses the same days as the backtest; ABC revenue uses full history.
+    # Segmentation is a decision, so it only sees data before the scoring days: ABC revenue uses the
+    # history up to the cutoff and XYZ / N use its last EVAL_WINDOW_DAYS days (ending the day
+    # before the first test day).  The test days are for scoring only.
+    cutoff = decision_panel_cutoff(panel)
+    decision_panel = panel[panel["date"] <= cutoff]
     classifier = ABCXYZClassifier(cv_window_days=EVAL_WINDOW_DAYS)
-    abc_xyz_df = classifier.classify(panel, prices=prices)
+    abc_xyz_df = classifier.classify(decision_panel, prices=prices)
+    log.info("segmentation_window", decision_cutoff=str(cutoff.date()), xyz_days=EVAL_WINDOW_DAYS)
     _save_table(abc_xyz_df, output_dir / "abc_xyz_classification")
     log.info("abc_xyz_saved", rows=len(abc_xyz_df))
 
@@ -341,12 +384,13 @@ def main() -> None:
         output_path=ca_preds_path,
         force_rerun=force_rerun,
     )
-    window_panel = evaluation_window_panel(panel, ca_preds)
+    decision_panel, scoring_panel = split_panel_for_decisions(panel, ca_preds)
     log.info(
-        "single_evaluation_window",
-        days=EVAL_WINDOW_DAYS,
-        start=str(window_panel["date"].min().date()),
-        end=str(window_panel["date"].max().date()),
+        "decision_scoring_split",
+        decision_end=str(decision_panel["date"].max().date()),
+        scoring_start=str(scoring_panel["date"].min().date()),
+        scoring_end=str(scoring_panel["date"].max().date()),
+        scoring_days=EVAL_WINDOW_DAYS,
     )
 
     # 3a. Model comparison: "The dollar value of a better forecast"
@@ -372,7 +416,7 @@ def main() -> None:
 
     ss_df = calc.from_forecast_errors(
         champion_preds,
-        panel=window_panel,  # mean demand on the same days as the residuals
+        panel=None,  # planning demand = the champion's mean forecast; actuals are scoring-only
         model=args.champion_model,
     )
     _save_table(ss_df, output_dir / "safety_stock")
@@ -411,6 +455,28 @@ def main() -> None:
 
     if len(portfolio) > 0:
         plot_working_capital_waterfall(portfolio, output_dir / "working_capital_waterfall.png")
+
+    # 5a. Policies side by side: capital released is only meaningful next to annual cost (M5-10).
+    policy_cmp = wca.compare_policies(kpis, current_sl=args.current_sl)
+    _save_table(policy_cmp, output_dir / "policy_comparison")
+    segment_opt = wca.segment_cost_optimum(kpis, current_sl=args.current_sl)
+    _save_table(segment_opt, output_dir / "segment_cost_optimum")
+
+    # 5b. Current working capital under three mean-demand bases.  Only the forecast is a planning
+    # input; actual sales on the scored days are look-ahead and the full-history mean still
+    # contains those days (about 4% weight), so both are reference only.
+    bases = demand_bases(panel, scoring_panel, ca_preds, args.champion_model)
+    basis_table = wca.demand_basis_comparison(
+        kpis, bases, current_sl=args.current_sl, planning_basis="forecast"
+    )
+    _save_table(basis_table, output_dir / "working_capital_demand_bases")
+    for _, r in policy_cmp.iterrows():
+        log.info(
+            "policy_compared",
+            policy=r["policy"],
+            wc_change=r["wc_change_vs_current"],
+            total_cost_change=r["total_cost_change"],
+        )
 
     # ---------------------------------------------------------------
     # 6. Summary

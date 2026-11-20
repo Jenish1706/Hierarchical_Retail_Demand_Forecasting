@@ -166,4 +166,8 @@ stages:
       - reports/inventory/service_level_scenarios.csv
       - reports/inventory/policy_recommendations.csv
       - reports/inventory/portfolio_summary.csv
+      - reports/inventory/safety_stock_by_model.csv
+      - reports/inventory/policy_comparison.csv
+      - reports/inventory/segment_cost_optimum.csv
+      - reports/inventory/working_capital_demand_bases.csv
 

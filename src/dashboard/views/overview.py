@@ -31,8 +31,12 @@ def render() -> None:
     portfolio_df = dl.load_portfolio_summary()
     if not portfolio_df.empty and "capital_released_total" in portfolio_df.columns:
         freed = portfolio_df["capital_released_total"].sum()
-        inv_value = f"${freed:,.0f} Freed"
-        inv_delta = "CA_1 & CA_2 Rebalancing"
+        inv_value = f"${freed:,.0f} Released"
+        # Capital released is never shown alone: next to it, the change in total annual cost.
+        if "total_cost_delta_total" in portfolio_df.columns:
+            inv_delta = f"{portfolio_df['total_cost_delta_total'].sum():+,.0f}/yr total annual cost"
+        else:
+            inv_delta = "CA_1 & CA_2 Rebalancing"
     else:
         inv_value = "Pending"
         inv_delta = "Run inventory analysis"

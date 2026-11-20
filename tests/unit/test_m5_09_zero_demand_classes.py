@@ -181,7 +181,30 @@ def test_degenerate_error_estimates_are_missing_not_zero():
     assert out.loc["NORMAL", "safety_stock_units"] > 0
 
 
-def test_avg_daily_demand_comes_from_the_panel_window_it_is_given():
+def test_numerically_zero_forecast_on_zero_sales_is_not_a_missing_estimate():
+    """A dormant item whose forecast has decayed to ~1e-13 and which sold nothing has no demand;
+    floating-point residue must not make it look like 'zero error on positive demand'."""
+    n = 84
+    dates = pd.date_range("2016-02-01", periods=n)
+    preds = pd.DataFrame(
+        {
+            "series_id": "DORMANT_CA_1",
+            "date": dates,
+            "y_true": np.zeros(n),
+            "y_pred": np.full(n, 3e-13),
+            "model": "adida",
+            "dept_id": "FOODS_1",
+        }
+    )
+    out = SafetyStockCalculator(lead_time_days=7, service_levels=(0.95,)).from_forecast_errors(preds, model="adida")
+    assert out.iloc[0]["error_estimate_status"] == "ok"
+    assert out.iloc[0]["safety_stock_units"] == pytest.approx(0.0, abs=1e-6)
+    assert not np.isnan(out.iloc[0]["safety_stock_units"])
+
+
+def test_explicit_panel_still_sets_demand_for_benchmarks_and_scoring():
+    """An explicit actuals panel is still honoured (benchmarks, scoring); planning passes None
+    and uses the forecast instead (see test_m5_10_cost_model)."""
     preds, window_panel = _backtest_frame()
     calc = SafetyStockCalculator(lead_time_days=7, service_levels=(0.95,))
     out = calc.from_forecast_errors(preds, panel=window_panel, model="adida").set_index("item_id")
@@ -277,23 +300,27 @@ def test_committed_classification_has_no_zero_demand_x_items(abc_csv):
     assert (abc_csv["n_days"] == WINDOW).all()
 
 
-def test_committed_zero_demand_count_matches_the_backtest_window(abc_csv):
+def test_committed_no_demand_check_uses_days_before_the_scored_days(abc_csv):
+    """M5-10 replaced M5-09's "one window" with a stricter split: classes (including N) are
+    decided on the 84 days *before* the first test day; the test days are for scoring only."""
     path = INVENTORY_DIR / "ca_predictions.parquet"
     if not path.exists():
         pytest.skip("ca_predictions.parquet not present")
-    preds = pd.read_parquet(path, columns=["model", "series_id", "y_true"])
-    preds = preds[preds["model"] == "adida"]
-    totals = preds.groupby("series_id", observed=True)["y_true"].sum()
-    assert int((abc_csv["xyz_class"] == "N").sum()) == int((totals == 0).sum())
+    first_scored_day = pd.to_datetime(pd.read_parquet(path, columns=["date"])["date"]).min()
+    window_end = pd.to_datetime(abc_csv["xyz_window_end"].unique())
+    assert len(window_end) == 1
+    assert window_end[0] == first_scored_day - pd.Timedelta(days=1)
+    assert (abc_csv["xyz_class"] == "N").sum() > 0
 
 
-def test_one_window_for_cv_mean_demand_and_error_estimate(abc_csv):
+def test_committed_decision_window_and_scoring_window_are_separate(abc_csv):
+    """Classes come from the decision window; planning demand is the forecast on the scored days.
+    The two are different quantities, so they must not be forced equal (the old one-window rule)."""
     ss = pd.read_csv(INVENTORY_DIR / "safety_stock.csv")
     ss95 = ss[ss["service_level"] == 0.95]
     merged = ss95.merge(abc_csv[["item_id", "store_id", "mean_demand"]], on=["item_id", "store_id"])
     assert len(merged) == len(abc_csv)
-    # Same days, so the same mean (the CSV rounds avg_daily_demand to 4 dp).
-    assert np.allclose(merged["avg_daily_demand"], merged["mean_demand"], atol=1e-4)
+    assert not np.allclose(merged["avg_daily_demand"], merged["mean_demand"], atol=1e-4)
     assert "error_estimate_status" in ss.columns
     assert ss["error_estimate_status"].isin(["ok", "insufficient_obs", "zero_error_with_demand"]).all()
 

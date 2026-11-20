@@ -28,6 +28,12 @@ def render() -> None:
             prop_cap = float(port_df["recommended_wc_total"].sum())
             freed_cap = float(port_df["capital_released_total"].sum())
             pct_freed = (freed_cap / curr_cap * 100.0) if curr_cap > 0 else 0.0
+            # Capital released is never shown alone: next to it, the change in total annual cost.
+            has_cost = "total_cost_delta_total" in port_df.columns
+            cost_chg = float(port_df["total_cost_delta_total"].sum()) if has_cost else float("nan")
+            released_delta = (
+                f"{cost_chg:+,.0f}/yr total annual cost" if has_cost else f"{pct_freed:.1f}% of working capital"
+            )
 
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -35,9 +41,11 @@ def render() -> None:
             with col2:
                 st.metric("Optimized Working Capital", f"${prop_cap:,.2f}")
             with col3:
-                st.metric("Released Working Capital", f"${freed_cap:,.2f}", delta=f"{pct_freed:.1f}% Freed")
+                st.metric(
+                    "Released Working Capital", f"${freed_cap:,.2f}", delta=released_delta, delta_color="inverse"
+                )
             with col4:
-                st.metric("Cycle Service Level (CSL)", "98% (AX) / 90% (CZ)", "Segmented Policy")
+                st.metric("Cycle Service Level (CSL)", "98% (AX) / 90% (CZ)", "Capital-release rule")
         except Exception as e:
             st.warning(f"Unable to render portfolio KPIs: {e}")
 

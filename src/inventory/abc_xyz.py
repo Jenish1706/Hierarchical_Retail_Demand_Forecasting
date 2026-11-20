@@ -190,6 +190,10 @@ class ABCXYZClassifier:
         ).astype(object)
         stats["xyz_class"] = np.where(no_demand, NO_DEMAND_CLASS, xyz)
 
+        # Self-describing artifact: which days the XYZ columns were computed on.
+        stats["xyz_window_start"] = df_window["date"].min().date().isoformat()
+        stats["xyz_window_end"] = df_window["date"].max().date().isoformat()
+
         log.info(
             "xyz_computed",
             n_series=len(stats),
@@ -306,8 +310,11 @@ class ABCXYZClassifier:
             ``abc_class``, ``xyz_class`` (X, Y, Z, or N for no sales in the
             window), ``abc_xyz_class``, ``revenue_share``,
             ``cumulative_revenue_pct``, ``cv`` (NaN for class N),
-            ``mean_demand``, ``std_demand``.  ABC revenue uses the whole
-            panel; the XYZ columns use only the trailing CV window.
+            ``mean_demand``, ``std_demand``, ``xyz_window_start`` and
+            ``xyz_window_end`` (the days the XYZ columns describe).  ABC revenue
+            uses the whole panel passed in; the XYZ columns use only its
+            trailing CV window.  Pass a panel that ends *before* the days a
+            policy will be scored on, so the class is decided without them.
         """
         required = {"item_id", "store_id", "date", "sales"}
         missing = required - set(panel.columns)

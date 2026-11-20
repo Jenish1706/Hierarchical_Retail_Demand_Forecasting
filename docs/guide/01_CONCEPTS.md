@@ -254,6 +254,13 @@ Item has mean daily forecast $\hat{\mu} = 10$ units, forecast root-mean-squared 
   $$\text{Safety Stock} = 2.054 \times 3.0 \times 2.6458 \approx 16.31 \approx 17 \text{ units}$$
   Upgrading service level from 95% to 98% requires 3 additional units of safety stock (+21.4% working capital buffer).
 
+### Expected Shortage and Annual Stockout Cost
+Safety stock only matters through the shortage it prevents. With lead-time standard deviation $\sigma_L = \sigma_e\sqrt{L}$ and $z = SS/\sigma_L$, the expected units short per replenishment cycle is
+$$\mathbb{E}[\text{short}] = \sigma_L \cdot G(z), \qquad G(z) = \varphi(z) - z\,(1 - \Phi(z)), \qquad G(1.2816) = 0.0473$$
+Each order covers one lead time, so there are $365/L$ cycles a year and
+$$\text{Stockout cost per year} = \sigma_L\, G(z) \times \frac{365}{L} \times \text{unit margin}$$
+An older version charged every stockout cycle the whole lead-time demand and overstated shortages by 3 to 4 times. Because the shortage depends on error size and stock, not on the demand level, doubling mean demand doubles cycle stock but leaves shortage cost unchanged. Minimising holding plus shortage over $z$ gives the closed form $SL^* = 1 - hcL/(365m)$ (holding rate $h$, unit cost $c$, unit margin $m$), which is above 99% for every M5 category: a lost unit of margin costs far more than a week of holding it.
+
 ### Intermittent Demand Reality
 Because retail sales have a discrete point mass at zero and heavy positive tails, the Gaussian normal approximation underestimates tail risk on erratic items and overestimates buffer on zero-heavy items. It serves as an analytical baseline in Stage A, pending empirical trace-driven stockout simulation in Stage B.
 

@@ -148,7 +148,11 @@ def render_leaderboard_table() -> str:
         f"Post-hoc Nemenyi critical difference $CD = {cd:.4f}$ ($\\alpha = 0.05$). "
         f"Top rank clique $\\{{croston\\_sba, adida, routed\\_ensemble\\}}$ is statistically indistinguishable in average rank. "
         f"Paired series bootstrap (2,000 resamples) demonstrates that Routed SBT Ensemble is indistinguishable from ADIDA in pooled WAPE "
-        f"($\\Delta\\text{{WAPE}} = +0.50\\%$, 95% CI [-0.01%, +1.04%]).*"
+        f"($\\Delta\\text{{WAPE}} = +0.50\\%$, 95% CI [-0.01%, +1.04%]). "
+        f"Global model caveat: LightGBM was evaluated under three handicaps compared to M5 competition conditions: "
+        f"(1) no price features (`price_features_included: false` due to Excel row-limit truncation of the raw price workbook to ~15% coverage), "
+        f"(2) a 3,000-series sample rather than the full 30,490 catalog, and "
+        f"(3) a 900-day window rather than the full 1,913-day history.*"
     )
 
     return "\n".join(lines) + "\n" + footnote

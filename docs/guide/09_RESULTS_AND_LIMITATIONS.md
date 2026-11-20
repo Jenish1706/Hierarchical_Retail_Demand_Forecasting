@@ -36,7 +36,7 @@ All quantitative rankings and statistical intervals are backed by committed arti
 ### Q4: Where does each model family excel?
 - **Intermittent Statistical (`adida`, `croston_sba`)**: Dominates sparse, zero-inflated series where demand arrives in discrete lumps separated by multi-day zero intervals. Croston SBA wins head-to-head rank tests on sparse series by decoupling inter-arrival intervals from non-zero sales size.
 - **Rolling Baselines (`moving_average`, `ses`)**: Highly robust baselines that prevent overfitting to erratic sales spikes, particularly effective on low-volume retail categories.
-- **Global Gradient Boosting (`lightgbm`, `lightgbm_tweedie`)**: Performs reliably on high-velocity, continuous series where price momentum, calendar holidays (SNAP events), and cross-series feature distributions provide clear predictive signal.
+- **Global Gradient Boosting (`lightgbm`, `lightgbm_tweedie`)**: Evaluated on direct horizon-shifted demand features, calendar indicators, and SNAP events without price features (`price_features_included: false`). Performs reliably on higher-velocity continuous series, but lacks the specialized variance shrinkage of intermittent methods when prices are unobserved.
 
 ---
 
@@ -86,6 +86,7 @@ Documenting what *did not work* is critical for engineering integrity:
    - Empirical Result: In post-hoc pairwise testing with Holm-Bonferroni correction, `lightgbm_tweedie` vs `lightgbm` yielded an adjusted p-value of **$1.0000$**. The Tweedie objective yielded no statistically detectable rank improvement over standard least-squares regression.
 2. **The Model Complexity Paradox**:
    - A zero-parameter 28-day `moving_average` achieved **75.47% WAPE** and **0.7687 RMSSE**, beating both LightGBM models on RMSSE and trailing the champion ADIDA by only 0.31 percentage points. Complex global feature engineering provided negligible aggregate advantage over simple rolling averages on this sample.
+   - *Global Model Handicaps*: Global GBDTs ran under three significant handicaps compared to winning M5 competition setups: (1) **no price or promotion features** (`price_features_included: false` due to workbook truncation at Excel's 1,048,575-row limit), (2) a **3,000-series sample** rather than the full 30,490 catalog, and (3) a **900-day window** rather than the full 1,913-day history. In the original competition, price momentum and catalog-wide cross-learning were decisive factors.
 3. **High Head-to-Head Indistinguishability**:
    - In pairwise per-series Diebold-Mariano tests with Holm-Bonferroni correction across 45 model pairs, `adida` and `croston_sba` were statistically indistinguishable on **93.80% of individual series** (2,814 out of 3,000 series).
 
@@ -93,8 +94,9 @@ Documenting what *did not work* is critical for engineering integrity:
 
 ## 3. Threats to Validity
 
-1. **Truncated Pricing History**:
-   - In the M5 dataset, 1,507 series in California stores lack recorded prices during initial backtest origins because Walmart only records prices for active weeks. Inventory revenue calculations partition these into an explicit `UNPRICED` segment.
+1. **Truncated Pricing History & Global Model Handicaps**:
+   - In the M5 dataset, the source `sell_prices.csv` workbook was truncated at Excel's 1,048,575-row boundary, capturing only 15.3% of the M5 price table (covering CA_1 and CA_2, with 1,507 California series unpriced).
+   - Because prices were missing across 85% of store-item combinations, the backtest was executed with `price_features_included: false`. LightGBM was therefore evaluated with three deliberate handicaps: no price features, a 3,000-series sample, and a 900-day history window. The empirical finding that intermittent statistical methods beat global GBDTs carries this essential caveat.
 2. **California-Specific Sample Scope**:
    - Walk-forward backtests evaluated a representative 3,000-series sample across California stores (`CA_1`, `CA_2`, `CA_3`, `CA_4`). While stratified across categories, store-level dynamics in Texas and Wisconsin may exhibit differing seasonal patterns.
 3. **Gaussian Safety Stock Approximation on Intermittent Demand**:

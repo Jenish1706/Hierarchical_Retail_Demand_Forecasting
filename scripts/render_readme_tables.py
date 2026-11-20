@@ -148,7 +148,7 @@ def render_leaderboard_table() -> str:
         f"Post-hoc Nemenyi critical difference $CD = {cd:.4f}$ ($\\alpha = 0.05$). "
         f"Top rank clique $\\{{croston\\_sba, adida, routed\\_ensemble\\}}$ is statistically indistinguishable in average rank. "
         f"Paired series bootstrap (2,000 resamples) demonstrates that Routed SBT Ensemble is indistinguishable from ADIDA in pooled WAPE "
-        f"($\\Delta\\text{{WAPE}} = +0.50\\%$, 95% CI [-0.01%, +1.04%]). "
+        f"($\\Delta\\text{{WAPE}} = +0.50\\%$, 95% CI [-0.01%, +1.04%]; assignment chosen on the evaluation origins; a clean test needs an earlier selection origin). "
         f"Global model caveat: LightGBM was evaluated under three handicaps compared to M5 competition conditions: "
         f"(1) no price features (`price_features_included: false` due to Excel row-limit truncation of the raw price workbook to ~15% coverage), "
         f"(2) a 3,000-series sample rather than the full 30,490 catalog, and "
@@ -293,7 +293,7 @@ def render_statistics_section(sig: dict | None = None) -> str:
         f"leads pooled volume-weighted accuracy at {adida_wape:.2f}% WAPE "
         f"[{adida_wape_ci[0]:.2f}%, {adida_wape_ci[1]:.2f}%]. Relative to ADIDA, "
         f"{re_name} is statistically indistinguishable in WAPE ($\\Delta\\text{{WAPE}} = {re_dw.get('point', 0.50):+.2f}\\%$, "
-        f"95% CI [{re_dw_ci[0]:+.2f}%, {re_dw_ci[1]:+.2f}%]), while {ma_name} "
+        f"95% CI [{re_dw_ci[0]:+.2f}%, {re_dw_ci[1]:+.2f}%]; routing assignment chosen on the evaluation origins; a clean test needs an earlier selection origin), while {ma_name} "
         f"is indistinguishable in RMSSE ($\\Delta\\text{{RMSSE}} = {ma_dr.get('point', 0.0011):+.4f}$, "
         f"95% CI [{ma_dr_ci[0]:+.4f}, {ma_dr_ci[1]:+.4f}])."
     )

@@ -87,20 +87,20 @@ Feeding champion **ADIDA** forecast errors ($\sigma_e$ = RMSE) into 3x3 ABC/XYZ 
 <!-- BEGIN_INVENTORY_TABLE -->
 | ABC/XYZ Cell | SKU Count | Current Working Capital ($) | Recommended Working Capital ($) | Capital Released ($) | Target Service Level (CSL) | Policy Impact |
 |---|---|---|---|---|---|---|
-| **AX** | 51 | $3,298.47 | $3,614.45 | -$315.98 | **98%** | High-turnover revenue drivers; upgraded buffer |
-| **AY** | 714 | $23,037.90 | $23,037.90 | $0.00 | **95%** | Moderate volume; maintained standard buffer |
-| **AZ** | 1,086 | $25,116.21 | $25,116.21 | $0.00 | **95%** | High volatility; guarded safety buffer |
-| **BX** | 9 | $39.40 | $39.40 | $0.00 | **95%** | Stable secondary SKUs; maintained |
-| **BY** | 129 | $1,477.01 | $1,477.01 | $0.00 | **95%** | Moderate secondary volume; maintained |
-| **BZ** | 1,212 | $13,766.33 | $11,530.12 | +$2,236.21 | **90%** | Volatile secondary; working capital released |
-| **CX** | 45 | $61.56 | $58.21 | +$3.35 | **90%** | Stable low volume; bulk periodic order |
-| **CY** | 30 | $198.50 | $162.98 | +$35.52 | **90%** | Slow-moving; conservative buffer |
-| **CZ** | 1,315 | $7,402.19 | $6,056.09 | +$1,346.10 | **90%** | Erratic low volume; working capital released |
-| **Unpriced (?X/?Y/?Z)** | 1,507 | $0.00 | $0.00 | $0.00 | — | CA_2 items lacking price coverage |
-| **Total Portfolio** | **6,098** | **$74,397.57** | **$71,092.37** | **+$3,305.20** | — | **$3,305.20 Net Working Capital Released** |
+| **AX** | 43 | $3,764.55 | $4,092.52 | -$327.97 | **98%** | High-turnover revenue drivers; upgraded buffer |
+| **AY** | 739 | $27,625.29 | $27,625.29 | $0.00 | **95%** | Moderate volume; maintained standard buffer |
+| **AZ** | 1,057 | $23,948.63 | $23,948.63 | $0.00 | **95%** | High volatility; guarded safety buffer |
+| **BY** | 128 | $2,113.59 | $2,113.59 | $0.00 | **95%** | Moderate secondary volume; maintained |
+| **BZ** | 1,210 | $15,077.67 | $12,843.43 | +$2,234.24 | **90%** | Volatile secondary; working capital released |
+| **CY** | 33 | $357.28 | $314.50 | +$42.78 | **90%** | Slow-moving; conservative buffer |
+| **CZ** | 1,303 | $8,437.33 | $7,101.14 | +$1,336.19 | **90%** | Erratic low volume; working capital released |
+| **No recent demand (AN/BN/CN)** | 78 | $46.24 | $46.24 | $0.00 | 95% (held) | Zero sales in the 84-day window; not stable, no differentiated policy, review for delisting or stock-outs |
+| **Unpriced (?X/?Y/?Z/?N)** | 1,507 | $0.00 | $0.00 | $0.00 | — | CA_2 items lacking price coverage |
+| **Total Portfolio** | **6,098** | **$81,370.58** | **$78,085.34** | **+$3,285.24** | — | **$3,285.24 Net Working Capital Released** |
 <!-- END_INVENTORY_TABLE -->
 
-- **Operational Trade-Off**: Releasing **+$3,305.20 in net working capital** requires an explicit trade-off: accepting an increase in theoretical stockout probability (CSL 95% $\to$ 90%) on slow-moving tail items (BZ, CX, CY, CZ) to fund higher safety stock (CSL 95% $\to$ 98%) on revenue-driving AX items. Note that under the project's current total relevant cost model, stockout penalty trade-offs are evaluated in detail (see Limitations).
+- **One window, and items with no demand**: the XYZ coefficient of variation, mean daily demand and $\sigma_e$ are all measured on the same 84-day backtest window (2016-02-01 to 2016-04-24); only ABC revenue uses the full history. A SKU with no sales in that window has an undefined CV, so it is not "stable": it gets its own class **N** and its own row, held at the current service level, because zero sales can be a stock-out rather than absent demand.
+- **Operational Trade-Off**: Releasing **+$3,285.24 in net working capital** requires an explicit trade-off: accepting an increase in theoretical stockout probability (CSL 95% $\to$ 90%) on slow-moving tail items (BZ, CY, CZ) to fund higher safety stock (CSL 95% $\to$ 98%) on revenue-driving AX items. Note that under the project's current total relevant cost model, stockout penalty trade-offs are evaluated in detail (see Limitations).
 
 ---
 

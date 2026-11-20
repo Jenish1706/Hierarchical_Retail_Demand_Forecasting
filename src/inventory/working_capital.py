@@ -70,6 +70,9 @@ DEFAULT_POLICY: dict[str, float] = {
     "?Y": 0.90,
     "?Z": 0.90,
 }
+# Classes ending in "N" (AN, BN, CN, ?N: no sales in the XYZ window) are deliberately
+# absent: ``recommend_policy`` falls back to the current service level for them, so they
+# are held, not differentiated, and reported as their own row (M5-09).
 
 
 class WorkingCapitalAnalyzer:
@@ -197,6 +200,9 @@ class WorkingCapitalAnalyzer:
         for _, row in current.iterrows():
             abc_xyz = str(row.get("abc_xyz_class", "??"))
             rec_sl = self.policy.get(abc_xyz, current_sl)
+            if pd.isna(row["safety_stock_units"]):
+                # sigma_e missing: the stock was never sized, so no recommendation is made.
+                rec_sl = np.nan
 
             # Find the recommended-SL row for this SKU
             rec_row = kpis_df[
@@ -237,8 +243,10 @@ class WorkingCapitalAnalyzer:
                 "abc_xyz_class": abc_xyz,
                 "current_service_level": current_sl,
                 "recommended_service_level": rec_sl,
-                "policy_change": "downgrade" if rec_sl < current_sl else (
-                    "upgrade" if rec_sl > current_sl else "maintain"
+                "policy_change": "excluded" if pd.isna(rec_sl) else (
+                    "downgrade" if rec_sl < current_sl else (
+                        "upgrade" if rec_sl > current_sl else "maintain"
+                    )
                 ),
                 "current_safety_stock": round(float(row["safety_stock_units"]), 2),
                 "recommended_safety_stock": round(float(rec_ss), 2),
@@ -276,6 +284,7 @@ class WorkingCapitalAnalyzer:
                 upgrades=("policy_change", lambda x: (x == "upgrade").sum()),
                 downgrades=("policy_change", lambda x: (x == "downgrade").sum()),
                 maintained=("policy_change", lambda x: (x == "maintain").sum()),
+                excluded=("policy_change", lambda x: (x == "excluded").sum()),
             )
             .reset_index()
         )

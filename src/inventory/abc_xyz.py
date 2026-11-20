@@ -28,6 +28,13 @@ trailing window.
     X = CV < 0.5   -- stable, forecastable demand
     Y = 0.5 <= CV < 1.0  -- variable demand
     Z = CV >= 1.0  -- erratic, hard to forecast
+    N = no sales at all in the window -- "no recent demand"
+
+An item with no sales has std = 0 and mean = 0, so CV = std / mean is undefined,
+not 0.  Giving it CV = 0 would label it "perfectly stable" (X), which is the
+opposite of what is known about it (M5-09).  Such items get their own class N
+and an undefined CV.  Zero sales can also be a stock-out (censored demand)
+rather than absent demand, so N means "review", not "discontinue".
 
 SBT cross-reference
 --------------------
@@ -70,6 +77,9 @@ log = get_logger(__name__)
 DEFAULT_ABC_THRESHOLDS: tuple[float, float] = (0.80, 0.95)
 DEFAULT_XYZ_THRESHOLDS: tuple[float, float] = (0.50, 1.00)
 DEFAULT_CV_WINDOW_DAYS: int = 90
+
+# XYZ label for items with no sales in the CV window (CV undefined, not "stable").
+NO_DEMAND_CLASS: str = "N"
 
 _EPS = 1e-12
 
@@ -115,7 +125,10 @@ class ABCXYZClassifier:
         CV cut-offs for X and Y.
         Default ``(0.50, 1.00)`` means X: CV < 0.5, Y: 0.5-1.0, Z: >= 1.0.
     cv_window_days : int
-        Trailing window for CV calculation.  Default 90 days.
+        Trailing window for CV calculation: exactly this many days ending at
+        the last date in the panel.  Default 90 days.  The inventory pipeline
+        sets it to the backtest evaluation window so that CV, mean demand and
+        the forecast-error estimate all describe the same days.
     """
 
     def __init__(
@@ -139,14 +152,14 @@ class ABCXYZClassifier:
     def _compute_xyz(self, panel: pd.DataFrame) -> pd.DataFrame:
         """Compute coefficient of variation per (item_id, store_id).
 
-        Uses a trailing window of ``cv_window_days`` from the last date in
-        the panel.  If the window is shorter than 14 days, the full history
-        is used with a warning.
+        Uses the last ``cv_window_days`` days of the panel (exactly that many:
+        the window is ``(max_date - cv_window_days, max_date]``).  Items with
+        no sales in the window get class ``N`` and an undefined (NaN) CV.
         """
         df = panel.copy()
         max_date = df["date"].max()
         window_start = max_date - pd.Timedelta(days=self.cv_window_days)
-        df_window = df[df["date"] >= window_start]
+        df_window = df[df["date"] > window_start]
 
         if len(df_window) == 0:
             log.warning(
@@ -162,14 +175,20 @@ class ABCXYZClassifier:
             .reset_index()
         )
         stats["std_demand"] = stats["std_demand"].fillna(0.0)
-        stats["cv"] = stats["std_demand"] / (stats["mean_demand"] + _EPS)
 
-        # XYZ assignment
-        stats["xyz_class"] = pd.cut(
+        # No sales in the window: CV = 0 / 0 is undefined, not "perfectly stable".
+        no_demand = stats["mean_demand"] <= 0
+        stats["cv"] = np.where(
+            no_demand, np.nan, stats["std_demand"] / (stats["mean_demand"] + _EPS)
+        )
+
+        # XYZ assignment (plain strings: N is not one of the three CV bins)
+        xyz = pd.cut(
             stats["cv"],
             bins=[-np.inf, self.xyz_thresholds[0], self.xyz_thresholds[1], np.inf],
             labels=["X", "Y", "Z"],
-        )
+        ).astype(object)
+        stats["xyz_class"] = np.where(no_demand, NO_DEMAND_CLASS, xyz)
 
         log.info(
             "xyz_computed",
@@ -177,6 +196,7 @@ class ABCXYZClassifier:
             x_count=int((stats["xyz_class"] == "X").sum()),
             y_count=int((stats["xyz_class"] == "Y").sum()),
             z_count=int((stats["xyz_class"] == "Z").sum()),
+            n_count=int((stats["xyz_class"] == NO_DEMAND_CLASS).sum()),
             cv_median=round(float(stats["cv"].median()), 3),
         )
         return stats
@@ -283,9 +303,11 @@ class ABCXYZClassifier:
         -------
         pd.DataFrame
             One row per (item_id, store_id) with columns:
-            ``abc_class``, ``xyz_class``, ``abc_xyz_class``,
-            ``revenue_share``, ``cumulative_revenue_pct``, ``cv``,
-            ``mean_demand``, ``std_demand``.
+            ``abc_class``, ``xyz_class`` (X, Y, Z, or N for no sales in the
+            window), ``abc_xyz_class``, ``revenue_share``,
+            ``cumulative_revenue_pct``, ``cv`` (NaN for class N),
+            ``mean_demand``, ``std_demand``.  ABC revenue uses the whole
+            panel; the XYZ columns use only the trailing CV window.
         """
         required = {"item_id", "store_id", "date", "sales"}
         missing = required - set(panel.columns)

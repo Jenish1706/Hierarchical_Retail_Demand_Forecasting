@@ -275,6 +275,9 @@ Classifies SKUs by demand predictability using the coefficient of variation ($CV
 - **Class X** ($CV \le 0.50$): Low volatility, stable demand.
 - **Class Y** ($0.50 < CV \le 1.0$): Moderate variability.
 - **Class Z** ($CV > 1.0$): Extreme volatility, highly erratic.
+- **Class N** (no sales in the window): $CV = 0/0$ is undefined, so the item is **not** "stable". A naive `std / (mean + eps)` returns $CV = 0$ for it and labels it X, which is wrong: nothing is known about its predictability. N items get their own row, are held at the current service level rather than differentiated, and are flagged for review (zero sales can be a stock-out rather than absent demand).
+
+The CV, the mean daily demand and the forecast-error estimate $\sigma_e$ are all measured on the same trailing window (the 84-day backtest window); only the ABC revenue uses the full history.
 
 ### The 3x3 Policy Matrix
 Combining ABC and XYZ yields 9 distinct replenishment strategies:

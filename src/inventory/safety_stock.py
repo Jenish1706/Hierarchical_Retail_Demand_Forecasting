@@ -71,6 +71,15 @@ log = get_logger(__name__)
 DEFAULT_SERVICE_LEVELS: tuple[float, ...] = (0.90, 0.95, 0.98)
 DEFAULT_LEAD_TIME_DAYS: int = 7
 
+# Fewest out-of-sample residuals from which sigma_e is estimated: one full 28-day
+# forecast horizon.  With fewer, the estimate is "missing", not "small" (M5-09).
+MIN_ERROR_OBS: int = 28
+
+# error_estimate_status values.
+STATUS_OK = "ok"
+STATUS_INSUFFICIENT_OBS = "insufficient_obs"
+STATUS_ZERO_ERROR_WITH_DEMAND = "zero_error_with_demand"
+
 _EPS = 1e-12
 
 
@@ -179,11 +188,20 @@ class SafetyStockCalculator:
         actuals: pd.DataFrame | None = None,
         panel: pd.DataFrame | None = None,
         model: str | None = None,
+        min_obs: int = MIN_ERROR_OBS,
     ) -> pd.DataFrame:
         """Compute safety stock from the RMSE of forecast errors.
 
         Formula: SS = z(alpha) * sigma_e * sqrt(L), with sigma_e = RMSE (error
         about zero, so a consistently biased forecast needs more stock).
+
+        A degenerate error estimate is **missing, not zero risk**.  When a series
+        has fewer than ``min_obs`` residuals (``insufficient_obs``), or exactly
+        zero error while its demand is positive (``zero_error_with_demand``: a
+        flat window proves nothing about future risk), ``forecast_error_rmse``,
+        ``safety_stock_units`` and ``reorder_point`` are NaN and
+        ``error_estimate_status`` says why.  A series with no demand and a zero
+        forecast is a legitimate zero and stays ``ok``.
 
         Parameters
         ----------
@@ -197,10 +215,14 @@ class SafetyStockCalculator:
             Must contain ``item_id``, ``store_id``, ``date``, ``sales`` if ``forecasts``
             does not already contain actuals (``y_true``).
         panel : pd.DataFrame | None
-            Full panel for mean daily demand computation. If None, daily demand is estimated
-            from the provided forecasts/actuals.
+            Panel for mean daily demand computation.  Pass it restricted to the
+            **same days as the residuals** (the backtest window) so that mean
+            demand and sigma_e describe one window.  If None, daily demand is
+            estimated from the provided forecasts/actuals.
         model : str | None
             Specific model to filter for, or name to record in the output table.
+        min_obs : int
+            Minimum number of residuals needed to trust sigma_e.
 
         Returns
         -------
@@ -210,7 +232,7 @@ class SafetyStockCalculator:
             ``z_score``, ``lead_time_days``, ``avg_daily_demand``,
             ``forecast_error_rmse`` (the sizing sigma_e), ``forecast_error_std``
             and ``forecast_error_bias`` (reference), ``safety_stock_units``,
-            ``reorder_point``.
+            ``reorder_point``, ``error_estimate_status``.
         """
         # Resolve forecast dataframe and compute residuals
         if actuals is None and "y_true" in forecasts.columns and "y_pred" in forecasts.columns:
@@ -240,8 +262,8 @@ class SafetyStockCalculator:
             resolved_model = model or (merged["model"].iloc[0] if "model" in merged.columns and len(merged) > 0 else "forecast_error")
 
         # Forecast error per series: RMSE sizes the stock; std and bias are kept for reference.
+        # (std is NaN for a single residual: that is "undefined", never filled with 0.)
         error_stats = summarise_forecast_errors(merged, by=["item_id", "store_id"])
-        error_stats["forecast_error_std"] = error_stats["forecast_error_std"].fillna(0.0)
 
         # Mean daily demand
         if panel is not None:
@@ -271,16 +293,30 @@ class SafetyStockCalculator:
 
         base = error_stats.merge(demand_stats, on=["item_id", "store_id"], how="inner")
 
+        # A degenerate error estimate is missing, not zero risk.
+        base["error_estimate_status"] = STATUS_OK
+        base.loc[base["n_obs"] < min_obs, "error_estimate_status"] = STATUS_INSUFFICIENT_OBS
+        flat_but_selling = (
+            (base["error_estimate_status"] == STATUS_OK)
+            & (base["forecast_error_rmse"] <= 1e-9)
+            & (base["avg_daily_demand"] > 0)
+        )
+        base.loc[flat_but_selling, "error_estimate_status"] = STATUS_ZERO_ERROR_WITH_DEMAND
+
         # Expand across service levels
         rows = []
         for _, row in base.iterrows():
             dept = row.get("dept_id")
             lt = self._get_lead_time(dept)
+            usable = row["error_estimate_status"] == STATUS_OK
             for sl in self.service_levels:
                 z = _z_score(sl)
-                sigma_e = row["forecast_error_rmse"]
-                ss = z * sigma_e * np.sqrt(lt)
-                rop = row["avg_daily_demand"] * lt + ss
+                if usable:
+                    sigma_e = float(row["forecast_error_rmse"])
+                    ss = round(float(max(z * sigma_e * np.sqrt(lt), 0.0)), 2)
+                    rop = round(float(max(row["avg_daily_demand"] * lt + z * sigma_e * np.sqrt(lt), 0.0)), 2)
+                else:
+                    sigma_e = ss = rop = np.nan
                 rows.append({
                     "item_id": row["item_id"],
                     "store_id": row["store_id"],
@@ -290,12 +326,22 @@ class SafetyStockCalculator:
                     "z_score": round(z, 4),
                     "lead_time_days": lt,
                     "avg_daily_demand": round(float(row["avg_daily_demand"]), 4),
-                    "forecast_error_rmse": round(float(sigma_e), 4),
+                    "forecast_error_rmse": round(sigma_e, 4),
                     "forecast_error_std": round(float(row["forecast_error_std"]), 4),
                     "forecast_error_bias": round(float(row["forecast_error_bias"]), 4),
-                    "safety_stock_units": round(float(max(ss, 0.0)), 2),
-                    "reorder_point": round(float(max(rop, 0.0)), 2),
+                    "safety_stock_units": ss,
+                    "reorder_point": rop,
+                    "error_estimate_status": row["error_estimate_status"],
                 })
+
+        n_missing = int((base["error_estimate_status"] != STATUS_OK).sum())
+        if n_missing:
+            log.warning(
+                "sigma_e_missing",
+                n_series=n_missing,
+                by_status=base["error_estimate_status"].value_counts().to_dict(),
+                note="safety stock left NaN (not 0) for these series",
+            )
 
         result = pd.DataFrame(rows)
         self._log_summary(result, method="forecast_error")
@@ -407,6 +453,9 @@ class SafetyStockCalculator:
         for sl in self.service_levels:
             sl_df = df[df["service_level"] == sl]
             if len(sl_df) == 0:
+                continue
+            if sl_df["safety_stock_units"].isna().all():
+                log.warning("safety_stock_all_missing", method=method, service_level=sl, n_series=len(sl_df))
                 continue
             log.info(
                 "safety_stock_computed",

@@ -19,6 +19,7 @@ BACKTEST_CSV = PROJECT_ROOT / "reports" / "backtest_main" / "accuracy_overall.cs
 SIGNIFICANCE_JSON = PROJECT_ROOT / "reports" / "backtest_main" / "significance" / "significance_report.json"
 INVENTORY_CSV = PROJECT_ROOT / "reports" / "inventory" / "portfolio_summary.csv"
 SAFETY_STOCK_MODEL_CSV = PROJECT_ROOT / "reports" / "inventory" / "safety_stock_by_model.csv"
+ABC_XYZ_CSV = PROJECT_ROOT / "reports" / "inventory" / "abc_xyz_classification.csv"
 README_PATH = PROJECT_ROOT / "README.md"
 
 LEADERBOARD_START = "<!-- BEGIN_LEADERBOARD_TABLE -->"
@@ -210,6 +211,25 @@ def render_inventory_table() -> str:
             f"| **{cell}** | {n_skus:,} | {cur_str} | {rec_str} | {rel_str} | {meta['csl']} | {meta['impact']} |"
         )
 
+    # Priced SKUs with no sales in the XYZ window (AN/BN/CN): not "stable", held, not differentiated.
+    no_demand_cells = [c for c in ("AN", "BN", "CN") if c in port_dict]
+    if no_demand_cells:
+        window_days = int(pd.read_csv(ABC_XYZ_CSV, usecols=["n_days"])["n_days"].max())
+        nd_skus = sum(int(port_dict[c]["n_skus"]) for c in no_demand_cells)
+        nd_cur = sum(float(port_dict[c]["current_wc_total"]) for c in no_demand_cells)
+        nd_rec = sum(float(port_dict[c]["recommended_wc_total"]) for c in no_demand_cells)
+        nd_rel = sum(float(port_dict[c]["capital_released_total"]) for c in no_demand_cells)
+        total_skus += nd_skus
+        total_current_wc += nd_cur
+        total_rec_wc += nd_rec
+        total_released += nd_rel
+        nd_rel_str = f"+${nd_rel:,.2f}" if nd_rel > 0 else (f"-${abs(nd_rel):,.2f}" if nd_rel < 0 else "$0.00")
+        lines.append(
+            f"| **No recent demand (AN/BN/CN)** | {nd_skus:,} | ${nd_cur:,.2f} | ${nd_rec:,.2f} | {nd_rel_str} | "
+            f"95% (held) | Zero sales in the {window_days}-day window; not stable, no differentiated policy, "
+            f"review for delisting or stock-outs |"
+        )
+
     # Accumulate unpriced
     for cell, row in port_dict.items():
         if cell.startswith("?"):
@@ -217,7 +237,7 @@ def render_inventory_table() -> str:
 
     total_skus += unpriced_skus
     lines.append(
-        f"| **Unpriced (?X/?Y/?Z)** | {unpriced_skus:,} | $0.00 | $0.00 | $0.00 | — | CA_2 items lacking price coverage |"
+        f"| **Unpriced (?X/?Y/?Z/?N)** | {unpriced_skus:,} | $0.00 | $0.00 | $0.00 | — | CA_2 items lacking price coverage |"
     )
 
     tot_rel_str = f"+${total_released:,.2f}" if total_released >= 0 else f"-${abs(total_released):,.2f}"

@@ -50,7 +50,7 @@ def render() -> None:
         st.markdown(
             """
             * **ABC (Revenue Pareto)**: **Class A** (Top 80% revenue), **Class B** (Next 15%), **Class C** (Bottom 5%).
-            * **XYZ (Demand Variability)**: **Class X** (CV <= 0.50, predictable), **Class Y** (0.50 < CV <= 1.0, moderate), **Class Z** (CV > 1.0, erratic).
+            * **XYZ (Demand Variability)**: **Class X** (CV <= 0.50, predictable), **Class Y** (0.50 < CV <= 1.0, moderate), **Class Z** (CV > 1.0, erratic), **Class N** (no sales in the window: CV undefined, held at the current service level and flagged for review).
             """
         )
 

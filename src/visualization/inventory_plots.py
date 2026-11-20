@@ -147,6 +147,8 @@ def plot_abc_xyz_heatmap(
         if label not in pivot.columns:
             pivot[label] = 0
     pivot = pivot.loc[["A", "B", "C"], ["X", "Y", "Z"]]
+    # Class N (no sales in the XYZ window) has no CV and so no column in the 3x3 grid.
+    n_no_demand = int((df["xyz_class"] == "N").sum())
 
     fig, ax = plt.subplots(figsize=(8, 6))
     sns.heatmap(
@@ -155,7 +157,10 @@ def plot_abc_xyz_heatmap(
         cbar_kws={"label": "SKU Count" if value_col == "count" else value_col},
         ax=ax,
     )
-    ax.set_xlabel("Demand Predictability (XYZ)")
+    xlabel = "Demand Predictability (XYZ)"
+    if n_no_demand:
+        xlabel += f"\n{n_no_demand:,} priced SKUs with no sales in the window (class N) are not shown"
+    ax.set_xlabel(xlabel)
     ax.set_ylabel("Revenue Importance (ABC)")
     ax.set_title(title, fontsize=12, fontweight="bold")
 

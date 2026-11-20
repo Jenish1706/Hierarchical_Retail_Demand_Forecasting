@@ -41,6 +41,13 @@ from src.visualization.inventory_plots import (  # noqa: E402
 
 log = get_logger("inventory_pipeline")
 
+# The backtest evaluation window: N_ORIGINS consecutive HORIZON-day test blocks ending at the
+# panel's last date.  Mean demand, the XYZ coefficient of variation and sigma_e are all measured
+# on these same days (M5-09); only ABC revenue uses the full history.
+N_ORIGINS = 3
+HORIZON = 28
+EVAL_WINDOW_DAYS = N_ORIGINS * HORIZON
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Inventory optimisation pipeline")
@@ -96,8 +103,8 @@ def ensure_ca_backtest_predictions(
     loader: M5Loader,
     output_path: Path,
     force_rerun: bool = False,
-    n_origins: int = 3,
-    horizon: int = 28,
+    n_origins: int = N_ORIGINS,
+    horizon: int = HORIZON,
 ) -> pd.DataFrame:
     """Load or generate rolling-origin backtest predictions on California stores.
 
@@ -170,6 +177,27 @@ def ensure_ca_backtest_predictions(
     df_preds.to_parquet(output_path, compression="zstd")
     log.info("saved_ca_predictions", path=str(output_path), rows=len(df_preds))
     return df_preds
+
+
+def evaluation_window_panel(panel: pd.DataFrame, predictions: pd.DataFrame) -> pd.DataFrame:
+    """Return the panel rows on the backtest evaluation days, after checking they are the
+    last ``EVAL_WINDOW_DAYS`` days of the panel.
+
+    The XYZ classifier looks at the last ``EVAL_WINDOW_DAYS`` days; sigma_e comes from the
+    prediction days.  If cached predictions cover other days the two would silently describe
+    different windows, so this raises instead.
+    """
+    pred_dates = pd.DatetimeIndex(sorted(pd.to_datetime(predictions["date"]).unique()))
+    panel_dates = pd.DatetimeIndex(sorted(pd.to_datetime(panel["date"]).unique()))
+    expected = panel_dates[-EVAL_WINDOW_DAYS:]
+    if not pred_dates.equals(expected):
+        raise ValueError(
+            "Cached CA predictions cover "
+            f"{pred_dates.min().date()}..{pred_dates.max().date()} ({len(pred_dates)} days) but the "
+            f"evaluation window is the last {EVAL_WINDOW_DAYS} panel days "
+            f"({expected.min().date()}..{expected.max().date()}). Re-run with --rerun-backtest."
+        )
+    return panel[panel["date"].isin(expected)]
 
 
 def compute_safety_stock_by_model(
@@ -288,7 +316,8 @@ def main() -> None:
     # 2. ABC/XYZ classification
     # ---------------------------------------------------------------
     log.info("running_abc_xyz")
-    classifier = ABCXYZClassifier()
+    # XYZ (CV, mean demand) uses the same days as the backtest; ABC revenue uses full history.
+    classifier = ABCXYZClassifier(cv_window_days=EVAL_WINDOW_DAYS)
     abc_xyz_df = classifier.classify(panel, prices=prices)
     _save_table(abc_xyz_df, output_dir / "abc_xyz_classification")
     log.info("abc_xyz_saved", rows=len(abc_xyz_df))
@@ -311,6 +340,13 @@ def main() -> None:
         loader=loader,
         output_path=ca_preds_path,
         force_rerun=force_rerun,
+    )
+    window_panel = evaluation_window_panel(panel, ca_preds)
+    log.info(
+        "single_evaluation_window",
+        days=EVAL_WINDOW_DAYS,
+        start=str(window_panel["date"].min().date()),
+        end=str(window_panel["date"].max().date()),
     )
 
     # 3a. Model comparison: "The dollar value of a better forecast"
@@ -336,7 +372,7 @@ def main() -> None:
 
     ss_df = calc.from_forecast_errors(
         champion_preds,
-        panel=panel,
+        panel=window_panel,  # mean demand on the same days as the residuals
         model=args.champion_model,
     )
     _save_table(ss_df, output_dir / "safety_stock")

@@ -84,7 +84,10 @@ def test_constant_under_forecast_raises_required_stock_in_calculator():
     perfect = calc.from_forecast_errors(_preds("perfect", np.zeros(28)), model="perfect")
 
     assert (low["safety_stock_units"] > 0).all()
-    assert (perfect["safety_stock_units"] == 0).all()
+    # M5-09: a forecast with exactly zero error on positive demand is "missing", not "needs
+    # 0 stock" (a flat window says nothing about future risk), so the control is NaN here.
+    assert (perfect["error_estimate_status"] == "zero_error_with_demand").all()
+    assert perfect["safety_stock_units"].isna().all()
     at95 = low[low["service_level"] == 0.95].iloc[0]
     assert at95["safety_stock_units"] == pytest.approx(Z95 * 2.0 * SQRT_L, abs=0.01)
     assert at95["forecast_error_rmse"] == pytest.approx(2.0)

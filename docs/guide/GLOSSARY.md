@@ -160,3 +160,4 @@ This glossary defines all domain-specific acronyms, mathematical terms, and soft
   - **X**: Stable demand ($CV \le 0.5$).
   - **Y**: Moderate variability ($0.5 < CV \le 1.0$).
   - **Z**: High variability / erratic ($CV > 1.0$).
+  - **N**: No sales in the window; $CV$ is undefined, so the item is not "stable". Held at the current service level and flagged for review.

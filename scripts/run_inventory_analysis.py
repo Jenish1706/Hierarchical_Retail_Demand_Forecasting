@@ -25,7 +25,11 @@ from src.config.logging import get_logger  # noqa: E402
 from src.config.settings import M5, settings  # noqa: E402
 from src.data.loader import M5Loader  # noqa: E402
 from src.inventory.abc_xyz import ABCXYZClassifier  # noqa: E402
-from src.inventory.safety_stock import SafetyStockCalculator, _z_score  # noqa: E402
+from src.inventory.safety_stock import (  # noqa: E402
+    SafetyStockCalculator,
+    _z_score,
+    summarise_forecast_errors,
+)
 from src.inventory.service_level import DEFAULT_COST_MARGINS, ServiceLevelAnalyzer  # noqa: E402
 from src.inventory.working_capital import WorkingCapitalAnalyzer  # noqa: E402
 from src.visualization.inventory_plots import (  # noqa: E402
@@ -176,16 +180,29 @@ def compute_safety_stock_by_model(
 ) -> pd.DataFrame:
     """Evaluate required safety stock units and working capital across models at fixed CSL.
 
-    The dollar value of a better forecast: connects forecast error standard deviation (sigma_e)
-    directly to required safety stock capital at 95% CSL.
+    The dollar value of a better forecast: connects forecast error (sigma_e) directly to
+    required safety stock capital at 95% CSL.
+
+    sigma_e is the per-SKU RMSE of the residuals (error about zero), **not** their standard
+    deviation: a standard deviation removes each model's mean error and so costs a
+    consistently-too-low forecast as if it were accurate (M5-12b). The std and the mean error
+    (``mean_bias``, actual - forecast; positive = under-forecast) are reported alongside for
+    transparency, but only the RMSE sizes the stock.
     """
     df = predictions.copy()
     if "residual" not in df.columns:
-        df["residual"] = df["y_true"] - df["y_pred"]
+        # float64: the cached parquet stores float32, which would round every residual.
+        df["residual"] = df["y_true"].astype(float) - df["y_pred"].astype(float)
     if "item_id" not in df.columns or "store_id" not in df.columns:
         sids = df["series_id"].astype(str)
         df["item_id"] = sids.str.rsplit("_", n=2).str[0]
         df["store_id"] = sids.str.rsplit("_", n=2).str[1] + "_" + sids.str.rsplit("_", n=2).str[2]
+
+    # Pooled WAPE per model on these CA series (sum|error| / sum(actual)). Reported next to
+    # the RMSE so the champion choice can be checked against this panel, not only the main one.
+    abs_err = df["residual"].abs().groupby(df["model"], observed=True).sum()
+    actual = df["y_true"].astype(float).groupby(df["model"], observed=True).sum()
+    wape_pct = (100.0 * abs_err / actual).rename("wape_pct").reset_index()
 
     # Load and aggregate sell prices for CA stores
     prices_ca = prices[prices["store_id"].isin(["CA_1", "CA_2"])]
@@ -199,29 +216,28 @@ def compute_safety_stock_by_model(
     avg_prices["margin"] = avg_prices["cat_id"].map(DEFAULT_COST_MARGINS).fillna(0.50)
     avg_prices["unit_cost"] = avg_prices["avg_sell_price"] * (1.0 - avg_prices["margin"])
 
-    # Forecast error std per model and SKU over the full 84 test days
-    grouped = (
-        df.groupby(["model", "item_id", "store_id"], observed=True)["residual"]
-        .agg(sigma_e="std", n_obs="count")
-        .reset_index()
-    )
+    # Forecast error per model and SKU over the full 84 test days (RMSE sizes the stock)
+    grouped = summarise_forecast_errors(df, by=["model", "item_id", "store_id"])
     grouped = grouped.merge(avg_prices, on=["item_id", "store_id"], how="left")
 
     z = _z_score(csl)
     sqrt_lt = np.sqrt(lead_time)
-    grouped["ss_units"] = z * grouped["sigma_e"].fillna(0.0) * sqrt_lt
+    grouped["ss_units"] = z * grouped["forecast_error_rmse"] * sqrt_lt
     grouped["ss_capital"] = grouped["ss_units"] * grouped["unit_cost"].fillna(0.0)
 
     summary = (
         grouped.groupby("model", observed=True)
         .agg(
-            mean_sigma_e=("sigma_e", "mean"),
+            mean_rmse=("forecast_error_rmse", "mean"),
+            mean_std=("forecast_error_std", "mean"),
+            mean_bias=("forecast_error_bias", "mean"),
             total_ss_units=("ss_units", "sum"),
             total_ss_capital=("ss_capital", "sum"),
             priced_skus=("unit_cost", lambda s: int(s.notna().sum())),
         )
         .reset_index()
     )
+    summary = summary.merge(wape_pct, on="model", how="left")
 
     naive_row = summary.loc[summary["model"] == "naive"]
     naive_cap = float(naive_row["total_ss_capital"].values[0]) if len(naive_row) > 0 else 0.0
@@ -234,7 +250,9 @@ def compute_safety_stock_by_model(
     )
 
     summary = summary.sort_values("total_ss_capital").reset_index(drop=True)
-    summary["mean_sigma_e"] = summary["mean_sigma_e"].round(4)
+    for col in ("mean_rmse", "mean_std", "mean_bias"):
+        summary[col] = summary[col].round(4)
+    summary["wape_pct"] = summary["wape_pct"].round(2)
     summary["total_ss_units"] = summary["total_ss_units"].round(2)
     summary["total_ss_capital"] = summary["total_ss_capital"].round(2)
     summary["capital_reduction_vs_naive"] = summary["capital_reduction_vs_naive"].round(2)

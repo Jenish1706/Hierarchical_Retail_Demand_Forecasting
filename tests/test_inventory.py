@@ -166,8 +166,8 @@ class TestSafetyStockCalculator:
             sorted_group = group.sort_values("service_level")
             ss_vals = sorted_group["safety_stock_units"].tolist()
             assert ss_vals[0] <= ss_vals[1] <= ss_vals[2]
-            # When forecast error std > 0, it should be strictly increasing
-            if sorted_group["forecast_error_std"].iloc[0] > 0.01:
+            # When forecast error RMSE > 0, it should be strictly increasing
+            if sorted_group["forecast_error_rmse"].iloc[0] > 0.01:
                 assert ss_vals[0] < ss_vals[1] < ss_vals[2]
 
     def test_reorder_point_ge_safety_stock_for_all_skus(self, synthetic_panel_and_prices):
@@ -250,7 +250,7 @@ class TestServiceLevelAndWorkingCapital:
         assert (marginals["delta_safety_stock"] >= 0).all()
 
     def test_marginal_stockout_cost_delta_zero_when_safety_stock_unchanged(self):
-        """When safety stock is 0 across service levels (e.g. zero forecast error std),
+        """When safety stock is 0 across service levels (e.g. zero forecast error RMSE),
         stockout cost delta must be 0 rather than falsely reporting savings."""
         sla = ServiceLevelAnalyzer()
         ss_df = pd.DataFrame([
@@ -261,7 +261,7 @@ class TestServiceLevelAndWorkingCapital:
                 "lead_time_days": 7,
                 "avg_daily_demand": 5.0,
                 "safety_stock_units": 0.0,
-                "forecast_error_std": 0.0,
+                "forecast_error_rmse": 0.0,
                 "avg_sell_price": 2.0,
                 "cat_id": "FOODS",
             },
@@ -272,7 +272,7 @@ class TestServiceLevelAndWorkingCapital:
                 "lead_time_days": 7,
                 "avg_daily_demand": 5.0,
                 "safety_stock_units": 0.0,
-                "forecast_error_std": 0.0,
+                "forecast_error_rmse": 0.0,
                 "avg_sell_price": 2.0,
                 "cat_id": "FOODS",
             },

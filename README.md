@@ -62,44 +62,45 @@ Evaluated across 3,000 sampled series over 3 rolling 28-day origins (84 test day
 
 ### The Dollar Value of a Better Forecast (Model-Driven Working Capital)
 
-Evaluating required safety stock capital at a fixed 95% Cycle Service Level (CSL) across California stores `CA_1` and `CA_2` (4,591 priced SKUs) directly connects empirical forecast accuracy ($\sigma_e$) across rolling origins to balance sheet capital requirements ($SS = z \cdot \sigma_e \cdot \sqrt{L}$):
+Evaluating required safety stock capital at a fixed 95% Cycle Service Level (CSL) across California stores `CA_1` and `CA_2` (4,591 priced SKUs) connects each model's rolling-origin forecast error to the stock needed to cover it ($SS = z \cdot \sigma_e \cdot \sqrt{L}$). Here $\sigma_e$ is the **RMSE** of the forecast errors, taken about zero, not their standard deviation: a standard deviation subtracts a model's mean error, so a forecast that is consistently too low would be costed as if it were accurate. The *Mean bias* column is that mean error (actual - forecast; positive means the forecast runs low):
 
 <!-- BEGIN_SAFETY_STOCK_MODEL_TABLE -->
-| Model Name | Architecture Tier | Mean $\sigma_e$ | Safety Stock Units (95% CSL) | Safety Stock Capital ($) | Capital Reduction vs Naive ($) | Reduction (%) |
-|---|---|---|---|---|---|---|
-| **Historical Mean (Baseline)** | Simple Baseline | 1.4336 | 38,044.01 | $46,390.24 | +$14,504.95 | +23.82% |
-| **Croston SBA** | Intermittent Statistical | 1.4690 | 38,982.90 | $47,332.95 | +$13,562.24 | +22.27% |
-| **ADIDA** | Intermittent Statistical | 1.4708 | 39,030.58 | $47,441.79 | +$13,453.40 | +22.09% |
-| **Moving Average (28d)** | Simple Baseline | 1.4724 | 39,074.33 | $47,535.17 | +$13,360.02 | +21.94% |
-| **SES** | Exponential Smoothing | 1.4798 | 39,270.54 | $47,592.80 | +$13,302.39 | +21.84% |
-| **Naive** | Baseline | 1.8872 | 50,081.65 | $60,895.19 | $0.00 | 0.00% |
-| **Seasonal Naive (Weekly)** | Baseline | 1.8853 | 50,030.91 | $61,460.50 | -$565.31 | -0.93% |
-| **Seasonal Naive (28d)** | Baseline | 1.8930 | 50,235.18 | $63,274.63 | -$2,379.44 | -3.91% |
+| Model Name | Architecture Tier | Mean RMSE ($\sigma_e$) | Mean bias (actual - forecast) | Safety Stock Units (95% CSL) | Safety Stock Capital ($) | Capital Reduction vs Naive ($) | Reduction (%) |
+|---|---|---|---|---|---|---|---|
+| **Moving Average (28d)** | Simple Baseline | 1.4891 | +0.0385 | 39,517.03 | $47,896.83 | +$20,639.58 | +30.11% |
+| **ADIDA** | Intermittent Statistical | 1.4898 | -0.0022 | 39,534.77 | $47,909.05 | +$20,627.36 | +30.10% |
+| **SES** | Exponential Smoothing | 1.5048 | -0.0389 | 39,934.20 | $48,135.60 | +$20,400.81 | +29.77% |
+| **Croston SBA** | Intermittent Statistical | 1.5269 | +0.0072 | 40,520.74 | $49,268.17 | +$19,268.24 | +28.11% |
+| **Historical Mean (Baseline)** | Simple Baseline | 1.6426 | +0.2949 | 43,589.60 | $52,085.50 | +$16,450.91 | +24.00% |
+| **Seasonal Naive (Weekly)** | Baseline | 1.9040 | +0.0326 | 50,526.82 | $61,980.25 | +$6,556.16 | +9.57% |
+| **Seasonal Naive (28d)** | Baseline | 2.0800 | +0.3290 | 55,197.38 | $67,325.36 | +$1,211.05 | +1.77% |
+| **Naive** | Baseline | 2.1345 | -0.4870 | 56,645.13 | $68,536.41 | $0.00 | 0.00% |
 <!-- END_SAFETY_STOCK_MODEL_TABLE -->
 
-- **Working Capital Impact**: Specialized intermittent models (**ADIDA**, **Croston SBA**) reduce required safety stock capital from **$60,895.19** under the Naive baseline to **$47,441.79** (ADIDA) and **$47,332.95** (Croston SBA) — releasing **$13,453.40 (22.09%)** in working capital purely through lower forecast error variance, holding service level constant at 95% CSL.
+- **Reading the table**: Sized on RMSE, **Naive** needs about 2.13 units per day of error cover against about 1.49 for **Moving Average (28d)** and **ADIDA**, so required safety stock capital falls from **$68,536.41** (Naive) to **$47,909.05** (ADIDA), **$20,627.36 (30.10%)** less at the same 95% CSL. The four smoothing methods (Moving Average, ADIDA, SES, Croston SBA) sit within 3% of each other ($47,896.83 to $49,268.17), so the saving comes from **smoothing versus naive, not from ADIDA specifically**. The **Historical Mean** baseline under-forecasts by 0.29 units per SKU per day: a standard deviation hid that and ranked it cheapest, but on RMSE it ranks fifth.
+- **Caveat on the 30%**: RMSE charges bias in either direction. Naive over-forecasts (mean error -0.49 per day), and an over-forecast already sits in the reorder point's forecast term, so part of Naive's gap is bias rather than variability. RMSE is the sizing rule used here and credits smoothing with the full 30%; on the bias-free standard deviation alone the gap is about 22% (`mean_std` in `safety_stock_by_model.csv`).
 
 ### Differentiated Service Levels & ABC/XYZ Optimization
 
-Feeding champion **ADIDA** forecast errors ($\sigma_e$) into 3x3 ABC/XYZ Pareto segmentation across California stores `CA_1` and `CA_2` (6,098 SKUs, 4,591 with verified price data):
+Feeding champion **ADIDA** forecast errors ($\sigma_e$ = RMSE) into 3x3 ABC/XYZ Pareto segmentation across California stores `CA_1` and `CA_2` (6,098 SKUs, 4,591 with verified price data). ADIDA is the inventory champion because it leads the main 3,000-series benchmark; on these 6,098 CA series alone **Moving Average (28d)** has the lower WAPE (76.73% vs 77.23%), and the two differ by under 0.1% in safety stock capital:
 
 <!-- BEGIN_INVENTORY_TABLE -->
 | ABC/XYZ Cell | SKU Count | Current Working Capital ($) | Recommended Working Capital ($) | Capital Released ($) | Target Service Level (CSL) | Policy Impact |
 |---|---|---|---|---|---|---|
-| **AX** | 51 | $3,295.91 | $3,611.34 | -$315.43 | **98%** | High-turnover revenue drivers; upgraded buffer |
-| **AY** | 714 | $22,933.61 | $22,933.61 | $0.00 | **95%** | Moderate volume; maintained standard buffer |
-| **AZ** | 1,086 | $24,917.08 | $24,917.08 | $0.00 | **95%** | High volatility; guarded safety buffer |
-| **BX** | 9 | $36.15 | $36.15 | $0.00 | **95%** | Stable secondary SKUs; maintained |
-| **BY** | 129 | $1,470.96 | $1,470.96 | $0.00 | **95%** | Moderate secondary volume; maintained |
-| **BZ** | 1,212 | $13,685.73 | $11,466.21 | +$2,219.52 | **90%** | Volatile secondary; working capital released |
-| **CX** | 45 | $53.66 | $52.09 | +$1.57 | **90%** | Stable low volume; bulk periodic order |
-| **CY** | 30 | $197.10 | $161.89 | +$35.21 | **90%** | Slow-moving; conservative buffer |
-| **CZ** | 1,315 | $7,340.09 | $6,007.13 | +$1,332.96 | **90%** | Erratic low volume; working capital released |
+| **AX** | 51 | $3,298.47 | $3,614.45 | -$315.98 | **98%** | High-turnover revenue drivers; upgraded buffer |
+| **AY** | 714 | $23,037.90 | $23,037.90 | $0.00 | **95%** | Moderate volume; maintained standard buffer |
+| **AZ** | 1,086 | $25,116.21 | $25,116.21 | $0.00 | **95%** | High volatility; guarded safety buffer |
+| **BX** | 9 | $39.40 | $39.40 | $0.00 | **95%** | Stable secondary SKUs; maintained |
+| **BY** | 129 | $1,477.01 | $1,477.01 | $0.00 | **95%** | Moderate secondary volume; maintained |
+| **BZ** | 1,212 | $13,766.33 | $11,530.12 | +$2,236.21 | **90%** | Volatile secondary; working capital released |
+| **CX** | 45 | $61.56 | $58.21 | +$3.35 | **90%** | Stable low volume; bulk periodic order |
+| **CY** | 30 | $198.50 | $162.98 | +$35.52 | **90%** | Slow-moving; conservative buffer |
+| **CZ** | 1,315 | $7,402.19 | $6,056.09 | +$1,346.10 | **90%** | Erratic low volume; working capital released |
 | **Unpriced (?X/?Y/?Z)** | 1,507 | $0.00 | $0.00 | $0.00 | — | CA_2 items lacking price coverage |
-| **Total Portfolio** | **6,098** | **$73,930.29** | **$70,656.46** | **+$3,273.83** | — | **$3,273.83 Net Working Capital Released** |
+| **Total Portfolio** | **6,098** | **$74,397.57** | **$71,092.37** | **+$3,305.20** | — | **$3,305.20 Net Working Capital Released** |
 <!-- END_INVENTORY_TABLE -->
 
-- **Operational Trade-Off**: Releasing **+$3,273.83 in net working capital** requires an explicit trade-off: accepting an increase in theoretical stockout probability (CSL 95% $\to$ 90%) on slow-moving tail items (BZ, CX, CY, CZ) to fund higher safety stock (CSL 95% $\to$ 98%) on revenue-driving AX items. Note that under the project's current total relevant cost model, stockout penalty trade-offs are evaluated in detail (see Limitations).
+- **Operational Trade-Off**: Releasing **+$3,305.20 in net working capital** requires an explicit trade-off: accepting an increase in theoretical stockout probability (CSL 95% $\to$ 90%) on slow-moving tail items (BZ, CX, CY, CZ) to fund higher safety stock (CSL 95% $\to$ 98%) on revenue-driving AX items. Note that under the project's current total relevant cost model, stockout penalty trade-offs are evaluated in detail (see Limitations).
 
 ---
 
@@ -146,7 +147,7 @@ The full engineering guide is available in `docs/guide/`:
 
 1. **Truncated Pricing History & Global Model Handicaps**: The raw price table originated from a workbook truncated at Excel's 1,048,575-row limit (covering only 15.3% of M5 price records, CA_1 and CA_2 only), leaving 1,507 California series without price data. Consequently, global models (LightGBM) ran under three major handicaps: (a) **no price or promotion features** (`price_features_included: false` in the backtest manifest), (b) trained on a **3,000-series sample** rather than the full 30,490-series catalog, and (c) trained on a **900-day window** rather than the full 1,913-day history. In the M5 competition, price momentum and catalog-wide cross-series learning were decisive drivers of GBDT performance; our finding that specialized intermittent methods match or outperform global GBDTs carries this essential qualification.
 2. **Bottom-Level Evaluation**: The benchmark evaluates bottom-level series (Level 12) across California stores rather than full 12-level WRMSSE competition aggregation.
-3. **Parametric Normal Safety Stock**: Analytical safety stock ($z \cdot \sigma_e \cdot \sqrt{L}$) serves as an operational baseline; empirical lead-time stockout simulations are scheduled for Stage B.
+3. **Parametric Normal Safety Stock**: Analytical safety stock ($z \cdot \sigma_e \cdot \sqrt{L}$, with $\sigma_e$ the RMSE so that bias is paid for) serves as an operational baseline. The $\sqrt{L}$ scaling treats daily errors as independent, so a persistent bias, which accumulates linearly over the lead time, is still understated; RMSE also charges over-forecast bias. Empirical lead-time stockout simulations are scheduled for Stage B.
 4. **Unevaluated Architectures**: Deep learning architectures and two-stage hurdle models were implemented but not scored in the main cross-tier walk-forward backtest.
 
 ---

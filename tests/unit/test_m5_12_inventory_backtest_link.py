@@ -70,7 +70,7 @@ def test_inventory_pipeline_consumes_backtest_predictions():
     assert not ss_df.empty
     assert "model" in ss_df.columns
     assert (ss_df["model"] == "adida").all()
-    assert (ss_df["forecast_error_std"] > 0).all()
+    assert (ss_df["forecast_error_rmse"] > 0).all()
     assert (ss_df["safety_stock_units"] > 0).all()
 
 
@@ -78,13 +78,13 @@ def test_compute_safety_stock_by_model_logic():
     """Verify compute_safety_stock_by_model calculates capital reduction vs naive."""
     dates = pd.date_range("2016-01-01", periods=28)
     preds_data = []
-    # Naive with higher errors (std = 2.0)
+    # Naive with higher errors (constant under-forecast of 2.0: RMSE = 2.0, std = 0)
     for d in dates:
         preds_data.append({
             "series_id": "FOODS_1_001_CA_1", "date": d,
             "y_true": 5.0, "y_pred": 3.0, "model": "naive"
         })
-    # ADIDA with lower errors (std = 1.0)
+    # ADIDA with lower errors (constant under-forecast of 1.0: RMSE = 1.0, std = 0)
     for d in dates:
         preds_data.append({
             "series_id": "FOODS_1_001_CA_1", "date": d,
@@ -102,5 +102,6 @@ def test_compute_safety_stock_by_model_logic():
     naive_row = summary[summary["model"] == "naive"].iloc[0]
     adida_row = summary[summary["model"] == "adida"].iloc[0]
 
-    assert adida_row["total_ss_capital"] <= naive_row["total_ss_capital"]
-    assert adida_row["capital_reduction_vs_naive"] >= 0
+    # Strict: with std both would be 0 (constant residuals) and a `<=` check passed vacuously.
+    assert adida_row["total_ss_capital"] < naive_row["total_ss_capital"]
+    assert adida_row["capital_reduction_vs_naive"] > 0

@@ -236,7 +236,7 @@ $$FR = 1 - \frac{E[\text{Units Short in Lead Time}]}{E[\text{Lead Time Demand}]}
 Fill rate is almost always higher than CSL: in a cycle with a stockout, 90% of requested units may still be fulfilled.
 
 ### Parametric Normal Safety Stock Formulation
-Under the standard normal approximation with lead time $L = 7$ days and forecast error standard deviation $\sigma_e$:
+Under the standard normal approximation with lead time $L = 7$ days and forecast-error RMSE $\sigma_e$ (the root mean squared error about zero, so that a consistently biased forecast needs more stock; a standard deviation would subtract the bias and hide it):
 $$\text{Safety Stock} = z_{\text{CSL}} \cdot \sigma_e \cdot \sqrt{L}$$
 $$\text{Reorder Point (ROP)} = \hat{\mu}_L + \text{Safety Stock} = \hat{\mu} \cdot L + z_{\text{CSL}} \cdot \sigma_e \cdot \sqrt{L}$$
 where:

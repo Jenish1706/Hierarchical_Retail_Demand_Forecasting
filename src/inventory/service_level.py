@@ -190,7 +190,9 @@ class ServiceLevelAnalyzer:
                 inventory_value = avg_inventory * unit_cost
                 holding_cost = inventory_value * self.holding_cost_rate
 
-                sigma_e = row.get("forecast_error_std", np.nan)
+                # Same sigma_e that sized the safety stock (RMSE, bias included). Reading the
+                # bias-free std here would pair a bias-inflated SS with a too-small sigma_L.
+                sigma_e = row.get("forecast_error_rmse", np.nan)
                 if pd.notna(sigma_e) and sigma_e <= 1e-4:
                     stockout_prob = 0.0
                 elif pd.notna(sigma_e) and sigma_e > 1e-4 and lt > 0:

@@ -88,10 +88,10 @@ To see how the platform functions in practice, consider the lifecycle of one sin
    - The SKU's 84 evaluation days across 3 origins are logged into `predictions.parquet`.
    - In the paired bootstrap engine, the entire block of `FOODS_1_001_CA_1` is resampled with replacement, contributing to the 95% confidence intervals on model gaps.
 7. **Inventory Optimization & Policy Output**:
-   - Historical unit sales and store price ($sell_price = $2.24$) place the SKU in **Class B** (secondary volume) and **Class Y** (moderate variance).
-   - Forecast error standard deviation $\sigma_e = 0.95$ units. With lead time $L = 7$ days:
-     $$\text{Safety Stock} = 1.645 \times 0.95 \times \sqrt{7} \approx 4.13 \approx 5 \text{ units}$$
-     $$\text{Reorder Point (ROP)} = (0.805 \times 7) + 5 = 5.63 + 5 \approx 11 \text{ units}$$
-   - Maintained at 95% CSL, locking $5 \times \$2.24 = \$11.20$ in working capital buffer.
+   - Historical unit sales and store price place the SKU in **Class B** (secondary volume) and **Class Z** (erratic, CV = 1.12): cell **BZ** in `abc_xyz_classification.csv`.
+   - Champion (ADIDA) forecast error over the 84 evaluation days: RMSE $\sigma_e = 1.0594$ units per day (standard deviation 1.0418; mean error +0.2233, so the forecast ran slightly low, which the RMSE pays for and the standard deviation does not). With lead time $L = 7$ days:
+     $$\text{Safety Stock} = 1.645 \times 1.0594 \times \sqrt{7} \approx 4.61 \text{ units}$$
+     $$\text{Reorder Point (ROP)} = (0.7857 \times 7) + 4.61 \approx 5.50 + 4.61 \approx 10.11 \text{ units}$$
+   - At 95% CSL (unit cost $0.8677) that buffer ties up $4.61 \times \$0.8677 \approx \$4.00$; the BZ segment policy lowers it to 90% CSL (3.59 units, about $3.12). Source row: `reports/inventory/safety_stock.csv`.
 8. **Dashboard & Report Synchronization**:
    - Streamlit overview binds the resulting inventory KPI card dynamically, while `render_readme_tables.py` updates the public README without human intervention.

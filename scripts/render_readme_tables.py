@@ -233,8 +233,8 @@ def render_safety_stock_by_model_table() -> str:
     df = pd.read_csv(SAFETY_STOCK_MODEL_CSV)
 
     lines = [
-        "| Model Name | Architecture Tier | Mean $\\sigma_e$ | Safety Stock Units (95% CSL) | Safety Stock Capital ($) | Capital Reduction vs Naive ($) | Reduction (%) |",
-        "|---|---|---|---|---|---|---|",
+        "| Model Name | Architecture Tier | Mean RMSE ($\\sigma_e$) | Mean bias (actual - forecast) | Safety Stock Units (95% CSL) | Safety Stock Capital ($) | Capital Reduction vs Naive ($) | Reduction (%) |",
+        "|---|---|---|---|---|---|---|---|",
     ]
 
     for _, row in df.iterrows():
@@ -242,7 +242,8 @@ def render_safety_stock_by_model_table() -> str:
         info = MODEL_INFO.get(model_key, {"name": f"**{model_key}**", "tier": "Statistical Baseline"})
         name = info["name"]
         tier = info["tier"]
-        mean_sigma = f"{float(row['mean_sigma_e']):.4f}"
+        mean_rmse = f"{float(row['mean_rmse']):.4f}"
+        mean_bias = f"{float(row['mean_bias']):+.4f}"
         ss_units = f"{float(row['total_ss_units']):,.2f}"
         ss_cap = f"${float(row['total_ss_capital']):,.2f}"
 
@@ -263,7 +264,7 @@ def render_safety_stock_by_model_table() -> str:
             pct_str = "0.00%"
 
         lines.append(
-            f"| {name} | {tier} | {mean_sigma} | {ss_units} | {ss_cap} | {red_str} | {pct_str} |"
+            f"| {name} | {tier} | {mean_rmse} | {mean_bias} | {ss_units} | {ss_cap} | {red_str} | {pct_str} |"
         )
 
     return "\n".join(lines)

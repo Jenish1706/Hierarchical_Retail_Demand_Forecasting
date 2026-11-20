@@ -9,10 +9,23 @@ forecast error at a given service level?"
 Two complementary approaches
 -----------------------------
 1. **Classical (forecast-error based):**
-       SS = z_alpha × sigma_e × sqrt(L)
-   Uses the standard deviation of backtest residuals as the demand uncertainty
-   estimate.  This is the textbook formula from Silver, Pyke & Thomas (2017),
+       SS = z_alpha × sigma_e × sqrt(L),   sigma_e = RMSE of backtest residuals
+   This is the textbook formula from Silver, Pyke & Thomas (2017),
    appropriate when the forecast error distribution is approximately normal.
+
+   ``sigma_e`` is the root mean squared error *about zero*, not the standard
+   deviation.  A standard deviation subtracts each model's mean error, so a
+   forecast that is consistently too low would be costed as if it were
+   accurate (M5-12b: that made the historical-mean baseline, which
+   under-forecasts by about 0.3 units per SKU per day, look like the cheapest
+   model).  Since RMSE^2 = bias^2 + variance, a biased forecast pays for its
+   bias.  RMSE is used instead of "std, then add the mean error to the reorder
+   point" because the latter assumes the bias measured on the evaluation window
+   is known and corrected in advance, which flatters exactly the models that
+   drift.  Known approximations: scaling by sqrt(L) treats daily errors as
+   independent, so a persistent bias (which accumulates as L, not sqrt(L)) is
+   still somewhat understated; and RMSE charges over-forecast bias too, even
+   though an over-forecast already sits in the reorder point's forecast term.
 
 2. **Quantile-based:**
        SS = Q_alpha(demand_L) - mu_hat_L
@@ -71,6 +84,49 @@ def _z_score(service_level: float) -> float:
     return float(sp_stats.norm.ppf(service_level))
 
 
+def summarise_forecast_errors(
+    df: pd.DataFrame,
+    by: list[str] | tuple[str, ...],
+    residual_col: str = "residual",
+) -> pd.DataFrame:
+    """Summarise forecast residuals (actual - forecast) per group.
+
+    This is the single definition of ``sigma_e`` used for safety stock, so the
+    per-model comparison table and the per-SKU safety stock file cannot drift
+    apart.
+
+    Returns one row per group with:
+
+    ``forecast_error_rmse``
+        sqrt(mean(e^2)): error about zero.  **This is the sigma_e that sizes
+        safety stock**, because it includes bias.
+    ``forecast_error_std``
+        Sample standard deviation (ddof=1).  Bias-free; kept for reference only.
+    ``forecast_error_bias``
+        Mean error, actual - forecast.  Positive means the forecast is too low
+        (under-forecast), negative means too high.
+    ``n_obs``
+        Number of residuals.
+    """
+    by = list(by)
+    work = df[by].copy()
+    err = df[residual_col].astype(float)
+    work["_e"] = err
+    work["_e2"] = err * err
+    out = (
+        work.groupby(by, observed=True)
+        .agg(
+            forecast_error_bias=("_e", "mean"),
+            forecast_error_std=("_e", "std"),
+            _mean_sq=("_e2", "mean"),
+            n_obs=("_e", "count"),
+        )
+        .reset_index()
+    )
+    out["forecast_error_rmse"] = np.sqrt(out.pop("_mean_sq"))
+    return out[[*by, "forecast_error_rmse", "forecast_error_std", "forecast_error_bias", "n_obs"]]
+
+
 class SafetyStockCalculator:
     """Compute safety stock and reorder points at multiple service levels.
 
@@ -124,9 +180,10 @@ class SafetyStockCalculator:
         panel: pd.DataFrame | None = None,
         model: str | None = None,
     ) -> pd.DataFrame:
-        """Compute safety stock using forecast error standard deviation.
+        """Compute safety stock from the RMSE of forecast errors.
 
-        Formula: SS = z(alpha) * sigma_e * sqrt(L)
+        Formula: SS = z(alpha) * sigma_e * sqrt(L), with sigma_e = RMSE (error
+        about zero, so a consistently biased forecast needs more stock).
 
         Parameters
         ----------
@@ -151,7 +208,9 @@ class SafetyStockCalculator:
             One row per (item_id, store_id, service_level) with columns:
             ``item_id``, ``store_id``, ``dept_id``, ``model``, ``service_level``,
             ``z_score``, ``lead_time_days``, ``avg_daily_demand``,
-            ``forecast_error_std``, ``safety_stock_units``, ``reorder_point``.
+            ``forecast_error_rmse`` (the sizing sigma_e), ``forecast_error_std``
+            and ``forecast_error_bias`` (reference), ``safety_stock_units``,
+            ``reorder_point``.
         """
         # Resolve forecast dataframe and compute residuals
         if actuals is None and "y_true" in forecasts.columns and "y_pred" in forecasts.columns:
@@ -162,7 +221,7 @@ class SafetyStockCalculator:
                 sids = f_df["series_id"].astype(str)
                 f_df["item_id"] = sids.str.rsplit("_", n=2).str[0]
                 f_df["store_id"] = sids.str.rsplit("_", n=2).str[1] + "_" + sids.str.rsplit("_", n=2).str[2]
-            f_df["residual"] = f_df["y_true"] - f_df["y_pred"]
+            f_df["residual"] = f_df["y_true"].astype(float) - f_df["y_pred"].astype(float)
             merged = f_df
             resolved_model = model or (f_df["model"].iloc[0] if "model" in f_df.columns and len(f_df) > 0 else "forecast_error")
         else:
@@ -180,12 +239,8 @@ class SafetyStockCalculator:
             merged["residual"] = merged["sales"] - merged["forecast"]
             resolved_model = model or (merged["model"].iloc[0] if "model" in merged.columns and len(merged) > 0 else "forecast_error")
 
-        # Forecast error std per series
-        error_stats = (
-            merged.groupby(["item_id", "store_id"], observed=True)["residual"]
-            .agg(forecast_error_std="std", n_obs="count")
-            .reset_index()
-        )
+        # Forecast error per series: RMSE sizes the stock; std and bias are kept for reference.
+        error_stats = summarise_forecast_errors(merged, by=["item_id", "store_id"])
         error_stats["forecast_error_std"] = error_stats["forecast_error_std"].fillna(0.0)
 
         # Mean daily demand
@@ -223,7 +278,7 @@ class SafetyStockCalculator:
             lt = self._get_lead_time(dept)
             for sl in self.service_levels:
                 z = _z_score(sl)
-                sigma_e = row["forecast_error_std"]
+                sigma_e = row["forecast_error_rmse"]
                 ss = z * sigma_e * np.sqrt(lt)
                 rop = row["avg_daily_demand"] * lt + ss
                 rows.append({
@@ -235,7 +290,9 @@ class SafetyStockCalculator:
                     "z_score": round(z, 4),
                     "lead_time_days": lt,
                     "avg_daily_demand": round(float(row["avg_daily_demand"]), 4),
-                    "forecast_error_std": round(float(sigma_e), 4),
+                    "forecast_error_rmse": round(float(sigma_e), 4),
+                    "forecast_error_std": round(float(row["forecast_error_std"]), 4),
+                    "forecast_error_bias": round(float(row["forecast_error_bias"]), 4),
                     "safety_stock_units": round(float(max(ss, 0.0)), 2),
                     "reorder_point": round(float(max(rop, 0.0)), 2),
                 })
@@ -326,7 +383,9 @@ class SafetyStockCalculator:
                     "z_score": np.nan,  # not applicable for quantile method
                     "lead_time_days": lt,
                     "avg_daily_demand": round(float(row["avg_daily_demand"]), 4),
+                    "forecast_error_rmse": np.nan,  # not applicable
                     "forecast_error_std": np.nan,  # not applicable
+                    "forecast_error_bias": np.nan,  # not applicable
                     "safety_stock_units": round(float(ss), 2),
                     "reorder_point": round(float(rop), 2),
                 })

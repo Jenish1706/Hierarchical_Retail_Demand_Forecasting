@@ -130,6 +130,7 @@ This glossary defines all domain-specific acronyms, mathematical terms, and soft
 ### S
 - **Safety Stock ($SS$)**: Buffer inventory held to protect customer service levels against demand variability and lead-time volatility:
   $$SS = z \cdot \sigma_L = z \cdot \sigma_e \cdot \sqrt{L}$$
+  Here $\sigma_e$ is the RMSE of the forecast errors (about zero, bias included), not their standard deviation.
 - **Seasonal Naive**: A baseline forecaster projecting historical actuals from the exact corresponding seasonal cycle period ($h=7$ for day-of-week seasonality, $h=28$ for 4-week retail cycle).
 - **Segment Router**: A modular dispatch engine that classifies time series into Syntetos-Boylan quadrants and directs each series to its specialized algorithm.
 - **SES (Simple Exponential Smoothing)**: A classical univariate time-series model applying geometrically declining weights to past observations.

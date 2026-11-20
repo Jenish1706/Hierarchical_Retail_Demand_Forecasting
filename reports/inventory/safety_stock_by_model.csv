@@ -1,0 +1,9 @@
+model,mean_sigma_e,total_ss_units,total_ss_capital,priced_skus,capital_reduction_vs_naive,pct_reduction_vs_naive
+historical_mean,1.4336,38044.01,46390.24,4591,14504.95,23.82
+croston_sba,1.469,38982.9,47332.95,4591,13562.24,22.27
+adida,1.4708,39030.58,47441.79,4591,13453.4,22.09
+moving_average,1.4724,39074.33,47535.17,4591,13360.02,21.94
+ses,1.4798,39270.54,47592.8,4591,13302.39,21.84
+naive,1.8872,50081.65,60895.19,4591,0.0,0.0
+seasonal_naive_weekly,1.8853,50030.91,61460.5,4591,-565.31,-0.93
+seasonal_naive,1.893,50235.18,63274.63,4591,-2379.44,-3.91

@@ -216,6 +216,7 @@ class ServiceLevelAnalyzer:
             results.append({
                 "item_id": row["item_id"],
                 "store_id": row["store_id"],
+                "model": row.get("model", "adida"),
                 "abc_xyz_class": row.get("abc_xyz_class", "??"),
                 "abc_class": row.get("abc_class"),
                 "xyz_class": row.get("xyz_class"),

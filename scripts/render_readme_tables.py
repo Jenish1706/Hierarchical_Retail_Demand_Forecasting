@@ -18,6 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BACKTEST_CSV = PROJECT_ROOT / "reports" / "backtest_main" / "accuracy_overall.csv"
 SIGNIFICANCE_JSON = PROJECT_ROOT / "reports" / "backtest_main" / "significance" / "significance_report.json"
 INVENTORY_CSV = PROJECT_ROOT / "reports" / "inventory" / "portfolio_summary.csv"
+SAFETY_STOCK_MODEL_CSV = PROJECT_ROOT / "reports" / "inventory" / "safety_stock_by_model.csv"
 README_PATH = PROJECT_ROOT / "README.md"
 
 LEADERBOARD_START = "<!-- BEGIN_LEADERBOARD_TABLE -->"
@@ -26,8 +27,11 @@ INVENTORY_START = "<!-- BEGIN_INVENTORY_TABLE -->"
 INVENTORY_END = "<!-- END_INVENTORY_TABLE -->"
 STATISTICS_START = "<!-- BEGIN_STATISTICS_SECTION -->"
 STATISTICS_END = "<!-- END_STATISTICS_SECTION -->"
+SAFETY_STOCK_MODEL_START = "<!-- BEGIN_SAFETY_STOCK_MODEL_TABLE -->"
+SAFETY_STOCK_MODEL_END = "<!-- END_SAFETY_STOCK_MODEL_TABLE -->"
 
 MODEL_INFO = {
+    "historical_mean": {"name": "**Historical Mean (Baseline)**", "tier": "Simple Baseline"},
     "adida": {"name": "**ADIDA**", "tier": "Intermittent Statistical"},
     "moving_average": {"name": "**Moving Average (28d)**", "tier": "Simple Baseline"},
     "routed_ensemble": {"name": "**Routed SBT Ensemble**", "tier": "Hybrid (ADIDA + Global)"},
@@ -224,6 +228,47 @@ def render_inventory_table() -> str:
     return "\n".join(lines)
 
 
+def render_safety_stock_by_model_table() -> str:
+    """Generate Markdown safety stock comparison table across forecast models."""
+    df = pd.read_csv(SAFETY_STOCK_MODEL_CSV)
+
+    lines = [
+        "| Model Name | Architecture Tier | Mean $\\sigma_e$ | Safety Stock Units (95% CSL) | Safety Stock Capital ($) | Capital Reduction vs Naive ($) | Reduction (%) |",
+        "|---|---|---|---|---|---|---|",
+    ]
+
+    for _, row in df.iterrows():
+        model_key = row["model"]
+        info = MODEL_INFO.get(model_key, {"name": f"**{model_key}**", "tier": "Statistical Baseline"})
+        name = info["name"]
+        tier = info["tier"]
+        mean_sigma = f"{float(row['mean_sigma_e']):.4f}"
+        ss_units = f"{float(row['total_ss_units']):,.2f}"
+        ss_cap = f"${float(row['total_ss_capital']):,.2f}"
+
+        red_val = float(row["capital_reduction_vs_naive"])
+        if red_val > 0:
+            red_str = f"+${red_val:,.2f}"
+        elif red_val < 0:
+            red_str = f"-${abs(red_val):,.2f}"
+        else:
+            red_str = "$0.00"
+
+        pct_val = float(row["pct_reduction_vs_naive"])
+        if pct_val > 0:
+            pct_str = f"+{pct_val:.2f}%"
+        elif pct_val < 0:
+            pct_str = f"{pct_val:.2f}%"
+        else:
+            pct_str = "0.00%"
+
+        lines.append(
+            f"| {name} | {tier} | {mean_sigma} | {ss_units} | {ss_cap} | {red_str} | {pct_str} |"
+        )
+
+    return "\n".join(lines)
+
+
 def render_statistics_section(sig: dict | None = None) -> str:
     """Generate Markdown statistics summary from significance report."""
     if sig is None:
@@ -333,15 +378,19 @@ def check_readme_tables(readme_path: Path = README_PATH) -> tuple[bool, str]:
         return False, f"Inventory markers missing in {readme_path}"
     if STATISTICS_START not in content or STATISTICS_END not in content:
         return False, f"Statistics markers missing in {readme_path}"
+    if SAFETY_STOCK_MODEL_START not in content or SAFETY_STOCK_MODEL_END not in content:
+        return False, f"Safety stock model comparison markers missing in {readme_path}"
 
     leaderboard_expected = render_leaderboard_table().strip()
     inventory_expected = render_inventory_table().strip()
     statistics_expected = render_statistics_section().strip()
+    ss_model_expected = render_safety_stock_by_model_table().strip()
 
     # Extract current tables
     lb_part = content.split(LEADERBOARD_START)[1].split(LEADERBOARD_END)[0].strip()
     inv_part = content.split(INVENTORY_START)[1].split(INVENTORY_END)[0].strip()
     stat_part = content.split(STATISTICS_START)[1].split(STATISTICS_END)[0].strip()
+    ss_model_part = content.split(SAFETY_STOCK_MODEL_START)[1].split(SAFETY_STOCK_MODEL_END)[0].strip()
 
     diffs = []
     if lb_part != leaderboard_expected:
@@ -350,6 +399,8 @@ def check_readme_tables(readme_path: Path = README_PATH) -> tuple[bool, str]:
         diffs.append("Inventory table in README does not match artifact outputs.")
     if stat_part != statistics_expected:
         diffs.append("Statistics section in README does not match artifact outputs.")
+    if ss_model_part != ss_model_expected:
+        diffs.append("Safety stock by model table in README does not match artifact outputs.")
 
     if diffs:
         return False, "\n".join(diffs)
@@ -363,6 +414,7 @@ def update_readme_tables(readme_path: Path = README_PATH) -> None:
     leaderboard_str = render_leaderboard_table().strip()
     inventory_str = render_inventory_table().strip()
     statistics_str = render_statistics_section().strip()
+    ss_model_str = render_safety_stock_by_model_table().strip()
 
     # Replace leaderboard
     if LEADERBOARD_START in content and LEADERBOARD_END in content:
@@ -371,6 +423,14 @@ def update_readme_tables(readme_path: Path = README_PATH) -> None:
         content = f"{before}{LEADERBOARD_START}\n{leaderboard_str}\n{LEADERBOARD_END}{after}"
     else:
         print(f"Warning: {LEADERBOARD_START} not found, skipping leaderboard replacement.")
+
+    # Replace safety stock by model
+    if SAFETY_STOCK_MODEL_START in content and SAFETY_STOCK_MODEL_END in content:
+        before = content.split(SAFETY_STOCK_MODEL_START)[0]
+        after = content.split(SAFETY_STOCK_MODEL_END)[1]
+        content = f"{before}{SAFETY_STOCK_MODEL_START}\n{ss_model_str}\n{SAFETY_STOCK_MODEL_END}{after}"
+    else:
+        print(f"Warning: {SAFETY_STOCK_MODEL_START} not found, skipping safety stock model replacement.")
 
     # Replace inventory
     if INVENTORY_START in content and INVENTORY_END in content:

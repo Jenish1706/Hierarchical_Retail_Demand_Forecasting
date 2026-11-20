@@ -120,36 +120,65 @@ class SafetyStockCalculator:
     def from_forecast_errors(
         self,
         forecasts: pd.DataFrame,
-        actuals: pd.DataFrame,
-        panel: pd.DataFrame,
+        actuals: pd.DataFrame | None = None,
+        panel: pd.DataFrame | None = None,
+        model: str | None = None,
     ) -> pd.DataFrame:
         """Compute safety stock using forecast error standard deviation.
 
-        Formula: SS = z(alpha) × sigma_e × sqrt(L)
+        Formula: SS = z(alpha) * sigma_e * sqrt(L)
 
         Parameters
         ----------
         forecasts : pd.DataFrame
-            Must contain ``item_id``, ``store_id``, ``date``, ``forecast``.
-        actuals : pd.DataFrame
-            Must contain ``item_id``, ``store_id``, ``date``, ``sales``.
-        panel : pd.DataFrame
-            Full panel for mean daily demand computation.
+            Either:
+            1. Standard format containing ``item_id``, ``store_id``, ``date``, ``forecast``
+               (and optional ``model``).
+            2. Backtest predictions format containing ``series_id``, ``date``, ``y_true``,
+               ``y_pred`` (and optional ``model``, ``item_id``, ``store_id``).
+        actuals : pd.DataFrame | None
+            Must contain ``item_id``, ``store_id``, ``date``, ``sales`` if ``forecasts``
+            does not already contain actuals (``y_true``).
+        panel : pd.DataFrame | None
+            Full panel for mean daily demand computation. If None, daily demand is estimated
+            from the provided forecasts/actuals.
+        model : str | None
+            Specific model to filter for, or name to record in the output table.
 
         Returns
         -------
         pd.DataFrame
             One row per (item_id, store_id, service_level) with columns:
-            ``safety_stock_units``, ``reorder_point``, ``avg_daily_demand``,
-            ``forecast_error_std``, ``lead_time_days``, ``z_score``.
+            ``item_id``, ``store_id``, ``dept_id``, ``model``, ``service_level``,
+            ``z_score``, ``lead_time_days``, ``avg_daily_demand``,
+            ``forecast_error_std``, ``safety_stock_units``, ``reorder_point``.
         """
-        # Merge forecasts with actuals to get residuals
-        merged = forecasts.merge(
-            actuals[["item_id", "store_id", "date", "sales"]],
-            on=["item_id", "store_id", "date"],
-            how="inner",
-        )
-        merged["residual"] = merged["sales"] - merged["forecast"]
+        # Resolve forecast dataframe and compute residuals
+        if actuals is None and "y_true" in forecasts.columns and "y_pred" in forecasts.columns:
+            f_df = forecasts.copy()
+            if model is not None and "model" in f_df.columns:
+                f_df = f_df[f_df["model"] == model]
+            if "item_id" not in f_df.columns or "store_id" not in f_df.columns:
+                sids = f_df["series_id"].astype(str)
+                f_df["item_id"] = sids.str.rsplit("_", n=2).str[0]
+                f_df["store_id"] = sids.str.rsplit("_", n=2).str[1] + "_" + sids.str.rsplit("_", n=2).str[2]
+            f_df["residual"] = f_df["y_true"] - f_df["y_pred"]
+            merged = f_df
+            resolved_model = model or (f_df["model"].iloc[0] if "model" in f_df.columns and len(f_df) > 0 else "forecast_error")
+        else:
+            if actuals is None:
+                raise ValueError("actuals must be provided when forecasts does not contain y_true and y_pred.")
+            f_df = forecasts.copy()
+            if model is not None and "model" in f_df.columns:
+                f_df = f_df[f_df["model"] == model]
+            merge_cols = ["item_id", "store_id", "date"]
+            merged = f_df.merge(
+                actuals[["item_id", "store_id", "date", "sales"]],
+                on=merge_cols,
+                how="inner",
+            )
+            merged["residual"] = merged["sales"] - merged["forecast"]
+            resolved_model = model or (merged["model"].iloc[0] if "model" in merged.columns and len(merged) > 0 else "forecast_error")
 
         # Forecast error std per series
         error_stats = (
@@ -159,21 +188,31 @@ class SafetyStockCalculator:
         )
         error_stats["forecast_error_std"] = error_stats["forecast_error_std"].fillna(0.0)
 
-        # Mean daily demand from the full panel
-        demand_stats = (
-            panel.groupby(["item_id", "store_id"], observed=True)["sales"]
-            .mean()
-            .reset_index()
-            .rename(columns={"sales": "avg_daily_demand"})
-        )
-
-        # Add dept_id for lead-time lookup
-        if "dept_id" in panel.columns:
-            dept_map = (
-                panel[["item_id", "store_id", "dept_id"]]
-                .drop_duplicates()
+        # Mean daily demand
+        if panel is not None:
+            demand_stats = (
+                panel.groupby(["item_id", "store_id"], observed=True)["sales"]
+                .mean()
+                .reset_index()
+                .rename(columns={"sales": "avg_daily_demand"})
             )
-            demand_stats = demand_stats.merge(dept_map, on=["item_id", "store_id"], how="left")
+            if "dept_id" in panel.columns:
+                dept_map = (
+                    panel[["item_id", "store_id", "dept_id"]]
+                    .drop_duplicates()
+                )
+                demand_stats = demand_stats.merge(dept_map, on=["item_id", "store_id"], how="left")
+        else:
+            sales_col = "sales" if "sales" in merged.columns else "y_true"
+            demand_stats = (
+                merged.groupby(["item_id", "store_id"], observed=True)[sales_col]
+                .mean()
+                .reset_index()
+                .rename(columns={sales_col: "avg_daily_demand"})
+            )
+            if "dept_id" in merged.columns:
+                dept_map = merged[["item_id", "store_id", "dept_id"]].drop_duplicates()
+                demand_stats = demand_stats.merge(dept_map, on=["item_id", "store_id"], how="left")
 
         base = error_stats.merge(demand_stats, on=["item_id", "store_id"], how="inner")
 
@@ -191,6 +230,7 @@ class SafetyStockCalculator:
                     "item_id": row["item_id"],
                     "store_id": row["store_id"],
                     "dept_id": dept,
+                    "model": resolved_model,
                     "service_level": sl,
                     "z_score": round(z, 4),
                     "lead_time_days": lt,

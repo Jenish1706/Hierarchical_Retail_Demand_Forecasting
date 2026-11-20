@@ -60,25 +60,46 @@ Evaluated across 3,000 sampled series over 3 rolling 28-day origins (84 test day
 
 ## Inventory Decision Layer (Operations Analytics)
 
-Converts forecast uncertainty distributions into replenishment policies via 3x3 ABC/XYZ Pareto segmentation across California stores `CA_1` and `CA_2` (6,098 SKUs, 4,591 with verified price data):
+### The Dollar Value of a Better Forecast (Model-Driven Working Capital)
+
+Evaluating required safety stock capital at a fixed 95% Cycle Service Level (CSL) across California stores `CA_1` and `CA_2` (4,591 priced SKUs) directly connects empirical forecast accuracy ($\sigma_e$) across rolling origins to balance sheet capital requirements ($SS = z \cdot \sigma_e \cdot \sqrt{L}$):
+
+<!-- BEGIN_SAFETY_STOCK_MODEL_TABLE -->
+| Model Name | Architecture Tier | Mean $\sigma_e$ | Safety Stock Units (95% CSL) | Safety Stock Capital ($) | Capital Reduction vs Naive ($) | Reduction (%) |
+|---|---|---|---|---|---|---|
+| **Historical Mean (Baseline)** | Simple Baseline | 1.4336 | 38,044.01 | $46,390.24 | +$14,504.95 | +23.82% |
+| **Croston SBA** | Intermittent Statistical | 1.4690 | 38,982.90 | $47,332.95 | +$13,562.24 | +22.27% |
+| **ADIDA** | Intermittent Statistical | 1.4708 | 39,030.58 | $47,441.79 | +$13,453.40 | +22.09% |
+| **Moving Average (28d)** | Simple Baseline | 1.4724 | 39,074.33 | $47,535.17 | +$13,360.02 | +21.94% |
+| **SES** | Exponential Smoothing | 1.4798 | 39,270.54 | $47,592.80 | +$13,302.39 | +21.84% |
+| **Naive** | Baseline | 1.8872 | 50,081.65 | $60,895.19 | $0.00 | 0.00% |
+| **Seasonal Naive (Weekly)** | Baseline | 1.8853 | 50,030.91 | $61,460.50 | -$565.31 | -0.93% |
+| **Seasonal Naive (28d)** | Baseline | 1.8930 | 50,235.18 | $63,274.63 | -$2,379.44 | -3.91% |
+<!-- END_SAFETY_STOCK_MODEL_TABLE -->
+
+- **Working Capital Impact**: Specialized intermittent models (**ADIDA**, **Croston SBA**) reduce required safety stock capital from **$60,895.19** under the Naive baseline to **$47,441.79** (ADIDA) and **$47,332.95** (Croston SBA) — releasing **$13,453.40 (22.09%)** in working capital purely through lower forecast error variance, holding service level constant at 95% CSL.
+
+### Differentiated Service Levels & ABC/XYZ Optimization
+
+Feeding champion **ADIDA** forecast errors ($\sigma_e$) into 3x3 ABC/XYZ Pareto segmentation across California stores `CA_1` and `CA_2` (6,098 SKUs, 4,591 with verified price data):
 
 <!-- BEGIN_INVENTORY_TABLE -->
 | ABC/XYZ Cell | SKU Count | Current Working Capital ($) | Recommended Working Capital ($) | Capital Released ($) | Target Service Level (CSL) | Policy Impact |
 |---|---|---|---|---|---|---|
-| **AX** | 51 | $3,249.87 | $3,553.91 | -$304.04 | **98%** | High-turnover revenue drivers; upgraded buffer |
-| **AY** | 714 | $22,398.62 | $22,398.62 | $0.00 | **95%** | Moderate volume; maintained standard buffer |
-| **AZ** | 1,086 | $24,320.08 | $24,320.08 | $0.00 | **95%** | High volatility; guarded safety buffer |
-| **BX** | 9 | $30.61 | $30.61 | $0.00 | **95%** | Stable secondary SKUs; maintained |
-| **BY** | 129 | $1,424.57 | $1,424.57 | $0.00 | **95%** | Moderate secondary volume; maintained |
-| **BZ** | 1,212 | $13,591.24 | $11,393.62 | +$2,197.62 | **90%** | Volatile secondary; working capital released |
-| **CX** | 45 | $46.51 | $46.51 | $0.00 | **90%** | Stable low volume; bulk periodic order |
-| **CY** | 30 | $192.80 | $158.52 | +$34.28 | **90%** | Slow-moving; conservative buffer |
-| **CZ** | 1,315 | $7,172.06 | $5,876.78 | +$1,295.28 | **90%** | Erratic low volume; working capital released |
+| **AX** | 51 | $3,295.91 | $3,611.34 | -$315.43 | **98%** | High-turnover revenue drivers; upgraded buffer |
+| **AY** | 714 | $22,933.61 | $22,933.61 | $0.00 | **95%** | Moderate volume; maintained standard buffer |
+| **AZ** | 1,086 | $24,917.08 | $24,917.08 | $0.00 | **95%** | High volatility; guarded safety buffer |
+| **BX** | 9 | $36.15 | $36.15 | $0.00 | **95%** | Stable secondary SKUs; maintained |
+| **BY** | 129 | $1,470.96 | $1,470.96 | $0.00 | **95%** | Moderate secondary volume; maintained |
+| **BZ** | 1,212 | $13,685.73 | $11,466.21 | +$2,219.52 | **90%** | Volatile secondary; working capital released |
+| **CX** | 45 | $53.66 | $52.09 | +$1.57 | **90%** | Stable low volume; bulk periodic order |
+| **CY** | 30 | $197.10 | $161.89 | +$35.21 | **90%** | Slow-moving; conservative buffer |
+| **CZ** | 1,315 | $7,340.09 | $6,007.13 | +$1,332.96 | **90%** | Erratic low volume; working capital released |
 | **Unpriced (?X/?Y/?Z)** | 1,507 | $0.00 | $0.00 | $0.00 | — | CA_2 items lacking price coverage |
-| **Total Portfolio** | **6,098** | **$72,426.36** | **$69,203.22** | **+$3,223.14** | — | **$3,223.14 Net Working Capital Released** |
+| **Total Portfolio** | **6,098** | **$73,930.29** | **$70,656.46** | **+$3,273.83** | — | **$3,273.83 Net Working Capital Released** |
 <!-- END_INVENTORY_TABLE -->
 
-- **Operational Trade-Off**: Releasing **+$3,223.14 in net working capital** requires an explicit trade-off: accepting an increase in theoretical stockout probability (CSL 95% $\to$ 90%) on slow-moving tail items (BZ, CY, CZ) to fund higher safety stock (CSL 95% $\to$ 98%) on revenue-driving AX items.
+- **Operational Trade-Off**: Releasing **+$3,273.83 in net working capital** requires an explicit trade-off: accepting an increase in theoretical stockout probability (CSL 95% $\to$ 90%) on slow-moving tail items (BZ, CX, CY, CZ) to fund higher safety stock (CSL 95% $\to$ 98%) on revenue-driving AX items. Note that under the project's current total relevant cost model, stockout penalty trade-offs are evaluated in detail (see Limitations).
 
 ---
 

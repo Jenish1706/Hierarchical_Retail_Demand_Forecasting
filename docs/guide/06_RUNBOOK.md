@@ -87,7 +87,7 @@ If `render_readme_tables.py --check` exits with status `0`, the README is perfec
 
 ### Running Automated Tests
 ```powershell
-# Run the entire test suite (110 tests, ~25-30s)
+# Run the entire test suite
 & .venv\Scripts\pytest.exe
 
 # Run unit tests only

@@ -155,6 +155,7 @@ stages:
     deps:
       - scripts/run_inventory_analysis.py
       - src/inventory/abc_xyz.py
+      - src/inventory/margin_sensitivity.py
       - src/inventory/safety_stock.py
       - src/inventory/service_level.py
       - src/inventory/working_capital.py
@@ -174,4 +175,6 @@ stages:
       - reports/inventory/policy_comparison.csv
       - reports/inventory/segment_cost_optimum.csv
       - reports/inventory/working_capital_demand_bases.csv
+      - reports/inventory/margin_sensitivity.csv
+      - reports/inventory/margin_break_even.csv
 

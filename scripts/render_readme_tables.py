@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -39,8 +40,21 @@ DEMAND_BASIS_START = "<!-- BEGIN_DEMAND_BASIS_TABLE -->"
 DEMAND_BASIS_END = "<!-- END_DEMAND_BASIS_TABLE -->"
 ROUTING_COMPARISON_CSV = PROJECT_ROOT / "reports" / "backtest_main" / "routing_vs_best_single.csv"
 MANIFEST_JSON = PROJECT_ROOT / "reports" / "backtest_main" / "manifest.json"
+EDA_FINDINGS_JSON = PROJECT_ROOT / "reports" / "eda" / "eda_findings.json"
+SBC_CSV = PROJECT_ROOT / "reports" / "eda" / "table_sbc_classification.csv"
+MARGIN_SENSITIVITY_CSV = PROJECT_ROOT / "reports" / "inventory" / "margin_sensitivity.csv"
+MARGIN_BREAK_EVEN_CSV = PROJECT_ROOT / "reports" / "inventory" / "margin_break_even.csv"
+SEGMENT_OPTIMUM_CSV = PROJECT_ROOT / "reports" / "inventory" / "segment_cost_optimum.csv"
 ROUTER_START = "<!-- BEGIN_ROUTER_COMPARISON -->"
 ROUTER_END = "<!-- END_ROUTER_COMPARISON -->"
+DEMAND_PROFILE_START = "<!-- BEGIN_DEMAND_PROFILE -->"
+DEMAND_PROFILE_END = "<!-- END_DEMAND_PROFILE -->"
+EVAL_PROTOCOL_START = "<!-- BEGIN_EVAL_PROTOCOL -->"
+EVAL_PROTOCOL_END = "<!-- END_EVAL_PROTOCOL -->"
+MODEL_LADDER_START = "<!-- BEGIN_MODEL_LADDER -->"
+MODEL_LADDER_END = "<!-- END_MODEL_LADDER -->"
+MARGIN_START = "<!-- BEGIN_MARGIN_SENSITIVITY -->"
+MARGIN_END = "<!-- END_MARGIN_SENSITIVITY -->"
 
 DEMAND_BASIS_LABELS = {
     "forecast": "ADIDA mean forecast on the scored days",
@@ -473,6 +487,158 @@ def render_router_comparison(path: Path | None = None) -> str:
     return "\n".join(lines + [""] + reading)
 
 
+def render_demand_profile() -> str:
+    """Step 1: what the demand looks like, from the EDA artifacts."""
+    f = json.loads(EDA_FINDINGS_JSON.read_text(encoding="utf-8"))
+    s, d, mix = f["3.1_structure"], f["3.2_demand"], f["3.3_intermittency"]
+    n, late = s["n_series"], s["series_starting_after_day_1"]
+    zero_by_cat = ", ".join(
+        f"{cat.title()} {rate:.1%}" for cat, rate in sorted(d["zero_rate_by_category"].items(), key=lambda kv: kv[1])
+    )
+
+    sbc = pd.read_csv(SBC_CSV).set_index("pattern")
+    order = [p for p in SEGMENT_ORDER if p in sbc.index]
+    lines = [
+        f"- **Scale**: {n:,} store-item series over {s['n_days']:,} days, {s['long_format_rows'] / 1e6:.1f} million daily observations.",
+        f"- **Sparsity**: {d['overall_zero_rate']:.1%} of daily records are zero ({zero_by_cat} by category).",
+        f"- **Late launches**: {late / n:.0%} of series ({late:,}) had no sale on day 1, and the median first sale is on day "
+        f"{s['median_first_sale_day']}. Zeros before a series' first sale mean \"not on sale yet\", not \"no demand\".",
+        f"- **Demand patterns** (SBC quadrants, full history, pre-launch zeros trimmed): "
+        f"{mix['intermittent_or_lumpy_pct']:.1f}% of series are intermittent or lumpy.",
+        "",
+        "| SBC quadrant | Rule | Series | % of series | % of volume |",
+        "|---|---|---|---|---|",
+    ]
+    rules = {
+        "SMOOTH": "ADI < 1.32, CV² < 0.49",
+        "ERRATIC": "ADI < 1.32, CV² ≥ 0.49",
+        "LUMPY": "ADI ≥ 1.32, CV² ≥ 0.49",
+        "INTERMITTENT": "ADI ≥ 1.32, CV² < 0.49",
+    }
+    for p in order:
+        r = sbc.loc[p]
+        lines.append(
+            f"| **{p}** | {rules.get(p, '')} | {int(r['n_series']):,} | {float(r['pct_of_series']):.1f}% | {float(r['pct_of_volume']):.1f}% |"
+        )
+    return "\n".join(lines)
+
+
+def render_evaluation_protocol() -> str:
+    """Step 3: the rolling-origin protocol, from the backtest manifest."""
+    m = json.loads(MANIFEST_JSON.read_text(encoding="utf-8"))
+    origins = sorted(m["origins"], key=lambda o: o["test_start"])
+    n_origins, horizon, n_series = int(m["n_origins"]), int(m["horizon_days"]), int(m["n_series"])
+    test_days = n_origins * horizon
+    lines = [
+        "| Origin index | Training ends | Test window |",
+        "|---|---|---|",
+        *(f"| {o['index']} | {o['train_end']} | {o['test_start']} to {o['test_end']} |" for o in origins),
+        "",
+        f"- **Sample and size**: {n_series:,} series drawn at random with a fixed seed, {m['history_days']} days of history each. "
+        f"{n_origins} origins x {horizon} days = {test_days} test days per series, {n_series * test_days:,} predictions per model. "
+        "Origin indices count back from the end of the data, so index 0 is the latest window.",
+        f"- **Horizon-shifted features**: every lag and rolling feature the global model sees is shifted by the full "
+        f"{horizon}-day horizon ({m['n_features']} features), so a test row never references an actual inside its own window.",
+        "- **Training-window-only statistics**: the RMSSE scale and the router's SBC quadrants for each origin "
+        "use data up to that origin's training end, never the test window.",
+    ]
+    return "\n".join(lines)
+
+
+#: What each rung of the model ladder is there to test (no numbers: those are rendered elsewhere).
+MODEL_RUNGS = [
+    ("naive", "The floor: repeat the last observed value."),
+    ("seasonal_naive_weekly", "Does a weekly cycle alone help?"),
+    ("seasonal_naive", "Does a four-week cycle alone help?"),
+    ("moving_average", "Does averaging out the noise help?"),
+    ("ses", "Does recency-weighted smoothing help?"),
+    ("croston_sba", "Does modelling demand size and interval separately (debiased) help on intermittent series?"),
+    ("adida", "Does aggregating to shorter, denser series help on intermittent series?"),
+    ("lightgbm", "Does a global model that learns across series help? (squared-error loss)"),
+    ("lightgbm_tweedie", "The same global model with a loss suited to zero-inflated counts."),
+    ("routed_ensemble", "Does sending each demand pattern to a different method help? (step 6)"),
+]
+
+
+def render_model_ladder() -> str:
+    """Step 4: the model ladder and the global model's handicaps, from the manifest."""
+    m = json.loads(MANIFEST_JSON.read_text(encoding="utf-8"))
+    eda = json.loads(EDA_FINDINGS_JSON.read_text(encoding="utf-8"))["3.1_structure"]
+    coverage = re.search(r"(\d+(?:\.\d+)?)% of the full M5 price table", str(m.get("price_coverage_note", "")))
+    price_note = f"about {float(coverage.group(1)):.0f}% of M5 prices" if coverage else "a fraction of M5 prices"
+    no_price = not m.get("price_features_included", False)
+
+    lines = [
+        "| Rung | Model | Tier | What this rung tests |",
+        "|---|---|---|---|",
+        *(
+            f"| {i} | {_model_label(key)} | {MODEL_INFO[key]['tier']} | {text} |"
+            for i, (key, text) in enumerate(MODEL_RUNGS, 1)
+        ),
+        "",
+        f"- **Handicaps on the global model**: LightGBM ran under three handicaps relative to the M5 competition: "
+        f"(1) {'no price features' if no_price else 'price features included'} (`price_features_included: {str(not no_price).lower()}`; "
+        f"the price table came from a workbook truncated at Excel's row limit and covers {price_note}), "
+        f"(2) a {int(m['n_series']):,}-series sample of the {int(eda['n_series']):,}-series catalogue, and "
+        f"(3) a {int(m['history_days'])}-day window of the {int(eda['n_days']):,}-day history. "
+        "In the M5 competition price and promotion features and catalogue-wide learning were a large part of why GBDTs won, so "
+        "\"intermittent methods match or beat global GBDTs here\" carries that qualification.",
+    ]
+    return "\n".join(lines)
+
+
+def render_margin_sensitivity() -> str:
+    """Step 8: how far the service-level answer moves with the assumed gross margin."""
+    sens = pd.read_csv(MARGIN_SENSITIVITY_CSV)
+    be = pd.read_csv(MARGIN_BREAK_EVEN_CSV).set_index("threshold")
+    seg = pd.read_csv(SEGMENT_OPTIMUM_CSV)
+    optimised = seg[~seg["abc_xyz_class"].astype(str).str.endswith("N")]
+
+    cols = [c for c in sens.columns if c.startswith("extra_cost_")]
+    levels = sorted(int(c.split("_")[2]) for c in cols)
+    lines = [
+        "| Gross margin | Scenario | Unconstrained optimum SL* | Cheapest menu level | "
+        + " | ".join(f"Extra holding + shortage cost at {lv}%" for lv in levels)
+        + " |",
+        "|---|---|---|---|" + "---|" * len(levels),
+    ]
+    for _, r in sens.iterrows():
+        scenario = "grid" if r["scenario"] == "grid" else f"{r['scenario']} assumption"
+        extras = " | ".join(f"{float(r[f'extra_cost_{lv}_pct']):+.0f}%" if float(r[f"extra_cost_{lv}_pct"]) > 0 else "0%" for lv in levels)
+        lines.append(
+            f"| {float(r['gross_margin']):.0%} | {scenario} | {float(r['sl_star']):.1%} | "
+            f"{float(r['best_menu_level']):.0%} | {extras} |"
+        )
+
+    b98, b95 = float(be.loc["cheapest_98_over_95", "gross_margin"]), float(be.loc["cheapest_95_over_90", "gross_margin"])
+    x98, x95 = float(be.loc["sl_star_reaches_98", "gross_margin"]), float(be.loc["sl_star_reaches_95", "gross_margin"])
+    cats = sens[sens["scenario"] != "grid"].sort_values("sl_star")
+    lo_c, hi_c = cats.iloc[0], cats.iloc[-1]
+    grocery = sens[(sens["scenario"] == "grid") & sens["gross_margin"].between(0.25, 0.30)].sort_values("gross_margin")
+    g_txt = " and ".join(f"{float(r['gross_margin']):.0%}" for _, r in grocery.iterrows())
+    g_extra = " and ".join(f"{float(r['extra_cost_95_pct']):.0f}%" for _, r in grocery.iterrows())
+    g_all98 = bool((grocery["best_menu_level"] == 0.98).all())
+
+    reading = [
+        f"- **Break-evens** (exact, from the same cost formula the analysis uses): 98% costs less than 95% above a {b98:.1%} gross margin, "
+        f"and 95% costs less than 90% above {b95:.1%}. So the cheapest menu level is 98% above {b98:.1%}, 95% between {b95:.1%} and {b98:.1%}, "
+        f"and 90% below {b95:.1%}. The cost per unit of error size scales with price, so the answer depends on the margin alone.",
+        f"- **Rule of thumb versus exact**: the unconstrained optimum SL* only reaches 98% above a {x98:.1%} margin and 95% above {x95:.1%}. "
+        f"Those are looser than the break-evens above: SL* can sit below 98% while 98% is still the cheapest of the three menu levels, "
+        f"because SL* is a continuous optimum and the menu is coarse.",
+        f"- **Realistic grocery margins**: at {g_txt} gross margin the cheapest level is "
+        f"{'98%' if g_all98 else 'not 98%'}, and holding 95% instead would cost {g_extra} more in safety-stock holding plus shortage cost.",
+        f"- **Range of SL***: by category it is {float(lo_c['sl_star']):.1%} ({lo_c['scenario']}, {float(lo_c['gross_margin']):.0%} margin) to "
+        f"{float(hi_c['sl_star']):.1%} ({hi_c['scenario']}, {float(hi_c['gross_margin']):.0%}); the per-segment medians in "
+        f"`segment_cost_optimum.csv` run from {float(optimised['closed_form_sl_star'].min()):.1%} to {float(optimised['closed_form_sl_star'].max()):.1%}. "
+        "All of them sit above the whole 90/95/98% menu.",
+        f"- **What it means**: because the cheapest level depends on the margin and not on volume or variability, every segment within a "
+        f"category shares one cheapest level. Differentiating service levels by ABC/XYZ cannot lower cost under lost-margin costing while the "
+        f"gross margin is above {b98:.1%}; it can pay only when working capital is the binding constraint, or for items whose margin is below that.",
+    ]
+    return "\n".join(lines + [""] + reading)
+
+
 def render_statistics_section(sig: dict | None = None) -> str:
     """Generate Markdown statistics summary from significance report."""
     if sig is None:
@@ -572,7 +738,11 @@ def render_statistics_section(sig: dict | None = None) -> str:
 #: Blocks added after M5-10 share one mechanism: (label, start marker, end marker, renderer).
 #: Add a block here and in the README; check and update pick it up.
 EXTRA_BLOCKS: list[tuple[str, str, str, Callable[[], str]]] = [
+    ("Demand profile", DEMAND_PROFILE_START, DEMAND_PROFILE_END, render_demand_profile),
+    ("Evaluation protocol", EVAL_PROTOCOL_START, EVAL_PROTOCOL_END, render_evaluation_protocol),
+    ("Model ladder", MODEL_LADDER_START, MODEL_LADDER_END, render_model_ladder),
     ("Router comparison", ROUTER_START, ROUTER_END, render_router_comparison),
+    ("Margin sensitivity", MARGIN_START, MARGIN_END, render_margin_sensitivity),
 ]
 
 

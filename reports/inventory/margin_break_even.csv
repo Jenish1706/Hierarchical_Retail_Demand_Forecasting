@@ -1,0 +1,5 @@
+threshold,service_level,gross_margin,meaning
+cheapest_95_over_90,0.95,0.061785418938515024,95% costs less than 90% above this gross margin
+cheapest_98_over_95,0.98,0.126397434161182,98% costs less than 95% above this gross margin
+sl_star_reaches_98,0.98,0.19337016574585622,the unconstrained optimum SL* is at least 98% above this gross margin (a looser rule of thumb than the menu break-even)
+sl_star_reaches_95,0.95,0.08749999999999991,the unconstrained optimum SL* is at least 95% above this gross margin (a looser rule of thumb than the menu break-even)

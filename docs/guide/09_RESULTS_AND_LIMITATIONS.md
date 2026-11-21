@@ -41,7 +41,7 @@ All quantitative rankings and statistical intervals are backed by committed arti
 ---
 
 ### Q5: Do intermittent-demand methods beat general models on sparse series?
-- **Finding**: **Yes.** On intermittent and lumpy series (which represent 72.6% of the catalog post-trimming), specialized estimators (`adida`, `croston_sba`) substantially outperform standard naive baselines (`seasonal_naive_28d` WAPE 98.92%, `naive` WAPE 99.65%).
+- **Finding**: **Yes.** On intermittent and lumpy series (which represent 91.0% of the catalog after pre-launch trimming), specialized estimators (`adida`, `croston_sba`) substantially outperform standard naive baselines (`seasonal_naive_28d` WAPE 98.92%, `naive` WAPE 99.65%).
 
 ---
 
@@ -72,7 +72,8 @@ All quantitative rankings and statistical intervals are backed by committed arti
 
 ### Q10: Operational Impact: Working Capital Optimization
 - **Finding**: Translating forecast uncertainty into safety stock via ABC/XYZ segmentation across California stores (`CA_1`, `CA_2`), the capital-release rule frees **$3,170** of working capital but raises total annual cost by **+$12,444/yr** under the project's cost model (holding -$792/yr, expected stockout cost +$13,237/yr). It is a capital-for-risk trade, not a saving.
-- **Operational Trade-Off**: The rule cuts BZ/CY/CZ items from 95% to 90% CSL and upgrades AX from 95% to 98%. The cheapest level on the 90/95/98% menu is 98% in every optimised segment (-$18,684/yr for +$11,455 of working capital); the unconstrained optimum is 99.5% to 99.7%, because a lost unit of margin costs far more than a week of holding it.
+- **Operational Trade-Off**: The rule cuts BZ/CY/CZ items from 95% to 90% CSL and upgrades AX from 95% to 98%. The cheapest level on the 90/95/98% menu is 98% in every optimised segment (-$18,684/yr for +$11,455 of working capital); the unconstrained optimum is 99.4% to 99.7% by category (HOBBIES at a 45% margin to FOODS at 60%), because a lost unit of margin costs far more than a week of holding it.
+- **Margin sensitivity**: the cheapest menu level depends on the gross margin alone. 98% is the cheapest above a 12.6% margin, 95% between 6.2% and 12.6%, and 90% below 6.2%; the looser rule of thumb "SL* reaches 98%" needs 19.3%. At 25% to 30% grocery margins 98% is still the cheapest, so differentiating service levels by ABC/XYZ does not pay under lost-margin costing. Rendered in the README margin table from `reports/inventory/margin_sensitivity.csv` and `margin_break_even.csv`.
 - **Decisions versus scoring**: classes are decided on the 84 days before the first test day (ending 2016-01-31), planning demand is ADIDA's mean forecast, and $\sigma_e$ is a forecast-error size measured on the backtest days, not a realised inventory outcome.
 - **Artifact Backing**: `reports/inventory/policy_comparison.csv`, `reports/inventory/segment_cost_optimum.csv`, `reports/inventory/portfolio_summary.csv`.
 

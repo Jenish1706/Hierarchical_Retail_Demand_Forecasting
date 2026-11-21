@@ -6,7 +6,7 @@ This document details the automated testing suite: what each test module covers,
 
 ## 1. Test Suite Coverage by Module
 
-The repository maintains an automated test suite of 110 tests executing in ~25 seconds on CPU. The suite is organized into unit, integration, and system-level checks.
+The repository maintains an automated test suite (`pytest`) that runs on CPU in about a minute. The suite is organized into unit, integration, and system-level checks. Test counts are not quoted here because they change with every item; the count and the fresh-clone result of the latest gate are recorded in the final report, and `pytest` prints the live figure.
 
 ### Unit Tests (`tests/unit/`)
 
@@ -70,9 +70,9 @@ def test_full_pipeline_ingestion():
 
 ### Fresh-Clone Guarantees
 In a fresh clone without raw data:
-- **108 unit and system tests pass immediately**.
-- **2 integration tests requiring raw CSVs are cleanly skipped**.
-- **0 tests fail**.
+- Every unit and system test passes immediately.
+- Tests that need the raw M5 data or a downloaded model are cleanly skipped with a stated reason (`DATA_AVAILABLE`, `importorskip`).
+- No test fails.
 - All report artifacts (`reports/`), benchmark results, significance outputs, and dashboard views are fully tested because all derived tables are tracked in the repository.
 
 ---

@@ -25,6 +25,10 @@ from src.config.logging import get_logger  # noqa: E402
 from src.config.settings import M5, settings  # noqa: E402
 from src.data.loader import M5Loader  # noqa: E402
 from src.inventory.abc_xyz import ABCXYZClassifier  # noqa: E402
+from src.inventory.margin_sensitivity import (  # noqa: E402
+    break_even_table,
+    margin_sensitivity,
+)
 from src.inventory.safety_stock import (  # noqa: E402
     SafetyStockCalculator,
     _z_score,
@@ -461,6 +465,17 @@ def main() -> None:
     _save_table(policy_cmp, output_dir / "policy_comparison")
     segment_opt = wca.segment_cost_optimum(kpis, current_sl=args.current_sl)
     _save_table(segment_opt, output_dir / "segment_cost_optimum")
+
+    # 5a'. How far the 98%-everywhere conclusion moves with the assumed gross margin (M5-15).
+    # Break-evens come from the same cost formula the analyzer uses, not from hand-typed numbers.
+    _save_table(
+        margin_sensitivity(sla.cost_margins, holding_cost_rate=sla.holding_cost_rate),
+        output_dir / "margin_sensitivity",
+    )
+    _save_table(
+        break_even_table(holding_cost_rate=sla.holding_cost_rate),
+        output_dir / "margin_break_even",
+    )
 
     # 5b. Current working capital under three mean-demand bases.  Only the forecast is a planning
     # input; actual sales on the scored days are look-ahead and the full-history mean still

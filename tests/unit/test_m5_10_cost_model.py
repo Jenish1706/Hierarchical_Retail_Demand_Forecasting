@@ -394,8 +394,10 @@ def test_readme_prose_numbers_match_the_artifacts(policy_cmp):
     optimised = seg[~seg["abc_xyz_class"].str.endswith("N")]
     assert set(optimised["cost_minimising_sl"]) == {0.98}
     assert "98% in every optimised segment" in section
+    # The SL* range is rendered in the margin-sensitivity block (M5-15) from the per-segment medians
+    # and, separately, per category; the old "99.5% to 99.7%" sentence ignored HOBBIES at 99.4%.
     lo, hi = optimised["closed_form_sl_star"].min() * 100, optimised["closed_form_sl_star"].max() * 100
-    assert f"is {lo:.1f}% to {hi:.1f}%" in section
+    assert f"run from {lo:.1f}% to {hi:.1f}%" in section
 
     b = pd.read_csv(INVENTORY_DIR / "working_capital_demand_bases.csv").set_index("basis")
     wc = b["working_capital"]

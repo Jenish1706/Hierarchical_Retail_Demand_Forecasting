@@ -1,35 +1,104 @@
 # M5 Retail Demand Intelligence Platform
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-110%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-pytest-brightgreen.svg)]()
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![DVC Pipeline](https://img.shields.io/badge/pipeline-DVC%20v3-orange.svg)](https://dvc.org)
 [![Data Engine: Polars](https://img.shields.io/badge/engine-Polars%20lazy%20streaming-blueviolet.svg)](https://pola.rs)
 [![Documentation](https://img.shields.io/badge/docs-comprehensive%20guide-blue.svg)](docs/guide/00_START_HERE.md)
 
-An empirical demand forecasting and inventory intelligence benchmark built on **58.3 million daily retail observations** from the Walmart M5 dataset (30,490 SKUs across 10 stores over 1,913 days).
-
-The platform bridges the gap between raw statistical forecasts and inventory operations, evaluating where specialized intermittent demand methods match or beat complex gradient boosted machines on zero-inflated counts.
+An empirical demand-forecasting and inventory benchmark on the Walmart M5 retail data (store-item daily unit sales). It is organised as one chain of eight questions, each raised by the answer to the one before, from "what does the demand look like?" to "which service level should each segment get?". Every number in this README is rendered from a committed artifact (`python scripts/render_readme_tables.py --check` verifies that) or tied to one by a test, and where a result is negative or limited the limit is stated next to it.
 
 > **Deep Documentation Available**: For first-principles math, worked numerical examples, architecture diagrams, runbooks, and design decisions, see the [Comprehensive Guide](docs/guide/00_START_HERE.md).
 
+### The chain at a glance
+
+1. [What does the demand look like?](#1-what-does-the-demand-look-like) Mostly zeros, and many series launch late.
+2. [Which metric is fair for it?](#2-which-metric-is-fair-for-it) WAPE for volume, RMSSE per (series, origin) for scale-free comparison, with pre-launch zeros trimmed only before a series' first sale.
+3. [How do we evaluate without leakage?](#3-how-do-we-evaluate-without-leakage) Rolling origins, horizon-shifted features and training-window-only statistics.
+4. [Which models, and what does each rung test?](#4-which-models-and-what-does-each-rung-test) A ladder from naive, through intermittent-demand methods, to a global gradient-boosted model with stated handicaps.
+5. [Are the differences real?](#5-are-the-differences-real) Friedman, Nemenyi and a paired series bootstrap separate real gaps from noise.
+6. [Does demand classification help?](#6-does-demand-classification-help) Not against ADIDA applied to every series.
+7. [What is a better forecast worth?](#7-what-is-a-better-forecast-worth) Safety-stock capital, by forecast model.
+8. [Which service level should each segment get?](#8-which-service-level-should-each-segment-get) Under lost-margin costing the highest service level on the menu is the cheapest for every segment, so differentiating by ABC/XYZ trades capital for risk instead of saving money.
+
 ---
 
-## The Problem & Methodological Approach
+## Forecast benchmark (steps 1 to 6)
 
-Retail demand at store-item level is characterized by extreme sparsity: **68.2% of daily records across the catalog are zero**, and 77% of SKUs launched after Day 1 (median first sale on day 160). When evaluated without strict leakage controls or lifecycle zero trimming, standard benchmarks distort both model accuracy and inventory buffers.
+### 1. What does the demand look like?
 
-### Core Architecture & Safeguards
-- **Data Engineering**: Memory-efficient Polars streaming engine applying `narrow-before-melt` to eliminate memory spikes across 58 million rows.
-- **Leakage Prevention**: All rolling and lag features are shifted by the full 28-day horizon (`FeaturePipeline(horizon=28)`), eliminating future lookahead bias.
-- **Canonical Scaling**: RMSSE scaling is anchored strictly to the first non-zero sale ($d_{\text{first}}$) and evaluated per (series, origin) to prevent scale dilution.
-- **Statistical Gating**: Rankings are gated by omnibus Friedman testing, Nemenyi critical difference ranking, and paired series bootstrap confidence intervals (2,000 resamples).
+Store-item sales are mostly zeros, and many series start late. Before choosing a metric or a model, look at the shape (rendered from `reports/eda/`):
 
----
+<!-- BEGIN_DEMAND_PROFILE -->
+- **Scale**: 30,490 store-item series over 1,913 days, 58.3 million daily observations.
+- **Sparsity**: 68.2% of daily records are zero (Foods 62.0%, Household 71.8%, Hobbies 77.3% by category).
+- **Late launches**: 77% of series (23,511) had no sale on day 1, and the median first sale is on day 160. Zeros before a series' first sale mean "not on sale yet", not "no demand".
+- **Demand patterns** (SBC quadrants, full history, pre-launch zeros trimmed): 91.0% of series are intermittent or lumpy.
 
-## Walk-Forward Backtest Leaderboard (3,000 Series $\times$ 3 Origins $\times$ 10 Models)
+| SBC quadrant | Rule | Series | % of series | % of volume |
+|---|---|---|---|---|
+| **SMOOTH** | ADI < 1.32, CV² < 0.49 | 1,895 | 6.2% | 28.5% |
+| **ERRATIC** | ADI < 1.32, CV² ≥ 0.49 | 859 | 2.8% | 13.8% |
+| **LUMPY** | ADI ≥ 1.32, CV² ≥ 0.49 | 5,598 | 18.4% | 23.7% |
+| **INTERMITTENT** | ADI ≥ 1.32, CV² < 0.49 | 22,138 | 72.6% | 34.0% |
+<!-- END_DEMAND_PROFILE -->
 
-Evaluated across 3,000 sampled series over 3 rolling 28-day origins (84 test days per series = 252,000 predictions per model) under canonical M5 per-series evaluation rules.
+*Raises the next question*: zero-heavy, late-starting series break the usual accuracy measures. Which metric is fair for them?
+
+### 2. Which metric is fair for it?
+
+- **WAPE** (weighted absolute percentage error) is pooled absolute error divided by pooled actual sales. It is defined on zeros, so it works for sparse series, and it is volume-weighted, so it follows units sold.
+- **RMSSE** (the M5 competition's scale-free error) divides the root mean squared error by the in-sample one-step naive error of the same series, so series of different size are comparable. It is computed per (series, origin) with that origin's own scale and then averaged, never with one scale shared across origins.
+- **Trimming rule** (the M5 rule): the scale and the demand classification drop zeros only before a series' first sale in its *full* history, never zeros in the middle of its life. Trimming a mid-life window would turn genuine zero-demand days into "not on sale yet".
+- The two measures can disagree on sparse items (equal-weighted ranks versus volume), which is why both are reported and why step 5 tests the gaps.
+
+*Raises the next question*: a fair metric still needs a fair test. How do we evaluate without leakage?
+
+### 3. How do we evaluate without leakage?
+
+A rolling-origin walk-forward backtest: at each origin the models see only data up to that origin and forecast the next block of days, and the next origin starts after the previous test window (rendered from `reports/backtest_main/manifest.json`).
+
+<!-- BEGIN_EVAL_PROTOCOL -->
+| Origin index | Training ends | Test window |
+|---|---|---|
+| 2 | 2016-01-31 | 2016-02-01 to 2016-02-28 |
+| 1 | 2016-02-28 | 2016-02-29 to 2016-03-27 |
+| 0 | 2016-03-27 | 2016-03-28 to 2016-04-24 |
+
+- **Sample and size**: 3,000 series drawn at random with a fixed seed, 900 days of history each. 3 origins x 28 days = 84 test days per series, 252,000 predictions per model. Origin indices count back from the end of the data, so index 0 is the latest window.
+- **Horizon-shifted features**: every lag and rolling feature the global model sees is shifted by the full 28-day horizon (38 features), so a test row never references an actual inside its own window.
+- **Training-window-only statistics**: the RMSSE scale and the router's SBC quadrants for each origin use data up to that origin's training end, never the test window.
+<!-- END_EVAL_PROTOCOL -->
+
+*Raises the next question*: with a leakage-free test in place, which models do we run, and what is each one there to test?
+
+### 4. Which models, and what does each rung test?
+
+Each rung adds one idea to the one below it, so a gap between two rungs can be attributed to that idea.
+
+<!-- BEGIN_MODEL_LADDER -->
+| Rung | Model | Tier | What this rung tests |
+|---|---|---|---|
+| 1 | Naive | Baseline | The floor: repeat the last observed value. |
+| 2 | Seasonal Naive (Weekly) | Baseline | Does a weekly cycle alone help? |
+| 3 | Seasonal Naive (28d) | Baseline | Does a four-week cycle alone help? |
+| 4 | Moving Average (28d) | Simple Baseline | Does averaging out the noise help? |
+| 5 | SES | Exponential Smoothing | Does recency-weighted smoothing help? |
+| 6 | Croston SBA | Intermittent Statistical | Does modelling demand size and interval separately (debiased) help on intermittent series? |
+| 7 | ADIDA | Intermittent Statistical | Does aggregating to shorter, denser series help on intermittent series? |
+| 8 | LightGBM | Global GBDT | Does a global model that learns across series help? (squared-error loss) |
+| 9 | LightGBM (Tweedie) | Global GBDT | The same global model with a loss suited to zero-inflated counts. |
+| 10 | Routed SBC Ensemble | Hybrid (ADIDA + Global) | Does sending each demand pattern to a different method help? (step 6) |
+
+- **Handicaps on the global model**: LightGBM ran under three handicaps relative to the M5 competition: (1) no price features (`price_features_included: false`; the price table came from a workbook truncated at Excel's row limit and covers about 15% of M5 prices), (2) a 3,000-series sample of the 30,490-series catalogue, and (3) a 900-day window of the 1,913-day history. In the M5 competition price and promotion features and catalogue-wide learning were a large part of why GBDTs won, so "intermittent methods match or beat global GBDTs here" carries that qualification.
+<!-- END_MODEL_LADDER -->
+
+*Raises the next question*: the rungs score differently, but are those differences larger than noise?
+
+### 5. Are the differences real?
+
+Rankings are gated by an omnibus Friedman test, Nemenyi critical-difference ranking and paired series bootstrap confidence intervals (resampling whole series, so within-series autocorrelation is kept). The leaderboard is ordered by Nemenyi average rank, with WAPE and RMSSE and their intervals alongside:
 
 <!-- BEGIN_LEADERBOARD_TABLE -->
 | Rank | Model Name | Architecture Tier | Nemenyi Avg Rank | Top Clique? | WAPE (%) [95% CI] | RMSSE [95% CI] | $\Delta$WAPE vs Best [95% CI] | Statistical Verdict |
@@ -48,7 +117,8 @@ Evaluated across 3,000 sampled series over 3 rolling 28-day origins (84 test day
 *Statistical significance: Omnibus Friedman test $\chi^2 = 2429.30$ ($p < 10^{-12}$, 10 models $\times$ 2,950 complete series). Post-hoc Nemenyi critical difference $CD = 0.2494$ ($\alpha = 0.05$). Top rank clique $\{croston\_sba, adida, routed\_ensemble\}$ is statistically indistinguishable in average rank. Paired series bootstrap (2,000 resamples) demonstrates that Routed SBC Ensemble is indistinguishable from ADIDA in pooled WAPE ($\Delta\text{WAPE} = +0.50\%$, 95% CI [-0.01%, +1.04%]; assignment chosen on the evaluation origins; a clean test needs an earlier selection origin). Global model caveat: LightGBM was evaluated under three handicaps compared to M5 competition conditions: (1) no price features (`price_features_included: false` due to Excel row-limit truncation of the raw price workbook to ~15% coverage), (2) a 3,000-series sample rather than the full 30,490 catalog, and (3) a 900-day window rather than the full 1,913-day history.*
 <!-- END_LEADERBOARD_TABLE -->
 
-### Statistical Significance & Error Analysis
+#### Statistical significance and error analysis
+
 <!-- BEGIN_STATISTICS_SECTION -->
 - **Non-Parametric Omnibus Test (Friedman)**: Evaluated across 10 models over 2,950 complete series (84 evaluation days per series). The omnibus Friedman test decisively rejects the null hypothesis of equal model performance ($\chi^2 = 2429.30$, $p < 10^{-12}$), justifying post-hoc ranking comparisons.
 - **Post-Hoc Critical Difference (Nemenyi)**: Critical difference $CD = 0.2494$ at $\alpha = 0.05$. **Croston SBA** achieved the best average rank (4.55), forming a top statistically indistinguishable clique with **ADIDA**, **Routed SBC Ensemble**. Standard global models (**LightGBM (Tweedie)** at 5.38, **LightGBM** at 5.56) scored significantly worse in average rank across the panel.
@@ -56,7 +126,9 @@ Evaluated across 3,000 sampled series over 3 rolling 28-day origins (84 test day
 - **Per-Series Pairwise Win Rates**: Comparing models series-by-series resolves the apparent divergence between rank tests and volume metrics: **Croston SBA** beats **ADIDA** on 57.0% of individual series (favoring rank metrics on sparse items), whereas **ADIDA** achieves lower aggregate error on higher-volume items. On 93.8% of series, the two models are statistically indistinguishable under Holm-corrected per-series Diebold-Mariano testing.
 <!-- END_STATISTICS_SECTION -->
 
-### Does Demand-Pattern Routing Help? (Router vs the Best Single Model)
+*Raises the next question*: the routed ensemble sits in the top clique, so does classifying demand help at all?
+
+### 6. Does demand classification help?
 
 The router classifies each series into an SBC (Syntetos-Boylan-Croston, 2005) quadrant from its training window and sends it to a per-segment method. The right yardstick is the best single method applied everywhere, which here is ADIDA, not LightGBM. WAPE is the same pooled definition as the leaderboard.
 
@@ -78,11 +150,13 @@ The router classifies each series into an SBC (Syntetos-Boylan-Croston, 2005) qu
 - **Reading it**: the best single model is the lowest-WAPE single model within each row, chosen after the scores are known, which favours the single model. The INTERMITTENT to ADIDA assignment was chosen on these same evaluation origins, so the router is scored on the data that selected its rule; a clean test needs an earlier selection origin. LightGBM ran with the handicaps listed under Limitation 1.
 <!-- END_ROUTER_COMPARISON -->
 
+*Raises the next question*: if the best forecasts are all close, what is a better forecast worth in operational terms?
+
 ---
 
-## Inventory Decision Layer (Operations Analytics)
+## Inventory Decision Layer (steps 7 and 8)
 
-### The Dollar Value of a Better Forecast (Model-Driven Working Capital)
+### 7. What is a better forecast worth?
 
 Evaluating required safety stock capital at a fixed 95% Cycle Service Level (CSL) across California stores `CA_1` and `CA_2` (4,591 priced SKUs) connects each model's rolling-origin forecast error to the stock needed to cover it ($SS = z \cdot \sigma_e \cdot \sqrt{L}$). Here $\sigma_e$ is the **RMSE** of the forecast errors, taken about zero, not their standard deviation: a standard deviation subtracts a model's mean error, so a forecast that is consistently too low would be costed as if it were accurate. The *Mean bias* column is that mean error (actual - forecast; positive means the forecast runs low):
 
@@ -102,7 +176,7 @@ Evaluating required safety stock capital at a fixed 95% Cycle Service Level (CSL
 - **Reading the table**: Sized on RMSE, **Naive** needs about 2.13 units per day of error cover against about 1.49 for **Moving Average (28d)** and **ADIDA**, so required safety stock capital falls from **$68,536.41** (Naive) to **$47,909.05** (ADIDA), **$20,627.36 (30.10%)** less at the same 95% CSL. The four smoothing methods (Moving Average, ADIDA, SES, Croston SBA) sit within 3% of each other ($47,896.83 to $49,268.17), so the saving comes from **smoothing versus naive, not from ADIDA specifically**. The **Historical Mean** baseline under-forecasts by 0.29 units per SKU per day: a standard deviation hid that and ranked it cheapest, but on RMSE it ranks fifth.
 - **Caveat on the 30%**: RMSE charges bias in either direction. Naive over-forecasts (mean error -0.49 per day), and an over-forecast already sits in the reorder point's forecast term, so part of Naive's gap is bias rather than variability. RMSE is the sizing rule used here and credits smoothing with the full 30%; on the bias-free standard deviation alone the gap is about 22% (`mean_std` in `safety_stock_by_model.csv`).
 
-### Differentiated Service Levels & ABC/XYZ Optimization
+### 8. Which service level should each segment get?
 
 Feeding champion **ADIDA** forecast errors ($\sigma_e$ = RMSE) into 3x3 ABC/XYZ Pareto segmentation across California stores `CA_1` and `CA_2` (6,098 SKUs, 4,591 with verified price data). ADIDA is the inventory champion because it leads the main 3,000-series benchmark; on these 6,098 CA series alone **Moving Average (28d)** has the lower WAPE (76.73% vs 77.23%), and the two differ by under 0.1% in safety stock capital.
 
@@ -125,8 +199,32 @@ Capital released only means something next to what it costs. Holding cost uses a
 <!-- END_POLICY_COMPARISON_TABLE -->
 
 - **Capital-release rule** (AX 98%, BZ/CY/CZ 90%, the rest held at 95%): frees $3,170 of working capital but raises total annual cost by **+$12,444/yr**. Holding cost falls by $792/yr while expected stockout cost rises by $13,237/yr. Under the project's own cost model it is not a saving; it is a capital-for-risk trade, worth taking only if working capital is the binding constraint.
-- **Cost-minimising level**: on the 90/95/98% menu it is **98% in every optimised segment**, for **-$18,684/yr** at **+$11,455** of working capital. The unconstrained optimum $SL^* = 1 - hcL/(365m)$ is 99.5% to 99.7% (`closed_form_sl_star` in `segment_cost_optimum.csv`), above the whole menu, because a lost unit of margin costs far more than a week of holding it. Class N segments are held at the current level in both policies.
+- **Cost-minimising level**: on the 90/95/98% menu it is **98% in every optimised segment**, for **-$18,684/yr** at **+$11,455** of working capital. The unconstrained optimum $SL^* = 1 - hcL/(365m)$ sits above the whole menu in every category (range in the margin table below), because a lost unit of margin costs far more than a week of holding it. Class N segments are held at the current level in both policies.
 - **Limits of this result**: the cost model charges only lost margin per unit short (no churn or substitution) and assumes normal errors on zero-heavy demand, so it is an analytical baseline; empirical lead-time stockout simulation is scheduled for Stage B.
+
+#### Does the answer survive a different gross margin?
+
+The cost model rests on assumed gross margins, and a buyer will challenge 60% on groceries. For a SKU with price $p$ and gross margin $g$, unit cost is $c = p(1-g)$ and the margin lost per unit short is $m = pg$, so $SL^* = 1 - hcL/(365m)$ and the cheapest menu level depend on $g$ alone (price and error size cancel). Break-even margins are computed in `src/inventory/margin_sensitivity.py`:
+
+<!-- BEGIN_MARGIN_SENSITIVITY -->
+| Gross margin | Scenario | Unconstrained optimum SL* | Cheapest menu level | Extra holding + shortage cost at 90% | Extra holding + shortage cost at 95% | Extra holding + shortage cost at 98% |
+|---|---|---|---|---|---|---|
+| 5% | grid | 90.9% | 90% | 0% | +4% | +18% |
+| 10% | grid | 95.7% | 95% | +12% | 0% | +4% |
+| 15% | grid | 97.3% | 98% | +30% | +4% | 0% |
+| 20% | grid | 98.1% | 98% | +54% | +12% | 0% |
+| 25% | grid | 98.6% | 98% | +78% | +21% | 0% |
+| 30% | grid | 98.9% | 98% | +103% | +30% | 0% |
+| 45% | HOBBIES assumption | 99.4% | 98% | +183% | +58% | 0% |
+| 50% | HOUSEHOLD assumption | 99.5% | 98% | +211% | +67% | 0% |
+| 60% | FOODS assumption | 99.7% | 98% | +270% | +88% | 0% |
+
+- **Break-evens** (exact, from the same cost formula the analysis uses): 98% costs less than 95% above a 12.6% gross margin, and 95% costs less than 90% above 6.2%. So the cheapest menu level is 98% above 12.6%, 95% between 6.2% and 12.6%, and 90% below 6.2%. The cost per unit of error size scales with price, so the answer depends on the margin alone.
+- **Rule of thumb versus exact**: the unconstrained optimum SL* only reaches 98% above a 19.3% margin and 95% above 8.7%. Those are looser than the break-evens above: SL* can sit below 98% while 98% is still the cheapest of the three menu levels, because SL* is a continuous optimum and the menu is coarse.
+- **Realistic grocery margins**: at 25% and 30% gross margin the cheapest level is 98%, and holding 95% instead would cost 21% and 30% more in safety-stock holding plus shortage cost.
+- **Range of SL***: by category it is 99.4% (HOBBIES, 45% margin) to 99.7% (FOODS, 60%); the per-segment medians in `segment_cost_optimum.csv` run from 99.5% to 99.7%. All of them sit above the whole 90/95/98% menu.
+- **What it means**: because the cheapest level depends on the margin and not on volume or variability, every segment within a category shares one cheapest level. Differentiating service levels by ABC/XYZ cannot lower cost under lost-margin costing while the gross margin is above 12.6%; it can pay only when working capital is the binding constraint, or for items whose margin is below that.
+<!-- END_MARGIN_SENSITIVITY -->
 
 Per-segment detail of the capital-release rule, with capital released always shown next to its annual cost change:
 
@@ -161,6 +259,8 @@ Per-segment detail of the capital-release rule, with capital released always sho
 
 ---
 
+---
+
 ## Quickstart & Reproduction
 
 ```powershell
@@ -169,7 +269,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 
-# 2. Run the test suite (110 tests, ~25s)
+# 2. Run the test suite
 pytest
 
 # 3. Regenerate backtest, significance, and inventory analysis

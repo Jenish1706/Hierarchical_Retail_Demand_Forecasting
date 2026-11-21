@@ -87,6 +87,7 @@ def test_chain_prose_has_no_hand_typed_numbers(readme: str) -> None:
         (rrt.LEADERBOARD_START, rrt.LEADERBOARD_END),
         (rrt.STATISTICS_START, rrt.STATISTICS_END),
         (rrt.ROUTER_START, rrt.ROUTER_END),
+        (rrt.TIER1_START, rrt.TIER1_END),
     ):
         text = re.sub(re.escape(s) + r".*?" + re.escape(e), "", text, flags=re.S)
     text = re.sub(r"\]\(#[^)]*\)", "]", text)  # anchor links carry the step numbers

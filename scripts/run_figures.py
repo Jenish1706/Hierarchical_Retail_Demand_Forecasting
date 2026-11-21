@@ -106,6 +106,13 @@ def main() -> int:
                 row["mase"] = float(np.mean(np.abs(yt[ok] - yp[ok]) / np.sqrt(scales[ok])))
         rows.append(row)
     leaderboard = pd.DataFrame(rows).sort_values("wape").reset_index(drop=True)
+    # RMSSE here must be the canonical per-(series, origin) mean from accuracy_overall.csv. The pooled
+    # sqrt(mean(e^2 / scale)) computed above is a different quantity (it ranks LightGBM first and
+    # contradicts the README), so it is replaced whenever the canonical table is present.
+    canonical_csv = results_dir / "accuracy_overall.csv"
+    if canonical_csv.exists():
+        canonical = pd.read_csv(canonical_csv).set_index("model")["rmsse"]
+        leaderboard["rmsse"] = leaderboard["model"].map(canonical)
     leaderboard.to_csv(
         out_dir.parent / "results" / "leaderboard.csv", index=False
     ) if out_dir.name == "results" else None

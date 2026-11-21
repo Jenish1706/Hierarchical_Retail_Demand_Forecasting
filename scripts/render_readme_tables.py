@@ -45,6 +45,10 @@ SBC_CSV = PROJECT_ROOT / "reports" / "eda" / "table_sbc_classification.csv"
 MARGIN_SENSITIVITY_CSV = PROJECT_ROOT / "reports" / "inventory" / "margin_sensitivity.csv"
 MARGIN_BREAK_EVEN_CSV = PROJECT_ROOT / "reports" / "inventory" / "margin_break_even.csv"
 SEGMENT_OPTIMUM_CSV = PROJECT_ROOT / "reports" / "inventory" / "segment_cost_optimum.csv"
+TIER1_CSV = PROJECT_ROOT / "reports" / "tier1" / "tier1_overall.csv"
+POLICY_RECS_CSV = PROJECT_ROOT / "reports" / "inventory" / "policy_recommendations.csv"
+TIER1_START = "<!-- BEGIN_TIER1_NOTE -->"
+TIER1_END = "<!-- END_TIER1_NOTE -->"
 ROUTER_START = "<!-- BEGIN_ROUTER_COMPARISON -->"
 ROUTER_END = "<!-- END_ROUTER_COMPARISON -->"
 DEMAND_PROFILE_START = "<!-- BEGIN_DEMAND_PROFILE -->"
@@ -60,6 +64,7 @@ DEMAND_BASIS_LABELS = {
     "forecast": "ADIDA mean forecast on the scored days",
     "actual_backtest_days": "Mean actual sales on the scored days (look-ahead)",
     "full_history_mean": "Full-history mean (the earlier figure)",
+    "forecast_first_origin": "ADIDA forecast for the first 28 scored days only",
 }
 
 
@@ -186,6 +191,9 @@ def render_leaderboard_table() -> str:
     n_models = sig.get("n_models", 10)
     n_series = sig.get("n_series_complete", 2950)
     cd = sig.get("nemenyi", {}).get("critical_difference", 0.2494)
+    _re_d = sig["bootstrap"]["routed_ensemble"]["delta_wape_vs_best"]
+    _man = json.loads(MANIFEST_JSON.read_text(encoding="utf-8"))
+    _eda = json.loads(EDA_FINDINGS_JSON.read_text(encoding="utf-8"))["3.1_structure"]
 
     footnote = (
         f"\n*Statistical significance: Omnibus Friedman test $\\chi^2 = {friedman_stat:.2f}$ "
@@ -193,11 +201,12 @@ def render_leaderboard_table() -> str:
         f"Post-hoc Nemenyi critical difference $CD = {cd:.4f}$ ($\\alpha = 0.05$). "
         f"Top rank clique $\\{{croston\\_sba, adida, routed\\_ensemble\\}}$ is statistically indistinguishable in average rank. "
         f"Paired series bootstrap (2,000 resamples) demonstrates that Routed SBC Ensemble is indistinguishable from ADIDA in pooled WAPE "
-        f"($\\Delta\\text{{WAPE}} = +0.50\\%$, 95% CI [-0.01%, +1.04%]; assignment chosen on the evaluation origins; a clean test needs an earlier selection origin). "
+        f"($\\Delta\\text{{WAPE}} = {_re_d['point']:+.2f}\\%$, 95% CI [{_re_d['ci_lower']:+.2f}%, {_re_d['ci_upper']:+.2f}%]; assignment chosen on the evaluation origins; a clean test needs an earlier selection origin). "
+        f"RMSSE point estimates are the per-(series, origin) mean in `accuracy_overall.csv`; the intervals come from a bootstrap over per-series means, so they are centred slightly off the point. "
         f"Global model caveat: LightGBM was evaluated under three handicaps compared to M5 competition conditions: "
-        f"(1) no price features (`price_features_included: false` due to Excel row-limit truncation of the raw price workbook to ~15% coverage), "
-        f"(2) a 3,000-series sample rather than the full 30,490 catalog, and "
-        f"(3) a 900-day window rather than the full 1,913-day history.*"
+        f"(1) no price features (`price_features_included: {str(_man.get('price_features_included', False)).lower()}` because the price table was truncated at Excel's row limit), "
+        f"(2) a {int(_man['n_series']):,}-series sample rather than the full {int(_eda['n_series']):,}-series catalog, and "
+        f"(3) a {int(_man['history_days'])}-day panel rather than the full {int(_eda['n_days']):,}-day history (shorter training windows, see step 3).*"
     )
 
     return "\n".join(lines) + "\n" + footnote
@@ -206,6 +215,10 @@ def render_leaderboard_table() -> str:
 def render_inventory_table() -> str:
     """Generate Markdown inventory allocation matrix from portfolio summary."""
     df_port = pd.read_csv(INVENTORY_CSV)
+    # The target service level of each cell is what the recommendation rule assigned, not typed here.
+    recommended_sl = (
+        pd.read_csv(POLICY_RECS_CSV).groupby("abc_xyz_class")["recommended_service_level"].agg(lambda s: s.mode().iloc[0])
+    )
 
     lines = [
         "| ABC/XYZ Cell | SKU Count | Current Working Capital ($) | Recommended Working Capital ($) | Capital Released ($) | Annual Cost Change ($/yr) | Target Service Level (CSL) | Policy Impact |",
@@ -237,7 +250,9 @@ def render_inventory_table() -> str:
         total_released += rel_wc
         total_cost_change += cost_chg
 
-        meta = POLICY_METADATA.get(cell, {"csl": "95%", "impact": "Maintained"})
+        meta = dict(POLICY_METADATA.get(cell, {"csl": "95%", "impact": "Maintained"}))
+        if cell in recommended_sl.index:
+            meta["csl"] = f"**{float(recommended_sl[cell]):.0%}**"
 
         cur_str = f"${cur_wc:,.2f}"
         rec_str = f"${rec_wc:,.2f}"
@@ -308,7 +323,7 @@ def render_safety_stock_by_model_table() -> str:
     df = pd.read_csv(SAFETY_STOCK_MODEL_CSV)
 
     lines = [
-        "| Model Name | Architecture Tier | Mean RMSE ($\\sigma_e$) | Mean bias (actual - forecast) | Safety Stock Units (95% CSL) | Safety Stock Capital ($) | Capital Reduction vs Naive ($) | Reduction (%) |",
+        "| Model Name | Architecture Tier | Mean RMSE ($\\sigma_e$, all CA SKUs) | Mean bias (actual - forecast, all CA SKUs) | Safety Stock Units (95% CSL, all CA SKUs) | Safety Stock Capital ($, priced SKUs only) | Capital Reduction vs Naive ($, priced SKUs only) | Reduction (%) |",
         "|---|---|---|---|---|---|---|---|",
     ]
 
@@ -529,12 +544,17 @@ def render_evaluation_protocol() -> str:
     origins = sorted(m["origins"], key=lambda o: o["test_start"])
     n_origins, horizon, n_series = int(m["n_origins"]), int(m["horizon_days"]), int(m["n_series"])
     test_days = n_origins * horizon
+    panel_end = pd.Timestamp(max(o["test_end"] for o in origins))
+    panel_start = panel_end - pd.Timedelta(days=int(m["history_days"]) - 1)
+    train_days = [(pd.Timestamp(o["train_end"]) - panel_start).days + 1 for o in origins]
     lines = [
         "| Origin index | Training ends | Test window |",
         "|---|---|---|",
         *(f"| {o['index']} | {o['train_end']} | {o['test_start']} to {o['test_end']} |" for o in origins),
         "",
-        f"- **Sample and size**: {n_series:,} series drawn at random with a fixed seed, {m['history_days']} days of history each. "
+        f"- **Sample and size**: {n_series:,} series drawn at random with a fixed seed across all stores, from a {m['history_days']}-day panel "
+        f"({panel_start.date()} to {panel_end.date()}), so each origin trains on {', '.join(str(d) for d in train_days[:-1])} and {train_days[-1]} days "
+        f"(the panel also holds the test windows). "
         f"{n_origins} origins x {horizon} days = {test_days} test days per series, {n_series * test_days:,} predictions per model. "
         "Origin indices count back from the end of the data, so index 0 is the latest window.",
         f"- **Horizon-shifted features**: every lag and rolling feature the global model sees is shifted by the full "
@@ -580,7 +600,7 @@ def render_model_ladder() -> str:
         f"(1) {'no price features' if no_price else 'price features included'} (`price_features_included: {str(not no_price).lower()}`; "
         f"the price table came from a workbook truncated at Excel's row limit and covers {price_note}), "
         f"(2) a {int(m['n_series']):,}-series sample of the {int(eda['n_series']):,}-series catalogue, and "
-        f"(3) a {int(m['history_days'])}-day window of the {int(eda['n_days']):,}-day history. "
+        f"(3) a {int(m['history_days'])}-day panel of the {int(eda['n_days']):,}-day history (shorter training windows, see step 3). "
         "In the M5 competition price and promotion features and catalogue-wide learning were a large part of why GBDTs won, so "
         "\"intermittent methods match or beat global GBDTs here\" carries that qualification.",
     ]
@@ -637,6 +657,47 @@ def render_margin_sensitivity() -> str:
         f"gross margin is above {b98:.1%}; it can pay only when working capital is the binding constraint, or for items whose margin is below that.",
     ]
     return "\n".join(lines + [""] + reading)
+
+
+def _dm_power_reference(h2h: dict) -> dict | None:
+    """ADIDA versus the seasonal-naive baseline: a large WAPE gap, with its share of 'indistinguishable' series."""
+    try:
+        sig = json.loads(SIGNIFICANCE_JSON.read_text(encoding="utf-8"))
+        acc = pd.read_csv(BACKTEST_CSV).set_index("model")
+    except (OSError, ValueError):
+        return None
+    for p in sig.get("pairwise_per_series", []):
+        if {p["model_a"], p["model_b"]} == {"adida", "seasonal_naive"}:
+            gap = float(acc.loc["seasonal_naive", "wape"] - acc.loc["adida", "wape"])
+            return {
+                "label": f"{_model_label('adida')} against {_model_label('seasonal_naive')}",
+                "gap": gap,
+                "indist": float(p["dm_indistinguishable_pct"]),
+            }
+    return None
+
+
+def render_tier1_note() -> str:
+    """Step 5: the Tier-1 StatsForecast models were scored on the same series and origins, outside the 10-model test."""
+    t1 = pd.read_csv(TIER1_CSV)
+    acc = pd.read_csv(BACKTEST_CSV).set_index("model")
+    best_w = t1.loc[t1["wape"].idxmin()]
+    best_r = t1.loc[t1["rmsse"].idxmin()]
+    adida = acc.loc["adida"]
+    names = {"autoces": "AutoCES", "autoets": "AutoETS", "theta": "Theta", "ets_damped": "Damped ETS"}
+
+    def nm(m: str) -> str:
+        return names.get(m, m)
+
+    lines = [
+        f"- **Tier-1 models outside this benchmark**: the StatsForecast Tier-1 run (`reports/tier1/tier1_overall.csv`) scores another set of "
+        f"statistical models on the same series, origins and actuals, but it is not part of the 10-model Friedman and Nemenyi tests above, and its "
+        f"implementations (including its own ADIDA, {float(t1.loc[t1['model'] == 'adida', 'wape'].iloc[0]):.2f}% WAPE) differ from the project's. "
+        f"Its lowest WAPE is {nm(best_w['model'])} at {float(best_w['wape']):.2f}%, below ADIDA's {float(adida['wape']):.2f}% here, "
+        f"and its lowest RMSSE is {nm(best_r['model'])} at {float(best_r['rmsse']):.4f} against ADIDA's {float(adida['rmsse']):.4f}. "
+        f"So \"ADIDA leads\" is a statement about the 10 models in the leaderboard, not about every model scored on this data."
+    ]
+    return "\n".join(lines)
 
 
 def render_statistics_section(sig: dict | None = None) -> str:
@@ -725,11 +786,21 @@ def render_statistics_section(sig: dict | None = None) -> str:
     indist_pct = ac_pair.get("dm_indistinguishable_pct", 93.80)
     csba_name = MODEL_INFO.get("croston_sba", {}).get("name", "**Croston SBA**")
 
+    # How much power does the per-series DM test have?  Compare with a pair whose WAPE gap is large.
+    wape_gap_pair = _dm_power_reference(h2h)
+    power_txt = ""
+    if wape_gap_pair is not None:
+        power_txt = (
+            f" The test has little power per series: {wape_gap_pair['label']} (a {wape_gap_pair['gap']:.1f} pp WAPE gap) is also "
+            f"indistinguishable on {wape_gap_pair['indist']:.1f}% of series, so \"indistinguishable\" does not mean \"equal\"."
+        )
+
     line4 = (
-        f"- **Per-Series Pairwise Win Rates**: Comparing models series-by-series resolves the apparent divergence "
-        f"between rank tests and volume metrics: {csba_name} beats {adida_name} on {c_win:.1f}% of individual series "
-        f"(favoring rank metrics on sparse items), whereas {adida_name} achieves lower aggregate error on higher-volume items. "
-        f"On {indist_pct:.1f}% of series, the two models are statistically indistinguishable under Holm-corrected per-series Diebold-Mariano testing."
+        f"- **Per-Series Pairwise Win Rates**: the rank leader and the pooled-WAPE leader differ, and series-by-series comparison "
+        f"shows how: {csba_name} has the lower absolute error on {c_win:.1f}% of individual series, yet {adida_name} has the lower pooled "
+        f"WAPE, so where ADIDA wins it wins by more. This analysis does not say which kind of series each model wins on, and the "
+        f"win rate does not follow series volume in the direction one might expect. On {indist_pct:.1f}% of series, the two models are statistically indistinguishable under "
+        f"Holm-corrected per-series Diebold-Mariano testing (Holm is applied across series within the pair).{power_txt}"
     )
 
     return "\n".join([line1, line2, line3, line4])
@@ -741,6 +812,7 @@ EXTRA_BLOCKS: list[tuple[str, str, str, Callable[[], str]]] = [
     ("Demand profile", DEMAND_PROFILE_START, DEMAND_PROFILE_END, render_demand_profile),
     ("Evaluation protocol", EVAL_PROTOCOL_START, EVAL_PROTOCOL_END, render_evaluation_protocol),
     ("Model ladder", MODEL_LADDER_START, MODEL_LADDER_END, render_model_ladder),
+    ("Tier-1 note", TIER1_START, TIER1_END, render_tier1_note),
     ("Router comparison", ROUTER_START, ROUTER_END, render_router_comparison),
     ("Margin sensitivity", MARGIN_START, MARGIN_END, render_margin_sensitivity),
 ]

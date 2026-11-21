@@ -18,7 +18,7 @@ flowchart TD
         SCHEMA --> LAGS["Shifted Lag Generator<br/>(Shift >= 28 Days)"]
         LAGS --> ROLLING["Rolling Window Statistics<br/>(roll_mean_7, roll_mean_28, roll_std_28)"]
         ROLLING --> CAL["Calendar & Event Encodings<br/>(Day of Week, Month, Snap, Events)"]
-        CAL --> LEAK_CHECK["assert_no_temporal_leakage()<br/>(Chronological Boundary Guard)"]
+        CAL --> LEAK_CHECK["Horizon-shifted features<br/>(perturbation-tested)"]
     end
 
     subgraph FORECASTING["3. Multi-Tier Model Zoo"]
@@ -66,28 +66,23 @@ flowchart TD
 
 ## 3. The Life of a Record: End-to-End Walkthrough
 
-To see how the platform functions in practice, consider the lifecycle of one single SKU record: **`FOODS_1_001_CA_1`** (a specialty food item in California Store 1):
+To see how the platform functions in practice, follow one series through the forecasting steps (`FOODS_1_001_WI_3`) and one California SKU through the inventory step (`FOODS_1_001_CA_1`). Every number below is read from a committed artifact:
 
-1. **Catalog Ingestion & Lifecycle Trimming**:
-   - `M5Loader.load_first_sale_dates()` scans the catalog history from Day 1 ($d_1$). It discovers `FOODS_1_001_CA_1` recorded its first non-zero sale on **Day 160**.
-   - When loading the 900-day backtest training window (Days 986 to 1885), the loader notes that Day 160 predates Day 986, meaning the item is a mature product. All zeros inside the 900-day window are genuine low demand, and no in-window zeros are falsely trimmed.
-2. **SBC Demand Profiling**:
-   - `classify_demand()` evaluates the historical series. The item experiences an average inter-demand interval $ADI = 2.45$ days ($ADI \ge 1.32$) and a transaction variance $CV^2 = 0.31$ ($CV^2 < 0.49$).
-   - The SKU is flagged as **INTERMITTENT**.
-3. **Feature Generation**:
-   - The Polars engine computes historical lags. For forecasting Day 1886 ($t+1$), the most recent sales feature used is strictly shifted by 28 days to Day 1858 ($t-28$). Runtime assertion `assert_no_temporal_leakage` passes.
-4. **Model Forecasting**:
-   - **Croston SBA**: Slices active non-zero sales, updates interval $\hat{p} = 2.45$ and demand size $\hat{z} = 2.10$, applying shrinkage $(1 - 0.1/2) \cdot (2.10 / 2.45) = 0.814$ units/day.
-   - **ADIDA**: Aggregates daily demand into 2-day buckets, fits SES, and outputs $0.805$ units/day.
-   - **LightGBM Tweedie**: Evaluates lag features and day-of-week indicators, predicting $0.782$ units/day.
-   - **Router**: Detects the INTERMITTENT classification and routes the item to ADIDA.
-5. **Rolling-Origin Evaluation**:
-   - Across Origin 0 (Days 1886–1913), in-sample naive scale $s_i$ is computed from Day 986 to 1885 ($s_i = 1.42$).
-   - Point errors $(y_{t} - \hat{y}_t)$ are scaled by $\sqrt{s_i}$ to compute $\text{RMSSE}_i = 0.742$ and absolute error for WAPE.
-6. **Significance & Bootstrap Inclusion**:
-   - The SKU's 84 evaluation days across 3 origins are logged into `predictions.parquet`.
-   - In the paired bootstrap engine, the entire block of `FOODS_1_001_CA_1` is resampled with replacement, contributing to the 95% confidence intervals on model gaps.
-7. **Inventory Optimization & Policy Output**:
+1. **Panel loading and lifecycle trimming**:
+   - The backtest loads a 900-day panel (2013-11-07 to 2016-04-24) for the sampled series, so Origin 0 trains on 872 days (up to 2016-03-27); the panel also holds the three test windows. `M5Loader.load_first_sale_dates()` scans the *full* history from day 1, and only zeros before a series' first sale are trimmed, never zeros in the middle of its life.
+   - The series traced in steps 2 to 6 is `FOODS_1_001_WI_3`, the first INTERMITTENT series (alphabetically) at Origin 0 with sales in its test window. It comes from the 3,000-series sample, so every number below is in `reports/backtest_main/`.
+2. **SBC demand profiling**:
+   - `classify_demand()` on the Origin 0 training window gives an average inter-demand interval $ADI = 8.81$ days and $CV^2 = 0.25$ (`routing_assignments.csv`). With $ADI \ge 1.32$ and $CV^2 < 0.49$ the series is **INTERMITTENT** and the router sends it to **ADIDA**.
+3. **Feature generation (global model only)**:
+   - Every lag and rolling feature is shifted by the full 28-day horizon, so a test row never sees an actual inside its own window. This is checked by perturbation tests (`tests/unit/test_g4b_review_fixes.py`: changing sales inside the test window changes no forecast) and a Polars/pandas parity test. `assert_no_temporal_leakage` (in `src/evaluation/splits.py`) only compares dates and is called by the Tier-1 runner, not the backtest.
+4. **Model forecasting** (mean forecast over the 28 test days at Origin 0, units per day; mean actual 0.357):
+   - **Croston SBA**: 0.136. **ADIDA**: 0.157. **LightGBM (Tweedie)**: 0.183. **LightGBM**: 0.197.
+   - **Router**: 0.157. It uses ADIDA fitted after trimming pre-launch zeros, so it can differ slightly from the standalone ADIDA forecast.
+5. **Rolling-origin evaluation**:
+   - The in-sample naive scale stored for this series at Origin 0 is $s_i = 0.381$ (training window only). ADIDA's WAPE over the 28 test days is 121.9% and its RMSSE for this (series, origin) is 1.354: the squared error is divided by $s_i$ inside the square root.
+6. **Significance & bootstrap inclusion**:
+   - The series' 84 evaluation days across 3 origins are rows of `predictions.parquet`. In the paired bootstrap the whole series is resampled with replacement, contributing to the 95% confidence intervals on the model gaps.
+7. **Inventory optimization & policy output** (a different series: the inventory layer runs on all California series from its own CA backtest in `reports/inventory/ca_predictions.parquet`, so it continues with `FOODS_1_001_CA_1`, which is in that run but not in the 3,000-series sample):
    - Decided on the 84 days before the first test day (2015-11-09 to 2016-01-31), the SKU is **Class B** (secondary volume) and **Class Z** (erratic, CV = 1.52): cell **BZ** in `abc_xyz_classification.csv`. The test days are never used to choose the class.
    - Champion (ADIDA) forecast error measured on the 84 backtest days: RMSE $\sigma_e = 1.0594$ units per day (standard deviation 1.0418; mean error +0.2233, so the forecast ran slightly low, which the RMSE pays for and the standard deviation does not). Planning demand is ADIDA's mean forecast, 0.6934 units per day, not the actual sales. With lead time $L = 7$ days:
      $$\text{Safety Stock} = 1.645 \times 1.0594 \times \sqrt{7} \approx 4.61 \text{ units}$$

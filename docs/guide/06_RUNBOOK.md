@@ -51,10 +51,10 @@ To run the full research and evaluation pipeline from raw inputs to verified rep
 | :--- | :--- | :--- | :--- | :--- |
 | **0. Raw Extraction** | `python scripts/extract_workbook.py` | ~10s | `data/raw/` CSVs | *Requires raw Kaggle zip* |
 | **1. Catalog Profiling** | `python scripts/run_eda.py` | ~25s | `reports/eda/` | Full 30,490-series analysis |
-| **2. Baseline Tier 1** | `python scripts/run_tier1.py` | ~45s | `reports/tier1/` | Evaluates baselines on 3k series |
-| **3. Walk-Forward Backtest** | `python scripts/run_backtest.py` | ~450s (7.5 min) | `reports/backtest_main/` | 3,000 series $\times$ 3 origins $\times$ 10 models |
+| **2. Baseline Tier 1** | `python scripts/run_tier1.py --sample-series 3000 --n-origins 3` | about an hour (AutoCES alone is about 45 minutes) | `reports/tier1/` | StatsForecast models on the same 3,000 series and origins; not rerun by the gates |
+| **3. Walk-Forward Backtest** | `python scripts/run_backtest.py --sample-series 3000 --n-origins 3 --history-days 900 --out-dir reports/backtest_main` | 8 to 11 minutes | `reports/backtest_main/` | The arguments matter: the defaults use a 730-day panel and write to `reports/backtest`, which is not what the committed results used |
 | **4. Hypothesis Battery** | `python scripts/run_significance.py` | ~20s | `reports/backtest_main/significance/` | Bootstrap CIs, DM, Nemenyi plot |
-| **5. Inventory Analysis** | `python scripts/run_inventory_analysis.py` | ~15s | `reports/inventory/` | ABC/XYZ classification, policy comparison (capital released next to annual cost) |
+| **5. Inventory Analysis** | `python scripts/run_inventory_analysis.py --stores CA_1 CA_2` | about a minute | `reports/inventory/` | ABC/XYZ classification, policy comparison (capital released next to annual cost), margin sensitivity |
 | **6. Sync Documentation** | `python scripts/render_readme_tables.py` | ~2s | `README.md` | Injects verified artifact tables |
 
 ---
@@ -64,13 +64,13 @@ To run the full research and evaluation pipeline from raw inputs to verified rep
 ### Complete Reproduction Workflow
 ```powershell
 # Step 1: Execute walk-forward backtest (generates accuracy_overall.csv & predictions.parquet)
-& .venv\Scripts\python.exe scripts/run_backtest.py --sample-series 3000 --n-origins 3
+& .venv\Scripts\python.exe scripts/run_backtest.py --sample-series 3000 --n-origins 3 --history-days 900 --out-dir reports/backtest_main
 
 # Step 2: Run significance tests (generates critical difference plot, paired bootstrap, per-series DM)
 & .venv\Scripts\python.exe scripts/run_significance.py --backtest-dir reports/backtest_main
 
 # Step 3: Run inventory analysis (generates portfolio_summary.csv & service level tradeoffs)
-& .venv\Scripts\python.exe scripts/run_inventory_analysis.py
+& .venv\Scripts\python.exe scripts/run_inventory_analysis.py --stores CA_1 CA_2
 
 # Step 4: Render dynamic Markdown tables into README.md
 & .venv\Scripts\python.exe scripts/render_readme_tables.py
@@ -143,7 +143,7 @@ print('All modules import cleanly!')
 
 ### Defect 3: Missing Price Data and KeyErrors on California Series
 - **Symptom**: Joining sales panels with `sell_prices.csv` generates unexpected nulls or missing index keys during inventory calculations.
-- **Root Cause**: In the official M5 dataset, 1,507 series in California stores (`CA_1`, `CA_2`) have no recorded prices in `sell_prices.csv` for initial backtest dates because Walmart only records prices for active store-item weeks.
+- **Root Cause**: In the official M5 dataset, 1,507 CA_2 series have no recorded prices because the price workbook was truncated at Excel's row limit (all 1,507 are CA_2 items; the price file ends partway through CA_2).
 - **Fix**: In `src/inventory/abc_xyz.py` and `src/inventory/working_capital.py`, unpriced series are explicitly classified as `UNPRICED` and partitioned into a separate monitoring segment. Never impute zero prices (which distorts inventory value to zero) or drop active items.
 
 ### Defect 4: PowerShell String Quoting and Semicolon Parsing Errors

@@ -55,7 +55,7 @@ This document provides formal Architecture Decision Records for the primary tech
   - *Recursive multi-step forecasting*: Feeding predictions back into lags iteratively accumulates autoregressive errors, resulting in severe degradation on sparse series.
 - **Consequences**:
   - Completely eliminated future temporal leakage.
-  - Corrected historical metrics: LightGBM WAPE adjusted from 86.76% to 88.79%, Tweedie from 81.95% to 85.72%, exposing the ~3.8 WAPE points that were illusory.
+  - Corrected historical metrics: LightGBM WAPE adjusted from 86.76% to 88.79%, Tweedie from 81.95% to 85.72%, exposing the ~3.8 WAPE points that were illusory (historical figures from an earlier run; no committed artifact reproduces them).
   - Evaluation is 100% like-for-like against statistical baselines.
 
 ---

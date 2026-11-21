@@ -15,7 +15,7 @@ The repository maintains an automated test suite (`pytest`) that runs on CPU in 
 | `test_m5_01_scale_semantics.py` | `src.evaluation.point_metrics` | Multi-origin scale pooling; anchor scaling from first historical sale $d_1$; pre-launch zero trimming; zero-division edge cases ($s_i = 1.0$). |
 | `test_m5_03_tier1_parity.py` | `src.evaluation.point_metrics`, `reports/tier1/` | Cross-pipeline metric consistency; AutoETS Level-12 RMSSE parity harmonized at $0.7675$ between `tier1` and `backtest_main`. |
 | `test_m5_04_source_of_truth.py` | `src.dashboard.data_loader`, `reports/` | Lossless parity across all companion CSV-Parquet pairs; verifies `read_table()` treats CSV as canonical source of truth. |
-| `test_m5_06_statistical_defense.py` | `src.evaluation.significance` | Paired series bootstrap (2,000 resamples); preservation of within-series temporal autocorrelation; per-series win rates; Holm-Bonferroni FWER control across 45 model pairs. |
+| `test_m5_06_statistical_defense.py` | `src.evaluation.significance` | Paired series bootstrap (2,000 resamples); preservation of within-series temporal autocorrelation; per-series win rates; Holm-Bonferroni correction across series within each model pair. |
 | `test_m5_09_zero_demand_classes.py` | `src.inventory.abc_xyz`, `src.inventory.safety_stock` | No-sales items are class N, never X; classes are decided on the window before the first test day; degenerate error estimates are missing, not zero risk; zero-demand and constant-demand series. |
 | `test_m5_10_cost_model.py` | `src.inventory.service_level`, `src.inventory.working_capital` | Normal loss function against hand values; shortage cost independent of the demand level; planning demand is the forecast; capital released never shown without its annual cost; README and guide numbers tied to the CSVs. |
 | `test_m5_11_global_model_handicaps.py` | README, guides | The three global-model handicaps and the price-feature caveat are stated. |
@@ -48,7 +48,7 @@ The repository maintains an automated test suite (`pytest`) that runs on CPU in 
 
 ## 2. Deliberate Omissions (What the Suite Does Not Cover)
 
-To ensure the test suite runs within 30 seconds during continuous integration, the following workloads are deliberately omitted from automated unit tests:
+To keep the test suite fast in continuous integration, the following workloads are deliberately omitted from automated unit tests:
 
 1. **Full 30,490-Series Multi-Hour Backtests**:
    - Running 10 models across 30,490 series over 3 rolling origins requires ~12 hours of compute. The test suite evaluates algorithms on small synthetic fixtures (10–50 series) or pre-sampled panels.
@@ -108,8 +108,8 @@ def test_wape_calculation_known_values():
     # Act: compute metric
     score = wape(y_true, y_pred)
     
-    # Assert: hand-calculated expected WAPE = (2 + 2 + 2 + 0) / (10 + 20 + 0 + 5) = 6 / 35 = 0.171428...
-    expected = 6.0 / 35.0
+    # Assert: hand-calculated expected WAPE (a percentage) = 100 * (2 + 2 + 2 + 0) / (10 + 20 + 0 + 5) = 17.1428...
+    expected = 100.0 * 6.0 / 35.0
     assert pytest.approx(score, rel=1e-5) == expected
 
 def test_wape_zero_actuals_boundary():

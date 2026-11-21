@@ -2,7 +2,7 @@
 
 This document provides a comprehensive synthesis of the platform's empirical findings, null results, threats to validity, and prioritized future directions.
 
-All quantitative rankings and statistical intervals are backed by committed artifacts in `reports/` and synchronized with the [Main Leaderboard in README.md](../../README.md#walk-forward-backtest-leaderboard-3000-series--3-origins--10-models).
+All quantitative rankings and statistical intervals are backed by committed artifacts in `reports/` and synchronized with the [Main Leaderboard in README.md](../../README.md#5-are-the-differences-real).
 
 ---
 
@@ -34,7 +34,7 @@ All quantitative rankings and statistical intervals are backed by committed arti
 ---
 
 ### Q4: Where does each model family excel?
-- **Intermittent Statistical (`adida`, `croston_sba`)**: Dominates sparse, zero-inflated series where demand arrives in discrete lumps separated by multi-day zero intervals. Croston SBA wins head-to-head rank tests on sparse series by decoupling inter-arrival intervals from non-zero sales size.
+- **Intermittent Statistical (`adida`, `croston_sba`)**: Dominates sparse, zero-inflated series where demand arrives in discrete lumps separated by multi-day zero intervals. Croston SBA has the lower absolute error on more individual series than ADIDA; this benchmark does not establish why.
 - **Rolling Baselines (`moving_average`, `ses`)**: Highly robust baselines that prevent overfitting to erratic sales spikes, particularly effective on low-volume retail categories.
 - **Global Gradient Boosting (`lightgbm`, `lightgbm_tweedie`)**: Evaluated on direct horizon-shifted demand features, calendar indicators, and SNAP events without price features (`price_features_included: false`). Performs reliably on higher-velocity continuous series, but lacks the specialized variance shrinkage of intermittent methods when prices are unobserved.
 
@@ -48,7 +48,7 @@ All quantitative rankings and statistical intervals are backed by committed arti
 ### Q6: Does segment routing beat the best single model?
 - **Finding**: **No.** Routing by SBC (Syntetos-Boylan-Croston) quadrant (INTERMITTENT to `adida`, no-demand series to a zero forecast, SMOOTH, ERRATIC and LUMPY to `lightgbm`) beats standalone LightGBM at every origin, but it does not beat applying `adida` to every series: the routed ensemble's WAPE is higher than ADIDA's at every origin and pooled, so the best single model is ADIDA at every origin.
 - **Where it loses**: in the segments handed to LightGBM. LightGBM, run without price features, is worse than ADIDA on ERRATIC and LUMPY and better on SMOOTH, so it was better on one of the three segments it was given, not on all. INTERMITTENT is ADIDA either way.
-- **Numbers**: every figure, per origin and per segment, is in the README table "Does Demand-Pattern Routing Help?", rendered from `routing_vs_best_single.csv`. This guide does not repeat them.
+- **Numbers**: every figure, per origin and per segment, is in the README table under "6. Does demand classification help?", rendered from `routing_vs_best_single.csv`. This guide does not repeat them.
 - **Caveats**: the INTERMITTENT to ADIDA assignment was chosen on these same evaluation origins, so a clean test needs an earlier selection origin; and the best single model is picked per row after the scores are known, which favours the single model.
 - **Artifact Backing**: `reports/backtest_main/routing_vs_best_single.csv`, `reports/backtest_main/routing_benefit.csv` (per-origin comparison columns), `reports/backtest_main/routing_assignments.csv` (where the router sent each series at each origin).
 
@@ -66,7 +66,7 @@ All quantitative rankings and statistical intervals are backed by committed arti
 ---
 
 ### Q9: Which features drive gradient boosting performance?
-- **Finding**: Tree-based feature importance indicates that temporal recency and rolling statistics (`roll_mean_7`, `roll_mean_28`) provide the strongest predictive power, while horizon-safe shifting (minimum 28 days) ensures zero leakage of future observations into training frames.
+- **Finding**: Not established. No committed artifact records the global model's feature importances, so no claim is made about which features drive it. What holds by construction is that every lag and rolling feature is horizon-shifted (at least 28 days), which the perturbation tests in `tests/unit/test_g4b_review_fixes.py` check.
 
 ---
 
@@ -84,13 +84,13 @@ All quantitative rankings and statistical intervals are backed by committed arti
 Documenting what *did not work* is critical for engineering integrity:
 
 1. **Tweedie Loss vs. Standard MSE in LightGBM**:
-   - Textbook theory indicates Tweedie compound Poisson-Gamma loss ($p=1.5$) is ideal for zero-inflated retail counts.
+   - Textbook theory indicates Tweedie compound Poisson-Gamma loss is well suited to zero-inflated retail counts; the project uses a power of 1.1.
    - Empirical Result: In post-hoc pairwise testing with Holm-Bonferroni correction, `lightgbm_tweedie` vs `lightgbm` yielded an adjusted p-value of **$1.0000$**. The Tweedie objective yielded no statistically detectable rank improvement over standard least-squares regression.
 2. **The Model Complexity Paradox**:
    - A zero-parameter 28-day `moving_average` achieved **75.47% WAPE** and **0.7687 RMSSE**, beating both LightGBM models on RMSSE and trailing the champion ADIDA by only 0.31 percentage points. Complex global feature engineering provided negligible aggregate advantage over simple rolling averages on this sample.
    - *Global Model Handicaps*: Global GBDTs ran under three significant handicaps compared to winning M5 competition setups: (1) **no price or promotion features** (`price_features_included: false` due to workbook truncation at Excel's 1,048,575-row limit), (2) a **3,000-series sample** rather than the full 30,490 catalog, and (3) a **900-day window** rather than the full 1,913-day history. In the original competition, price momentum and catalog-wide cross-learning were decisive factors.
 3. **High Head-to-Head Indistinguishability**:
-   - In pairwise per-series Diebold-Mariano tests with Holm-Bonferroni correction across 45 model pairs, `adida` and `croston_sba` were statistically indistinguishable on **93.80% of individual series** (2,814 out of 3,000 series).
+   - In pairwise per-series Diebold-Mariano tests with Holm-Bonferroni correction across series within the pair, `adida` and `croston_sba` were statistically indistinguishable on **93.80% of individual series** (2,814 out of 3,000 series).
 
 ---
 
@@ -100,7 +100,7 @@ Documenting what *did not work* is critical for engineering integrity:
    - In the M5 dataset, the source `sell_prices.csv` workbook was truncated at Excel's 1,048,575-row boundary, capturing only 15.3% of the M5 price table (covering CA_1 and CA_2, with 1,507 California series unpriced).
    - Because prices were missing across 85% of store-item combinations, the backtest was executed with `price_features_included: false`. LightGBM was therefore evaluated with three deliberate handicaps: no price features, a 3,000-series sample, and a 900-day history window. The empirical finding that intermittent statistical methods beat global GBDTs carries this essential caveat.
 2. **California-Specific Sample Scope**:
-   - Walk-forward backtests evaluated a representative 3,000-series sample across California stores (`CA_1`, `CA_2`, `CA_3`, `CA_4`). While stratified across categories, store-level dynamics in Texas and Wisconsin may exhibit differing seasonal patterns.
+   - Walk-forward backtests evaluated a random 3,000-series sample drawn from all ten stores (California, Texas and Wisconsin), not a stratified design; the inventory layer covers only the two California stores that have prices.
 3. **Gaussian Safety Stock Approximation on Intermittent Demand**:
    - Standard analytical safety stock formulas ($SS = z \cdot \sigma_e \cdot \sqrt{L}$) assume Gaussian error distributions. On zero-inflated retail series with 57.5% zeros, error distributions are discrete, right-skewed, and non-negative. Working capital figures represent an analytical baseline subject to discrete simulation in Stage B. Here $\sigma_e$ is the forecast-error RMSE (about zero, so bias is paid for), not a standard deviation; the $\sqrt{L}$ scaling treats daily errors as independent and so still understates a persistent bias, and RMSE also charges over-forecast bias. The cross-model comparison (`reports/inventory/safety_stock_by_model.csv`) therefore credits smoothing over Naive with about 30% less safety stock capital, of which part (about 22% on the bias-free standard deviation alone) is variability and the rest is Naive's over-forecast bias.
 4. **Direct Horizon Feature Freezing**:

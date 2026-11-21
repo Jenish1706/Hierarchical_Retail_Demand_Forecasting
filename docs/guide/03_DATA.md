@@ -10,7 +10,7 @@ The platform utilizes the **M5 Forecasting Competition dataset**, made publicly 
 - **Original Source**: Walmart retail point-of-sale data (10 stores across 3 US states: California, Texas, Wisconsin).
 - **Time Range**: 1,913 days from 2011-01-29 to 2016-04-24.
 - **Licence**: Creative Commons / MOFC Competition Terms for academic and educational research.
-- **Repository Storage**: The raw data is stored as Snappy-compressed Parquet tables under `data/raw/`. A 15-file lightweight slice of summary reports and backtest predictions is tracked in version control under `reports/`.
+- **Repository Storage**: The raw data is stored as Snappy-compressed Parquet tables under `data/raw/`. The report artifacts (CSV, JSON, PNG and the backtest predictions) under `reports/` are tracked in version control.
 
 ---
 
@@ -66,7 +66,7 @@ Provides weekly unit retail selling prices per store and item.
 | `store_id` | `Categorical` / `String` | Store identifier | `CA_1`, `CA_2` |
 | `item_id` | `Categorical` / `String` | Product identifier | `FOODS_1_001` |
 | `wm_yr_wk` | `int32` | Walmart retail week | `11101` |
-| `sell_price` | `float32` | Unit retail price in USD | `$0.05` to `$107.32` |
+| `sell_price` | `float32` | Unit retail price in USD | `$0.01` to `$30.98` (CA_1 and CA_2 only: the price file is truncated) |
 
 ---
 
@@ -93,14 +93,14 @@ The platform solves this with a two-phase lazy ingestion design in [`src/data/lo
 - **Resolution**: Rather than dropping unpriced series or improvising synthetic prices, the platform explicitly isolates inventory capital optimization to stores `CA_1` and `CA_2`. The remaining 1,507 unpriced California SKUs are tracked transparently as `Unpriced (?X/?Y/?Z)` with $0.00 valuation, ensuring capital claims are strictly verifiable against committed price records.
 
 ### 3. Christmas Zero Closure
-- **Problem**: Walmart retail stores close completely on Christmas Day (December 25). Recorded sales on Christmas days ($d_{331}, d_{696}, d_{1062}, d_{1427}, d_{1792}$) are identically zero for all 30,490 series.
+- **Problem**: Walmart retail stores close completely on Christmas Day (December 25). Recorded sales on Christmas days ($d_{331}, d_{697}, d_{1062}, d_{1427}, d_{1792}$) are near zero: only 8 to 17 of the 30,490 series record any sale on each of them (11 to 20 units in total).
 - **Resolution**: Calendar feature encodings explicitly mark `event_name_1 == 'Christmas'` as a zero-demand calendar override, preventing models from learning artificial structural dips.
 
 ---
 
 ## 5. Schema Contracts (Pandera Enforcement)
 
-Incoming panel data is validated at runtime against strict Pandera schema contracts (`src/data/schema.py`):
+Incoming panel data is validated at runtime against strict Pandera schema contracts (`src/data/validator.py`):
 - `series_id`: String / Categorical; non-null; matches regex `^[A-Z]+_[0-9]+_[A-Z]+_[0-9]+$`.
 - `date`: DateTime / Date; non-null; monotonically increasing per series.
 - `y_true`: Float / Integer; non-null; non-negative ($\ge 0$).

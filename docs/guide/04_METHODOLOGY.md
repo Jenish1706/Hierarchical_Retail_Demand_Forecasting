@@ -8,7 +8,7 @@ This document defines the rigorous experimental protocol, walk-forward backtesti
 
 Static train/test splits (e.g. training on days 1–1885 and testing on days 1886–1913) are vulnerable to temporal anomalies (holidays, promotions, stockouts occurring during that single 28-day window). 
 
-The platform evaluates all models using a **3-origin walk-forward rolling-origin backtest** across a stratified representative sample of **3,000 series** (10 stores $\times$ 3 categories $\times$ 100 items per store-category combination):
+The platform evaluates all models using a **3-origin walk-forward rolling-origin backtest** across a random sample (fixed seed) of **3,000 series** drawn from all ten stores:
 
 ```mermaid
 gantt
@@ -17,15 +17,15 @@ gantt
     axisFormat  Day %j
     
     section Origin 2
-    Train History (900 Days) :active, o2_tr, 2013-11-07, 2016-01-31
+    Train History (816 Days) :active, o2_tr, 2013-11-07, 2016-01-31
     Test Window 2 (28 Days, d1830-d1857) :crit, o2_te, 2016-02-01, 2016-02-28
     
     section Origin 1
-    Train History (928 Days) :active, o1_tr, 2013-11-07, 2016-02-28
+    Train History (844 Days) :active, o1_tr, 2013-11-07, 2016-02-28
     Test Window 1 (28 Days, d1858-d1885) :crit, o1_te, 2016-02-29, 2016-03-27
     
     section Origin 0
-    Train History (956 Days) :active, o0_tr, 2013-11-07, 2016-03-27
+    Train History (872 Days) :active, o0_tr, 2013-11-07, 2016-03-27
     Test Window 0 (28 Days, d1886-d1913) :crit, o0_te, 2016-03-28, 2016-04-24
 ```
 
@@ -48,7 +48,7 @@ where $s_{s,o}$ is the in-sample naive scale for series $s$ at origin $o$.
    Because the training history expands by 28 days between origins, in-sample naive variance $s_{s,o}$ changes at each origin for 99.9% of series. RMSSE must be scaled per (series, origin) using that origin's own scale before averaging across origins:
    $$\text{RMSSE}_s = \frac{1}{|O_s|}\sum_{o \in O_s} \text{RMSSE}_{s,o}$$
    $$\text{Panel Mean RMSSE} = \frac{1}{S}\sum_{s=1}^S \text{RMSSE}_s$$
-   Grouping all 84 predictions across origins together before dividing by a single scale inflates or deflates RMSSE by up to 14%.
+   Grouping all 84 predictions across origins together before dividing by a single scale changes every model's RMSSE.
 2. **Catalog-Wide Launch Anchor**:
    Pre-launch zero trimming is anchored to Day 1 ($d_1$) of the full catalog history. If a product launched on Day 100, its naive scale in a window starting on Day 900 does not trim the zeros at Day 900–930, because those zeros represent active low demand, not pre-launch inactivity.
 
@@ -63,7 +63,7 @@ The benchmark systematically compares 10 models spanning statistical baselines, 
 | `naive` | Naive Random Walk | Baseline | Persistence forecast: $\hat{y}_{t+h} = y_t$ (last observed value). |
 | `seasonal_naive` | Seasonal Naive (28d) | Baseline | 28-day lag persistence: $\hat{y}_{t+h} = y_{t+h-28}$. |
 | `seasonal_naive_weekly` | Seasonal Naive (Weekly) | Baseline | Day-of-week persistence: $\hat{y}_{t+h} = y_{t+h-7}$. |
-| `moving_average` | Moving Average (28d) | Baseline | Rolling mean of the most recent 28 observed active days. |
+| `moving_average` | Moving Average (28d) | Baseline | Rolling mean of the most recent 28 calendar days. |
 | `ses` | Simple Exponential Smoothing | Classical Statistical | Exponentially weighted average with optimized alpha parameter. |
 | `croston_sba` | Croston SBA | Intermittent Statistical | Debiased Syntetos-Boylan approximation separating demand size and interval. |
 | `adida` | ADIDA | Intermittent Statistical | Temporal aggregation into multi-day buckets, SES forecast, and uniform disaggregation. |
@@ -105,7 +105,7 @@ flowchart TD
   - `lightgbm`: 5.557 (Gap: $+1.003 > CD$) -> Significantly worse
 
 ### 3. Paired Series Bootstrap (95% CIs)
-Resampling 2,950 entire series blocks with replacement 2,000 times yields paired metric differences relative to ADIDA (the volume-weighted WAPE champion):
+Resampling whole series with replacement 2,000 times (the WAPE bootstrap uses every sampled series, the RMSSE bootstrap those with a positive scale) yields paired metric differences relative to ADIDA (the volume-weighted WAPE champion):
 - `adida`: $\Delta\text{WAPE} = +0.00\%$ (reference)
 - `routed_ensemble`: $\Delta\text{WAPE} = +0.50\%$, 95% CI: **[-0.01%, +1.04%]**. Because 0 is inside the 95% confidence interval, the Routed Ensemble is **statistically indistinguishable from ADIDA on WAPE**.
 - `moving_average`: $\Delta\text{RMSSE} = +0.0011$, 95% CI: **[-0.0001, +0.0023]**. Moving average is **statistically indistinguishable from ADIDA on RMSSE**.
@@ -114,8 +114,8 @@ Resampling 2,950 entire series blocks with replacement 2,000 times yields paired
 ### 4. Per-Series Head-to-Head Win Rates
 Evaluating models series-by-series resolves the apparent contradiction between Nemenyi ranks and pooled WAPE:
 - `croston_sba` vs. `adida`: Croston SBA wins on **56.97%** of series, while ADIDA wins on **42.87%** of series (0.17% ties).
-- **The Finding**: Croston SBA is consistently slightly better on thousands of low-volume sparse series (which dominates equal-weighted rank metrics), whereas ADIDA achieves lower absolute error on high-volume items (which dominates volume-weighted aggregate WAPE).
-- Furthermore, under Holm-corrected per-series Diebold-Mariano tests, the two models are statistically indistinguishable on **93.80% of series**.
+- **The Finding**: Croston SBA has the lower absolute error on more individual series, while ADIDA has the lower pooled WAPE, so where ADIDA wins it wins by more. This analysis does not say which kind of series each model wins on: Croston's win rate is lower, not higher, on the lowest-volume fifth of series than on the highest (`tests/unit/test_g4b_review_fixes.py`).
+- Furthermore, under Holm-corrected per-series Diebold-Mariano tests, the two models are statistically indistinguishable on **93.80% of series**. That test has little power per series: ADIDA against Seasonal Naive (28d), a gap of about 24 WAPE points, is also indistinguishable on 93.03% of series, so "indistinguishable" does not mean "equal"; Holm is applied across series within each pair.
 
 ---
 
@@ -127,6 +127,6 @@ A scientific engineering claim is only meaningful if it specifies the exact empi
 | :--- | :--- | :--- |
 | **"ADIDA matches or outperforms LightGBM on intermittent retail series"** | If LightGBM achieves statistically superior WAPE on sparse series, or if the 95% bootstrap CI on $\text{WAPE}_{\text{LightGBM}} - \text{WAPE}_{\text{ADIDA}}$ is strictly negative ($< 0$). | Check that $\Delta\text{WAPE}$ CI is $[+1.40\%, +2.84\%]$ in `reports/backtest_main/significance/bootstrap_intervals.csv`. |
 | **"Croston SBA, ADIDA, and Routed Ensemble form a top indistinguishable clique"** | If the gap in average ranks between Croston SBA and ADIDA or Routed Ensemble exceeds $CD = 0.2494$ at $\alpha=0.05$. | Check that $|\bar{R}_{\text{croston}} - \bar{R}_{\text{adida}}| = 0.214 \le 0.2494$ in `significance_report.json`. |
-| **"Feature engineering contains zero temporal leakage"** | If any lag feature uses actual sales from $t - 27$ to $t$ to forecast horizon days $t+1 \dots t+28$. | `src/features/polars_engine.py:assert_no_temporal_leakage()` raises `AssertionError` if maximum training timestamp overlaps evaluation periods. |
+| **"Feature engineering contains zero temporal leakage"** | If any lag feature uses actual sales from $t - 27$ to $t$ to forecast horizon days $t+1 \dots t+28$. | `tests/unit/test_g4b_review_fixes.py`: changing sales inside the test window must not change any forecast, for the per-series models and for LightGBM. (`assert_no_temporal_leakage()` in `src/evaluation/splits.py` only compares dates and is called by the Tier-1 runner, not by the backtest.) |
 | **"Releasing capital by cutting service levels on tail SKUs raises total annual cost"** | If the capital-release rule did not raise holding plus expected stockout cost under the project's cost model (shortage = $\sigma_L G(z) \times 365/L \times$ unit margin). | Verified in `reports/inventory/policy_comparison.csv`: the rule releases $3,170 of working capital but changes total annual cost by +$12,444/yr; on the 90/95/98% menu 98% is cheapest in every optimised segment (-$18,684/yr). |
 | **"Results are 100% reproducible from a clean git clone"** | If running `pytest -q` or `python scripts/render_readme_tables.py --check` on a fresh clone produces any failure or table diff. | Fresh clone check runs in an isolated temp directory and passes with 0 failures and green render check. |

@@ -35,12 +35,13 @@ Every metric reported in this guide is generated directly from committed artifac
 
 | Metric / Question | Verified Empirical Result | Backing Committed Artifact |
 | :--- | :--- | :--- |
-| **Lowest Pooled WAPE** | **ADIDA** leads at **75.16%** (95% bootstrap CI: [72.16%, 78.23%]) | [`reports/backtest_main/accuracy_overall.csv`](../../reports/backtest_main/accuracy_overall.csv) |
-| **Lowest Mean RMSSE** | **ADIDA** leads at **0.768** (95% bootstrap CI: [0.756, 0.788]) | [`reports/backtest_main/accuracy_overall.csv`](../../reports/backtest_main/accuracy_overall.csv) |
+| **Lowest Pooled WAPE (10-model benchmark)** | **ADIDA** leads at **75.16%** (95% bootstrap CI: [72.16%, 78.23%]) | [`reports/backtest_main/accuracy_overall.csv`](../../reports/backtest_main/accuracy_overall.csv) |
+| **Lowest Mean RMSSE (10-model benchmark)** | **ADIDA** leads at **0.768** (95% bootstrap CI: [0.756, 0.788]) | [`reports/backtest_main/accuracy_overall.csv`](../../reports/backtest_main/accuracy_overall.csv) |
 | **Best Nemenyi Average Rank** | **Croston SBA** leads with average rank **4.55** | [`reports/backtest_main/significance/significance_report.json`](../../reports/backtest_main/significance/significance_report.json) |
 | **Top Rank Clique** | `croston_sba`, `adida`, and `routed_ensemble` form a single indistinguishable clique ($CD = 0.2494, \alpha=0.05$) | [`reports/backtest_main/significance/critical_difference.png`](../../reports/backtest_main/significance/critical_difference.png) |
 | **WAPE Equivalence** | **Routed SBC Ensemble** is statistically indistinguishable from ADIDA ($\Delta\text{WAPE} = +0.50\%$, 95% CI [-0.01%, +1.04%]) | [`reports/backtest_main/significance/bootstrap_intervals.csv`](../../reports/backtest_main/significance/bootstrap_intervals.csv) |
 | **RMSSE Equivalence** | **Moving Average (28d)** is statistically indistinguishable from ADIDA on RMSSE ($\Delta\text{RMSSE} = +0.0011$, 95% CI [-0.0001, +0.0023]) | [`reports/backtest_main/significance/bootstrap_intervals.csv`](../../reports/backtest_main/significance/bootstrap_intervals.csv) |
+| **Tier-1 Models Outside the Benchmark** | The Tier-1 StatsForecast run scores other models on the same series and origins; AutoCES has a lower WAPE and AutoETS a slightly lower RMSSE than ADIDA, so "ADIDA leads" means within the 10 benchmarked models (README step 5) | [`reports/tier1/tier1_overall.csv`](../../reports/tier1/tier1_overall.csv) |
 | **Router vs Best Single Model** | The router beats standalone LightGBM at every origin but does not beat ADIDA applied to every series (worse at every origin); per-segment and per-origin numbers are in the README router table | [`reports/backtest_main/routing_vs_best_single.csv`](../../reports/backtest_main/routing_vs_best_single.csv) |
 | **Global GBDT Comparison** | **LightGBM (Tweedie)** scores 77.26% WAPE (rank 5.38), significantly worse in average rank across the panel | [`reports/backtest_main/accuracy_overall.csv`](../../reports/backtest_main/accuracy_overall.csv) |
 | **Inventory Capital Impact** | The ABC/XYZ capital-release rule (98% for AX, 90% for BZ/CY/CZ) across CA_1 & CA_2 frees **$3,170 of working capital** but raises total annual cost by **+$12,444/yr** (holding -$792, stockout +$13,237); the cheapest level on the 90/95/98% menu (98% everywhere) lowers cost by $18,684/yr for +$11,455 of capital | [`reports/inventory/policy_comparison.csv`](../../reports/inventory/policy_comparison.csv) |
@@ -80,7 +81,7 @@ python -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install -e .
 
-# 3. Run full test suite (108 unit tests pass in ~20s; integration tests skip gracefully)
+# 3. Run the full test suite (tests that need the raw data skip gracefully)
 pytest -q
 
 # 4. Verify that public README tables match committed artifacts exactly

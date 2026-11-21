@@ -24,25 +24,26 @@ Products are partitioned into four distinct quadrants with sharp operational bou
 ### Mathematical Formula
 Given a demand series $y = (y_1, y_2, \dots, y_n)$ with non-zero sales occurring at times $\{t_1, t_2, \dots, t_k\}$:
 $$\text{Inter-demand intervals: } p_i = t_i - t_{i-1} \quad \text{for } i = 2, \dots, k$$
-$$\text{Average Demand Interval: } ADI = \frac{1}{k-1} \sum_{i=2}^k p_i = \frac{t_k - t_1}{k - 1}$$
+$$\text{Average Demand Interval (as implemented): } ADI = \frac{n}{k}$$
+where $n$ is the number of periods from the first sale to the end of the window (pre-launch zeros trimmed) and $k$ the number of periods with demand. It equals the mean gap $\frac{t_k - t_1}{k - 1}$ only when the window ends on a sale.
 $$\text{Demand sizes: } z_i = y_{t_i} \quad \text{for } i = 1, \dots, k$$
 $$\text{Mean size: } \mu_z = \frac{1}{k}\sum_{i=1}^k z_i, \quad \text{Variance: } \sigma_z^2 = \frac{1}{k-1}\sum_{i=1}^k (z_i - \mu_z)^2$$
 $$CV^2 = \left(\frac{\sigma_z}{\mu_z}\right)^2 = \frac{\sigma_z^2}{\mu_z^2}$$
 
 ### Worked Example with Numbers
-Suppose an item sells across a 10-day active window:
+Suppose an item sells across a 10-day window (the leading zero is pre-launch and is trimmed, so $n = 9$):
 $$y = [0, 2, 0, 0, 4, 0, 0, 0, 2, 0]$$
 - Non-zero sales occur on days: $t_1 = 2$ ($z_1 = 2$), $t_2 = 5$ ($z_2 = 4$), $t_3 = 9$ ($z_3 = 2$). Total transactions $k = 3$.
 - Inter-arrival times: $p_1 = 5 - 2 = 3$, $p_2 = 9 - 5 = 4$.
-- $ADI = \frac{3 + 4}{2} = 3.50$. Since $3.50 \ge 1.32$, demand is **sparse**.
+- $ADI = n / k = 9 / 3 = 3.00$ (`classify_demand` returns 3.0). Since $3.00 \ge 1.32$, demand is **sparse**.
 - Non-zero quantities: $\{2, 4, 2\}$.
   - $\mu_z = \frac{2 + 4 + 2}{3} = \frac{8}{3} \approx 2.667$.
   - $\sigma_z^2 = \frac{(2 - 2.667)^2 + (4 - 2.667)^2 + (2 - 2.667)^2}{2} = \frac{0.444 + 1.778 + 0.444}{2} = 1.333$.
   - $CV^2 = \frac{1.333}{2.667^2} = \frac{1.333}{7.111} \approx 0.187$.
-- Since $ADI = 3.50 \ge 1.32$ and $CV^2 = 0.187 < 0.49$, the series is classified as **INTERMITTENT**.
+- Since $ADI = 3.00 \ge 1.32$ and $CV^2 = 0.187 < 0.49$, the series is classified as **INTERMITTENT**.
 
 ### Code Link
-Implemented in [`src/models/statistical/intermittent.py:classify_demand()`](../../src/models/statistical/intermittent.py#L40-L105).
+Implemented in [`src/models/statistical/intermittent.py:classify_demand()`](../../src/models/statistical/intermittent.py).
 
 ---
 
@@ -91,22 +92,22 @@ $$\hat{y}_{t+h|t}^{\text{TSB}} = \hat{P}_t \cdot \hat{z}_t$$
 
 ### ADIDA (Aggregate-Disaggregate Intermittent Demand Approach, Nikolopoulos et al. 2011)
 #### Intuition
-Instead of modeling sparse daily zeros, ADIDA aggregates daily sales into non-overlapping temporal buckets of size $K$ (e.g., $K = \text{round}(ADI)$). Aggregating removes zero sparsity and converts intermittent demand into a continuous time series. A standard forecaster (SES) is applied at the aggregate level, and the resulting bucket forecast is disaggregated equally across the $K$ days.
+Instead of modeling sparse daily zeros, ADIDA aggregates daily sales into non-overlapping temporal buckets of size $K$ (the code uses $K = \lceil ADI \rceil$). Aggregating removes zero sparsity and converts intermittent demand into a continuous time series. A standard forecaster (SES) is applied at the aggregate level, and the resulting bucket forecast is disaggregated equally across the $K$ days.
 
 #### Worked Numerical Example (ADIDA)
 Suppose active $ADI = 3.8 \approx 4$. We aggregate daily data into $K=4$-day buckets.
 - Daily actuals over 12 days: $[0, 2, 0, 0 \mid 1, 0, 0, 3 \mid 0, 0, 2, 0]$
 - Bucket totals: $B_1 = 2$, $B_2 = 4$, $B_3 = 2$.
-- Applying SES ($\alpha=0.2$) across buckets yields aggregate forecast $\hat{B}_4 = 2.8$ units for the next 4-day block.
+- Applying SES ($\alpha=0.2$, initialised at the first bucket) across buckets gives $2 \to 0.2 \cdot 4 + 0.8 \cdot 2 = 2.4 \to 0.2 \cdot 2 + 0.8 \cdot 2.4 = 2.32$ units for the next 4-day block.
 - Disaggregating across the 4 days yields a daily rate:
-  $$\hat{y}_{t} = \frac{2.8}{4} = 0.70 \text{ units/day}$$
+  $$\hat{y}_{t} = \frac{2.32}{4} = 0.58 \text{ units/day}$$
 
 ### Code Links
 Implemented in [`src/models/statistical/intermittent.py`](../../src/models/statistical/intermittent.py):
-- `croston()`: [Line 115](../../src/models/statistical/intermittent.py#L115)
-- `croston_sba()`: [Line 160](../../src/models/statistical/intermittent.py#L160)
-- `tsb()`: [Line 200](../../src/models/statistical/intermittent.py#L200)
-- `adida()`: [Line 250](../../src/models/statistical/intermittent.py#L250)
+- `CrostonForecaster` (`variant="croston"` or `"sba"`)
+- `ADIDAForecaster`
+- `classify_demand()`
+- TSB is not in this module; it runs only in the Tier-1 StatsForecast run.
 
 ---
 
@@ -153,10 +154,10 @@ $$\text{WRMSSE} = \sum_{i=1}^{30,490} w_i \cdot \text{RMSSE}_i$$
 
 ### Code Links
 Implemented in [`src/evaluation/point_metrics.py`](../../src/evaluation/point_metrics.py):
-- `naive_scale()`: [Line 35](../../src/evaluation/point_metrics.py#L35)
-- `rmsse()`: [Line 80](../../src/evaluation/point_metrics.py#L80)
-- `wape()`: [Line 110](../../src/evaluation/point_metrics.py#L110)
-- `metrics_by_group()`: [Line 160](../../src/evaluation/point_metrics.py#L160)
+- `naive_scale()`: [`src/evaluation/point_metrics.py`](../../src/evaluation/point_metrics.py)
+- `rmsse()`: [`src/evaluation/point_metrics.py`](../../src/evaluation/point_metrics.py)
+- `wape()`: [`src/evaluation/point_metrics.py`](../../src/evaluation/point_metrics.py)
+- `metrics_by_group()`: [`src/evaluation/point_metrics.py`](../../src/evaluation/point_metrics.py)
 
 ---
 
@@ -200,10 +201,10 @@ Concatenating 3,000 series into a 252,000-observation vector creates an artifici
 
 ### Code Links
 Implemented in [`src/evaluation/significance.py`](../../src/evaluation/significance.py):
-- `friedman_test()`: [Line 346](../../src/evaluation/significance.py#L346)
-- `nemenyi_test()`: [Line 471](../../src/evaluation/significance.py#L471)
-- `paired_series_bootstrap()`: [Line 660](../../src/evaluation/significance.py#L660)
-- `pairwise_per_series_tests()`: [Line 815](../../src/evaluation/significance.py#L815)
+- `friedman_test()`: [`src/evaluation/significance.py`](../../src/evaluation/significance.py)
+- `nemenyi_test()`: [`src/evaluation/significance.py`](../../src/evaluation/significance.py)
+- `paired_series_bootstrap()`: [`src/evaluation/significance.py`](../../src/evaluation/significance.py)
+- `pairwise_per_series_tests()`: [`src/evaluation/significance.py`](../../src/evaluation/significance.py)
 
 ---
 
@@ -219,7 +220,7 @@ $$\text{Safe rolling mean: } \bar{y}_{t, w} = \frac{1}{w}\sum_{j=0}^{w-1} y_{t -
 At inference time for any day $t+1 \le \tau \le t+28$, all conditioning inputs are strictly historical observations ($t \le 0$).
 
 ### Code Link
-Implemented in [`src/features/polars_engine.py`](../../src/features/polars_engine.py#L75-L160) with runtime assertion `assert_no_temporal_leakage()`.
+Implemented in [`src/features/polars_engine.py`](../../src/features/polars_engine.py) and [`src/features/base.py`](../../src/features/base.py) (`FeaturePipeline(horizon=...)`). The guarantee is tested by perturbation: changing sales inside the test window must not change any forecast (`tests/unit/test_g4b_review_fixes.py`).
 
 ---
 
@@ -265,7 +266,7 @@ An older version charged every stockout cycle the whole lead-time demand and ove
 Because retail sales have a discrete point mass at zero and heavy positive tails, the Gaussian normal approximation underestimates tail risk on erratic items and overestimates buffer on zero-heavy items. It serves as an analytical baseline in Stage A, pending empirical trace-driven stockout simulation in Stage B.
 
 ### Code Link
-Implemented in [`src/inventory/safety_stock.py:calculate_safety_stock()`](../../src/inventory/safety_stock.py#L45-L95).
+Implemented in [`src/inventory/safety_stock.py:SafetyStockCalculator.from_forecast_errors()`](../../src/inventory/safety_stock.py).
 
 ---
 
@@ -293,4 +294,4 @@ Combining ABC and XYZ yields 9 distinct replenishment strategies:
 - **CZ**: Low revenue, erratic demand -> Minimized buffer, periodic batch replenishment, relaxed CSL (90%) to release locked working capital.
 
 ### Code Link
-Implemented in [`src/inventory/abc_xyz.py:classify_abc_xyz()`](../../src/inventory/abc_xyz.py#L30-L110).
+Implemented in [`src/inventory/abc_xyz.py:ABCXYZClassifier.classify()`](../../src/inventory/abc_xyz.py).

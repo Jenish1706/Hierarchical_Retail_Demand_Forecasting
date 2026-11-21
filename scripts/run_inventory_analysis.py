@@ -230,6 +230,10 @@ def demand_bases(
     ``actual_backtest_days``  mean actual sales on the scoring days (look-ahead; reference only)
     ``full_history_mean``     mean over the whole panel, the figure the README used before M5-10
                               (it includes the scoring days, at about 4% weight)
+    ``forecast_first_origin`` the champion's forecast over the first 28 scored days only. The
+                              forecasts for the later two windows use data up to their own origins,
+                              which a planner deciding at the first origin would not have had, so
+                              ``forecast`` is a slightly generous planning basis; this row bounds that.
     """
     key = ["item_id", "store_id"]
     champ = predictions[predictions["model"] == champion].copy()
@@ -239,7 +243,15 @@ def demand_bases(
     forecast = champ.groupby(key, observed=True)["y_pred"].mean().rename("demand").reset_index()
     actual = scoring.groupby(key, observed=True)["sales"].mean().rename("demand").reset_index()
     full = panel.groupby(key, observed=True)["sales"].mean().rename("demand").reset_index()
-    return {"forecast": forecast, "actual_backtest_days": actual, "full_history_mean": full}
+    first_window_end = champ["date"].min() + pd.Timedelta(days=HORIZON - 1)
+    first = champ[champ["date"] <= first_window_end]
+    forecast_first = first.groupby(key, observed=True)["y_pred"].mean().rename("demand").reset_index()
+    return {
+        "forecast": forecast,
+        "forecast_first_origin": forecast_first,
+        "actual_backtest_days": actual,
+        "full_history_mean": full,
+    }
 
 
 def compute_safety_stock_by_model(

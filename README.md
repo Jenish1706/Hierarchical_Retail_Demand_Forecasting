@@ -7,7 +7,7 @@
 [![Data Engine: Polars](https://img.shields.io/badge/engine-Polars%20lazy%20streaming-blueviolet.svg)](https://pola.rs)
 [![Documentation](https://img.shields.io/badge/docs-comprehensive%20guide-blue.svg)](docs/guide/00_START_HERE.md)
 
-An empirical demand-forecasting and inventory benchmark on the Walmart M5 retail data (store-item daily unit sales). It is organised as one chain of eight questions, each raised by the answer to the one before, from "what does the demand look like?" to "which service level should each segment get?". Every number in this README is rendered from a committed artifact (`python scripts/render_readme_tables.py --check` verifies that) or tied to one by a test, and where a result is negative or limited the limit is stated next to it.
+An empirical demand-forecasting and inventory benchmark on the Walmart M5 retail data (store-item daily unit sales). It is organised as one chain of eight questions, each raised by the answer to the one before, from "what does the demand look like?" to "which service level should each segment get?". Result tables and the chain's own prose are rendered from committed artifacts (`python scripts/render_readme_tables.py --check` verifies that); the numbers quoted in the inventory sentences are tied to those artifacts by tests. The tests do not re-run the backtest, so a reproduction needs the quickstart commands below. Where a result is negative or limited, the limit is stated next to it.
 
 > **Deep Documentation Available**: For first-principles math, worked numerical examples, architecture diagrams, runbooks, and design decisions, see the [Comprehensive Guide](docs/guide/00_START_HERE.md).
 
@@ -66,7 +66,7 @@ A rolling-origin walk-forward backtest: at each origin the models see only data 
 | 1 | 2016-02-28 | 2016-02-29 to 2016-03-27 |
 | 0 | 2016-03-27 | 2016-03-28 to 2016-04-24 |
 
-- **Sample and size**: 3,000 series drawn at random with a fixed seed, 900 days of history each. 3 origins x 28 days = 84 test days per series, 252,000 predictions per model. Origin indices count back from the end of the data, so index 0 is the latest window.
+- **Sample and size**: 3,000 series drawn at random with a fixed seed across all stores, from a 900-day panel (2013-11-07 to 2016-04-24), so each origin trains on 816, 844 and 872 days (the panel also holds the test windows). 3 origins x 28 days = 84 test days per series, 252,000 predictions per model. Origin indices count back from the end of the data, so index 0 is the latest window.
 - **Horizon-shifted features**: every lag and rolling feature the global model sees is shifted by the full 28-day horizon (38 features), so a test row never references an actual inside its own window.
 - **Training-window-only statistics**: the RMSSE scale and the router's SBC quadrants for each origin use data up to that origin's training end, never the test window.
 <!-- END_EVAL_PROTOCOL -->
@@ -91,7 +91,7 @@ Each rung adds one idea to the one below it, so a gap between two rungs can be a
 | 9 | LightGBM (Tweedie) | Global GBDT | The same global model with a loss suited to zero-inflated counts. |
 | 10 | Routed SBC Ensemble | Hybrid (ADIDA + Global) | Does sending each demand pattern to a different method help? (step 6) |
 
-- **Handicaps on the global model**: LightGBM ran under three handicaps relative to the M5 competition: (1) no price features (`price_features_included: false`; the price table came from a workbook truncated at Excel's row limit and covers about 15% of M5 prices), (2) a 3,000-series sample of the 30,490-series catalogue, and (3) a 900-day window of the 1,913-day history. In the M5 competition price and promotion features and catalogue-wide learning were a large part of why GBDTs won, so "intermittent methods match or beat global GBDTs here" carries that qualification.
+- **Handicaps on the global model**: LightGBM ran under three handicaps relative to the M5 competition: (1) no price features (`price_features_included: false`; the price table came from a workbook truncated at Excel's row limit and covers about 15% of M5 prices), (2) a 3,000-series sample of the 30,490-series catalogue, and (3) a 900-day panel of the 1,913-day history (shorter training windows, see step 3). In the M5 competition price and promotion features and catalogue-wide learning were a large part of why GBDTs won, so "intermittent methods match or beat global GBDTs here" carries that qualification.
 <!-- END_MODEL_LADDER -->
 
 *Raises the next question*: the rungs score differently, but are those differences larger than noise?
@@ -114,7 +114,7 @@ Rankings are gated by an omnibus Friedman test, Nemenyi critical-difference rank
 | **9** | **Seasonal Naive (Weekly)** | Baseline | 6.74 | No | 88.08% [84.37%, 91.79%] | 1.000 [0.985, 1.025] | +12.92% [+11.99%, +13.77%] | Baseline |
 | **10** | **Seasonal Naive (28d)** | Baseline | 7.20 | No | 98.92% [95.11%, 102.55%] | 1.084 [1.070, 1.106] | +23.76% [+22.14%, +25.41%] | Baseline |
 
-*Statistical significance: Omnibus Friedman test $\chi^2 = 2429.30$ ($p < 10^{-12}$, 10 models $\times$ 2,950 complete series). Post-hoc Nemenyi critical difference $CD = 0.2494$ ($\alpha = 0.05$). Top rank clique $\{croston\_sba, adida, routed\_ensemble\}$ is statistically indistinguishable in average rank. Paired series bootstrap (2,000 resamples) demonstrates that Routed SBC Ensemble is indistinguishable from ADIDA in pooled WAPE ($\Delta\text{WAPE} = +0.50\%$, 95% CI [-0.01%, +1.04%]; assignment chosen on the evaluation origins; a clean test needs an earlier selection origin). Global model caveat: LightGBM was evaluated under three handicaps compared to M5 competition conditions: (1) no price features (`price_features_included: false` due to Excel row-limit truncation of the raw price workbook to ~15% coverage), (2) a 3,000-series sample rather than the full 30,490 catalog, and (3) a 900-day window rather than the full 1,913-day history.*
+*Statistical significance: Omnibus Friedman test $\chi^2 = 2429.30$ ($p < 10^{-12}$, 10 models $\times$ 2,950 complete series). Post-hoc Nemenyi critical difference $CD = 0.2494$ ($\alpha = 0.05$). Top rank clique $\{croston\_sba, adida, routed\_ensemble\}$ is statistically indistinguishable in average rank. Paired series bootstrap (2,000 resamples) demonstrates that Routed SBC Ensemble is indistinguishable from ADIDA in pooled WAPE ($\Delta\text{WAPE} = +0.50\%$, 95% CI [-0.01%, +1.04%]; assignment chosen on the evaluation origins; a clean test needs an earlier selection origin). RMSSE point estimates are the per-(series, origin) mean in `accuracy_overall.csv`; the intervals come from a bootstrap over per-series means, so they are centred slightly off the point. Global model caveat: LightGBM was evaluated under three handicaps compared to M5 competition conditions: (1) no price features (`price_features_included: false` because the price table was truncated at Excel's row limit), (2) a 3,000-series sample rather than the full 30,490-series catalog, and (3) a 900-day panel rather than the full 1,913-day history (shorter training windows, see step 3).*
 <!-- END_LEADERBOARD_TABLE -->
 
 #### Statistical significance and error analysis
@@ -123,8 +123,12 @@ Rankings are gated by an omnibus Friedman test, Nemenyi critical-difference rank
 - **Non-Parametric Omnibus Test (Friedman)**: Evaluated across 10 models over 2,950 complete series (84 evaluation days per series). The omnibus Friedman test decisively rejects the null hypothesis of equal model performance ($\chi^2 = 2429.30$, $p < 10^{-12}$), justifying post-hoc ranking comparisons.
 - **Post-Hoc Critical Difference (Nemenyi)**: Critical difference $CD = 0.2494$ at $\alpha = 0.05$. **Croston SBA** achieved the best average rank (4.55), forming a top statistically indistinguishable clique with **ADIDA**, **Routed SBC Ensemble**. Standard global models (**LightGBM (Tweedie)** at 5.38, **LightGBM** at 5.56) scored significantly worse in average rank across the panel.
 - **Paired Series Bootstrap (95% CI)**: Resampling whole series over 2,000 replicates (preserving within-series autocorrelation) reveals that **ADIDA** leads pooled volume-weighted accuracy at 75.16% WAPE [72.16%, 78.23%]. Relative to ADIDA, **Routed SBC Ensemble** is statistically indistinguishable in WAPE ($\Delta\text{WAPE} = +0.50\%$, 95% CI [-0.01%, +1.04%]; routing assignment chosen on the evaluation origins; a clean test needs an earlier selection origin), while **Moving Average (28d)** is indistinguishable in RMSSE ($\Delta\text{RMSSE} = +0.0011$, 95% CI [-0.0001, +0.0023]).
-- **Per-Series Pairwise Win Rates**: Comparing models series-by-series resolves the apparent divergence between rank tests and volume metrics: **Croston SBA** beats **ADIDA** on 57.0% of individual series (favoring rank metrics on sparse items), whereas **ADIDA** achieves lower aggregate error on higher-volume items. On 93.8% of series, the two models are statistically indistinguishable under Holm-corrected per-series Diebold-Mariano testing.
+- **Per-Series Pairwise Win Rates**: the rank leader and the pooled-WAPE leader differ, and series-by-series comparison shows how: **Croston SBA** has the lower absolute error on 57.0% of individual series, yet **ADIDA** has the lower pooled WAPE, so where ADIDA wins it wins by more. This analysis does not say which kind of series each model wins on, and the win rate does not follow series volume in the direction one might expect. On 93.8% of series, the two models are statistically indistinguishable under Holm-corrected per-series Diebold-Mariano testing (Holm is applied across series within the pair). The test has little power per series: ADIDA against Seasonal Naive (28d) (a 23.8 pp WAPE gap) is also indistinguishable on 93.0% of series, so "indistinguishable" does not mean "equal".
 <!-- END_STATISTICS_SECTION -->
+
+<!-- BEGIN_TIER1_NOTE -->
+- **Tier-1 models outside this benchmark**: the StatsForecast Tier-1 run (`reports/tier1/tier1_overall.csv`) scores another set of statistical models on the same series, origins and actuals, but it is not part of the 10-model Friedman and Nemenyi tests above, and its implementations (including its own ADIDA, 75.89% WAPE) differ from the project's. Its lowest WAPE is AutoCES at 73.65%, below ADIDA's 75.16% here, and its lowest RMSSE is AutoETS at 0.7675 against ADIDA's 0.7678. So "ADIDA leads" is a statement about the 10 models in the leaderboard, not about every model scored on this data.
+<!-- END_TIER1_NOTE -->
 
 *Raises the next question*: the routed ensemble sits in the top clique, so does classifying demand help at all?
 
@@ -158,10 +162,10 @@ The router classifies each series into an SBC (Syntetos-Boylan-Croston, 2005) qu
 
 ### 7. What is a better forecast worth?
 
-Evaluating required safety stock capital at a fixed 95% Cycle Service Level (CSL) across California stores `CA_1` and `CA_2` (4,591 priced SKUs) connects each model's rolling-origin forecast error to the stock needed to cover it ($SS = z \cdot \sigma_e \cdot \sqrt{L}$). Here $\sigma_e$ is the **RMSE** of the forecast errors, taken about zero, not their standard deviation: a standard deviation subtracts a model's mean error, so a forecast that is consistently too low would be costed as if it were accurate. The *Mean bias* column is that mean error (actual - forecast; positive means the forecast runs low):
+Evaluating required safety stock capital at a fixed 95% Cycle Service Level (CSL) across California stores `CA_1` and `CA_2` (6,098 SKUs, of which 4,591 are priced) connects each model's rolling-origin forecast error to the stock needed to cover it ($SS = z \cdot \sigma_e \cdot \sqrt{L}$). Here $\sigma_e$ is the **RMSE** of the forecast errors, taken about zero, not their standard deviation: a standard deviation subtracts a model's mean error, so a forecast that is consistently too low would be costed as if it were accurate. The *Mean bias* column is that mean error (actual - forecast; positive means the forecast runs low). RMSE, bias and units cover all 6,098 CA SKUs; the capital columns cover only the 4,591 SKUs with a price:
 
 <!-- BEGIN_SAFETY_STOCK_MODEL_TABLE -->
-| Model Name | Architecture Tier | Mean RMSE ($\sigma_e$) | Mean bias (actual - forecast) | Safety Stock Units (95% CSL) | Safety Stock Capital ($) | Capital Reduction vs Naive ($) | Reduction (%) |
+| Model Name | Architecture Tier | Mean RMSE ($\sigma_e$, all CA SKUs) | Mean bias (actual - forecast, all CA SKUs) | Safety Stock Units (95% CSL, all CA SKUs) | Safety Stock Capital ($, priced SKUs only) | Capital Reduction vs Naive ($, priced SKUs only) | Reduction (%) |
 |---|---|---|---|---|---|---|---|
 | **Moving Average (28d)** | Simple Baseline | 1.4891 | +0.0385 | 39,517.03 | $47,896.83 | +$20,639.58 | +30.11% |
 | **ADIDA** | Intermittent Statistical | 1.4898 | -0.0022 | 39,534.77 | $47,909.05 | +$20,627.36 | +30.10% |
@@ -183,7 +187,7 @@ Feeding champion **ADIDA** forecast errors ($\sigma_e$ = RMSE) into 3x3 ABC/XYZ 
 **Decisions and scoring use different days.** A planner decides before the test days, so the policy is built only from what is known then:
 
 - **Decision window (ends 2016-01-31)**: ABC revenue comes from the history up to that day, and the XYZ coefficient of variation, the mean demand behind the classes and the no-sales check (class **N**) from its last 84 days. The class decides who gets 98% or 90%, so it is never chosen with knowledge of the test days.
-- **Planning demand**: ADIDA's mean *forecast* on the 84 scored days (2016-02-01 to 2016-04-24) sets cycle stock and the reorder point. Actual sales on those days are used only for scoring.
+- **Planning demand**: ADIDA's mean *forecast* on the 84 scored days (2016-02-01 to 2016-04-24) sets cycle stock and the reorder point. Actual sales on those days are used only for scoring. The forecasts for the second and third windows use data up to 2016-02-28 and 2016-03-27, which a planner deciding at 2016-01-31 would not have had; the first-window-only row in the table below bounds that (working capital $80,888 instead of $81,263).
 - **$\sigma_e$ is a forecast-error size measured on the backtest days** (the same 84 days). It is the standard way a backtest compares models, not a realised inventory outcome.
 
 #### Two policies, side by side
@@ -200,7 +204,7 @@ Capital released only means something next to what it costs. Holding cost uses a
 
 - **Capital-release rule** (AX 98%, BZ/CY/CZ 90%, the rest held at 95%): frees $3,170 of working capital but raises total annual cost by **+$12,444/yr**. Holding cost falls by $792/yr while expected stockout cost rises by $13,237/yr. Under the project's own cost model it is not a saving; it is a capital-for-risk trade, worth taking only if working capital is the binding constraint.
 - **Cost-minimising level**: on the 90/95/98% menu it is **98% in every optimised segment**, for **-$18,684/yr** at **+$11,455** of working capital. The unconstrained optimum $SL^* = 1 - hcL/(365m)$ sits above the whole menu in every category (range in the margin table below), because a lost unit of margin costs far more than a week of holding it. Class N segments are held at the current level in both policies.
-- **Limits of this result**: the cost model charges only lost margin per unit short (no churn or substitution) and assumes normal errors on zero-heavy demand, so it is an analytical baseline; empirical lead-time stockout simulation is scheduled for Stage B.
+- **Limits of this result**: the cost model charges only lost margin per unit short (no churn or substitution) and assumes normal errors on zero-heavy demand, so it is an analytical baseline; empirical lead-time stockout simulation is scheduled for Stage B. Unit cost uses each SKU's mean sell price over the whole price table, including weeks after the decision date, a small look-ahead that has not been removed.
 
 #### Does the answer survive a different gross margin?
 
@@ -251,6 +255,7 @@ Per-segment detail of the capital-release rule, with capital released always sho
 | Mean-demand basis | Used for | Mean demand (units/day) | Cycle-Stock Capital ($) | Safety-Stock Capital ($) | Current Working Capital ($) |
 |---|---|---|---|---|---|
 | ADIDA mean forecast on the scored days | planning | 5,888.5 | $33,354 | $47,909 | $81,263 |
+| ADIDA forecast for the first 28 scored days only | reference only | 5,755.7 | $32,979 | $47,909 | $80,888 |
 | Mean actual sales on the scored days (look-ahead) | reference only | 5,894.7 | $33,463 | $47,909 | $81,372 |
 | Full-history mean (the earlier figure) | reference only | 5,141.0 | $26,487 | $47,909 | $74,396 |
 <!-- END_DEMAND_BASIS_TABLE -->
@@ -273,9 +278,9 @@ pip install -e ".[dev]"
 pytest
 
 # 3. Regenerate backtest, significance, and inventory analysis
-python scripts/run_backtest.py --sample-series 3000 --n-origins 3
+python scripts/run_backtest.py --sample-series 3000 --n-origins 3 --history-days 900 --out-dir reports/backtest_main
 python scripts/run_significance.py --backtest-dir reports/backtest_main
-python scripts/run_inventory_analysis.py
+python scripts/run_inventory_analysis.py --stores CA_1 CA_2
 
 # 4. Verify documentation synchronisation
 python scripts/render_readme_tables.py --check
@@ -302,8 +307,8 @@ The full engineering guide is available in `docs/guide/`:
 
 ## Limitations
 
-1. **Truncated Pricing History & Global Model Handicaps**: The raw price table originated from a workbook truncated at Excel's 1,048,575-row limit (covering only 15.3% of M5 price records, CA_1 and CA_2 only), leaving 1,507 California series without price data. Consequently, global models (LightGBM) ran under three major handicaps: (a) **no price or promotion features** (`price_features_included: false` in the backtest manifest), (b) trained on a **3,000-series sample** rather than the full 30,490-series catalog, and (c) trained on a **900-day window** rather than the full 1,913-day history. In the M5 competition, price momentum and catalog-wide cross-series learning were decisive drivers of GBDT performance; our finding that specialized intermittent methods match or outperform global GBDTs carries this essential qualification.
-2. **Bottom-Level Evaluation**: The benchmark evaluates bottom-level series (Level 12) across California stores rather than full 12-level WRMSSE competition aggregation.
+1. **Truncated Pricing History & Global Model Handicaps**: The raw price table originated from a workbook truncated at Excel's 1,048,575-row limit (covering only 15.3% of M5 price records, CA_1 and CA_2 only), leaving 1,507 CA_2 series without price data. Consequently, global models (LightGBM) ran under three major handicaps: (a) **no price or promotion features** (`price_features_included: false` in the backtest manifest), (b) trained on a **3,000-series sample** rather than the full 30,490-series catalog, and (c) trained on a **900-day window** rather than the full 1,913-day history. In the M5 competition, price momentum and catalog-wide cross-series learning were decisive drivers of GBDT performance; our finding that specialized intermittent methods match or outperform global GBDTs carries this essential qualification.
+2. **Bottom-Level Evaluation**: The benchmark evaluates a random sample of bottom-level series (Level 12) drawn from all ten stores rather than full 12-level WRMSSE competition aggregation; the inventory layer covers the two California stores with prices.
 3. **Parametric Normal Safety Stock**: Analytical safety stock ($z \cdot \sigma_e \cdot \sqrt{L}$, with $\sigma_e$ the RMSE so that bias is paid for) and the loss-function shortage cost ($\sigma_L \cdot G(z)$ per cycle) serve as an operational baseline; $\sigma_e$ is a forecast-error size measured on the backtest days, not a realised inventory outcome. The $\sqrt{L}$ scaling treats daily errors as independent, so a persistent bias, which accumulates linearly over the lead time, is still understated; RMSE also charges over-forecast bias. Empirical lead-time stockout simulations are scheduled for Stage B.
 4. **Unevaluated Architectures**: Deep learning architectures and two-stage hurdle models were implemented but not scored in the main cross-tier walk-forward backtest.
 

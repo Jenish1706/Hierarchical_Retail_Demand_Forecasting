@@ -39,6 +39,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import time
@@ -401,6 +402,22 @@ def evaluate_by_hierarchy_level(preds: pd.DataFrame) -> pd.DataFrame:
     return out.sort_values(["level", "wape"]).reset_index(drop=True)
 
 
+def manifest_provenance(out_dir: Path, argv: list[str]) -> dict[str, str]:
+    """
+    Where the saved predictions came from: file name, SHA-256 and the command that regenerates them.
+
+    These keys used to be added to ``manifest.json`` by hand after a run, so a rerun silently dropped
+    them. Writing them here keeps the manifest reproducible: the hash changes only when the
+    predictions do.
+    """
+    predictions = out_dir / "predictions.parquet"
+    return {
+        "predictions_file": predictions.name,
+        "predictions_sha256": hashlib.sha256(predictions.read_bytes()).hexdigest(),
+        "regeneration_command": " ".join(["python", "scripts/run_backtest.py", *argv]),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
@@ -636,6 +653,7 @@ def main() -> int:
         if not overall.empty
         else None,
     }
+    manifest.update(manifest_provenance(out_dir, sys.argv[1:]))
     (out_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2, default=str), encoding="utf-8"
     )

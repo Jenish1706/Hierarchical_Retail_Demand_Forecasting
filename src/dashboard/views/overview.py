@@ -28,6 +28,13 @@ def render() -> None:
         acc_value = "Pending"
         acc_delta = "Run backtest"
 
+    findings = dl.load_eda_findings()
+    structure = findings.get("3.1_structure", {})
+    n_series = int(structure.get("n_series", 0))
+    n_days = int(structure.get("n_days", 0))
+    n_rows_m = structure.get("long_format_rows", 0) / 1e6
+    n_stores = structure.get("hierarchy_cardinality", {}).get("store", 0)
+
     portfolio_df = dl.load_portfolio_summary()
     if not portfolio_df.empty and "capital_released_total" in portfolio_df.columns:
         freed = portfolio_df["capital_released_total"].sum()
@@ -46,15 +53,15 @@ def render() -> None:
     with col1:
         st.metric(
             label="Catalog Scale",
-            value="30,490 SKUs",
-            delta="10 Walmart Stores",
+            value=f"{n_series:,} store-item series",
+            delta=f"{n_stores} Walmart Stores",
             delta_color="off",
         )
     with col2:
         st.metric(
             label="Panel Observations",
-            value="58.3M Records",
-            delta="1,913 Days (30,490 Series)",
+            value=f"{n_rows_m:.1f}M Records",
+            delta=f"{n_days:,} Days ({n_series:,} Series)",
             delta_color="off",
         )
     with col3:
@@ -93,11 +100,11 @@ def render() -> None:
         st.success(
             """
             * **High-Throughput Streaming Engine**:
-              Processes 58.3M rows via Polars out-of-core lazy execution, eliminating high memory consumption during feature generation.
+              Processes the full panel via Polars out-of-core lazy execution, eliminating high memory consumption during feature generation.
             * **Multi-Tier Benchmark**:
               Benchmarks statistical, intermittent, and gradient-boosted architectures on walk-forward rolling origins with non-parametric significance testing.
             * **Differentiated ABC/XYZ Policies**:
-              Segments catalog into a 3x3 matrix: ensures higher availability on high-revenue staples (AX) while dialing back erratic, slow-moving items (CZ), freeing capital with controlled stockout risk.
+              Segments the catalog into a 3x3 ABC/XYZ matrix and compares policies by the capital they release and the annual cost they add, never capital alone.
             """
         )
 
@@ -108,7 +115,7 @@ def render() -> None:
         """
         ```mermaid
         flowchart LR
-            A[M5 Panel: 58.3M Rows] --> B[Polars Lazy Engine]
+            A[M5 Panel: store-item daily sales] --> B[Polars Lazy Engine]
             B --> C[Forecasting Model Benchmark]
             C --> D[Friedman & Nemenyi Tests]
             D --> E[ABC/XYZ Segmentation]

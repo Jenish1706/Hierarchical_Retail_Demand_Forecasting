@@ -11,38 +11,49 @@ from src.dashboard import data_loader as dl
 def render() -> None:
     """Render Demand Sparsity & EDA page."""
     st.markdown("## 🔍 Demand Sparsity & Intermittency Audit")
+
+    # Every figure below is read from reports/eda/ (scripts/run_eda.py), never typed here.
+    findings = dl.load_eda_findings()
+    sbc = dl.read_table("reports/eda/table_sbc_classification")
+    if not findings or sbc.empty:
+        st.info("EDA artifacts not found. Run `python scripts/run_eda.py`.")
+        return
+    structure = findings.get("3.1_structure", {})
+    demand = findings.get("3.2_demand", {})
+    mix = findings.get("3.3_intermittency", {})
     st.markdown(
-        """
-        Measured over all **30,490 series × 1,913 days** under the
-        **Syntetos-Boylan-Croston (SBC)** demand categorization framework.
+        f"""
+        Measured over all **{structure.get("n_series", 0):,} series × {structure.get("n_days", 0):,} days** under the
+        **Syntetos-Boylan-Croston (SBC)** demand categorization framework (full history, pre-launch zeros trimmed).
         """
     )
 
     # Key Sparsity Stats
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Total Catalog Series", "30,490", "100%")
+        st.metric("Total Catalog Series", f"{structure.get('n_series', 0):,}")
     with col2:
-        st.metric("Overall Zero Demand", "68.2%", "Daily Sales = 0")
+        st.metric("Overall Zero Demand", f"{demand.get('overall_zero_rate', 0.0):.1%}", "Daily Sales = 0")
     with col3:
-        st.metric("Sparse Series (SBC)", "95.2%", "Intermittent + Lumpy")
+        st.metric("Sparse Series (SBC)", f"{mix.get('intermittent_or_lumpy_pct', 0.0):.1f}%", "Intermittent + Lumpy")
     with col4:
-        st.metric("Smooth Series", "3.2%", "Traditional Time-Series")
+        st.metric("Smooth Series", f"{mix.get('pct_of_series', {}).get('SMOOTH', 0.0):.1f}%", "Traditional Time-Series")
 
     st.markdown("---")
 
     # Interactive SBC Breakdown Chart
     st.markdown("### 📊 Syntetos-Boylan-Croston Demand Classification")
+    descriptions = {
+        "INTERMITTENT": "Low volatility, infrequent demand (ADI >= 1.32, CV^2 < 0.49)",
+        "LUMPY": "High volatility, infrequent demand (ADI >= 1.32, CV^2 >= 0.49)",
+        "SMOOTH": "Low volatility, regular demand (ADI < 1.32, CV^2 < 0.49)",
+        "ERRATIC": "High volatility, regular demand (ADI < 1.32, CV^2 >= 0.49)",
+    }
     sbc_data = {
-        "Category": ["Intermittent", "Lumpy", "Smooth", "Erratic"],
-        "Pct_Series": [75.6, 19.5, 3.2, 1.6],
-        "Pct_Volume": [42.6, 27.7, 19.9, 9.9],
-        "Description": [
-            "Low volatility, infrequent demand (ADI >= 1.32, CV^2 < 0.49)",
-            "High volatility, infrequent demand (ADI >= 1.32, CV^2 >= 0.49)",
-            "Low volatility, regular demand (ADI < 1.32, CV^2 < 0.49)",
-            "High volatility, regular demand (ADI < 1.32, CV^2 >= 0.49)",
-        ],
+        "Category": [str(p).title() for p in sbc["pattern"]],
+        "Pct_Series": [float(x) for x in sbc["pct_of_series"]],
+        "Pct_Volume": [float(x) for x in sbc["pct_of_volume"]],
+        "Description": [descriptions.get(str(p), "") for p in sbc["pattern"]],
     }
 
     tab1, tab2 = st.tabs(["Chart View", "Data Table"])

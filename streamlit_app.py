@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from src.dashboard import data_loader as dl
 from src.dashboard.views import eda, inventory, models, overview, significance
 
 # Set page configuration
@@ -56,13 +57,19 @@ pages = {
 selection = st.sidebar.radio("Navigate Module", list(pages.keys()))
 
 st.sidebar.markdown("---")
+_structure = dl.load_eda_findings().get("3.1_structure", {})
+_data_line = (
+    f"{_structure.get('long_format_rows', 0) / 1e6:.1f}M panel records / {_structure.get('n_series', 0):,} store-item series"
+    if _structure
+    else "run scripts/run_eda.py to populate"
+)
 st.sidebar.markdown(
-    """
+    f"""
     **Project Highlights**:
-    * **Data**: 58.3M panel records / 30,490 SKUs
+    * **Data**: {_data_line}
     * **Evaluation**: Rolling-origin walk-forward backtest
-    * **Decision Layer**: ABC/XYZ inventory & working capital simulator
-    * **Testing**: 96 automated tests passing
+    * **Decision Layer**: ABC/XYZ policy comparison with annual cost and margin sensitivity
+    * **Testing**: automated test suite (`pytest`)
     """
 )
 st.sidebar.caption("IIT Kharagpur Placement Portfolio")

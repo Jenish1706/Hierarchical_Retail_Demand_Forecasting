@@ -212,6 +212,15 @@ This document provides a comprehensive, file-by-file walkthrough of the codebase
   def main(): ...
   ```
 
+### `src/evaluation/routing_comparison.py`
+- **Purpose**: Scores the routed ensemble against every single model, per origin and per demand segment, on the same predictions as the leaderboard (pooled WAPE).
+- **Key Functions**:
+  ```python
+  def compare_router(preds: pd.DataFrame, assignments: pd.DataFrame) -> pd.DataFrame: ...
+  def per_origin_columns(comparison: pd.DataFrame) -> pd.DataFrame: ...
+  ```
+- **Non-obvious**: the best single model in each row is picked after the scores are known (an oracle choice that favours the single model), and the router's INTERMITTENT to ADIDA rule was chosen on these same origins.
+
 ### `src/evaluation/significance.py`
 - **Purpose**: Comprehensive econometric hypothesis testing engine.
 - **Key Functions & Signatures**:
@@ -263,6 +272,17 @@ This document provides a comprehensive, file-by-file walkthrough of the codebase
   ```
 - **Non-Obvious Lines / Gotchas**:
   - In `ServiceLevelAnalyzer`, replenishment occurs every $L=7$ days ($365/7 \approx 52.14$ cycles/year). Stockout margin loss must be multiplied by $365 / L$ to achieve dimensional coherence when summed with annual inventory holding cost ($25\% \times \text{inventory value}$).
+
+### `src/inventory/margin_sensitivity.py`
+- **Purpose**: How far the service-level conclusion moves with the assumed gross margin. Per dollar of price and per unit of sigma_L the annual cost is $h(1-g)z + (365/L)\,g\,G(z)$, so the cheapest menu level depends on the gross margin $g$ alone.
+- **Key Functions**:
+  ```python
+  def break_even_margin(lower: float, higher: float, holding_cost_rate: float = ..., lead_time_days: float = ...) -> float: ...
+  def sl_star_equals(service_level: float, holding_cost_rate: float = ..., lead_time_days: float = ...) -> float: ...
+  def margin_sensitivity(category_margins=None, grid=..., menu=..., holding_cost_rate=..., lead_time_days=...) -> pd.DataFrame: ...
+  def break_even_table(menu=..., holding_cost_rate=..., lead_time_days=...) -> pd.DataFrame: ...
+  ```
+- **Non-obvious**: `break_even_margin` is where two *menu* levels cost the same; `sl_star_equals` is where the *unconstrained* optimum reaches a level. The second is looser (it needs a higher margin before 98% counts as optimal); both are reported so neither is mistaken for the other.
 
 ### `src/inventory/working_capital.py`
 - **Purpose**: Simulates portfolio working capital releases under tailored inventory policies.

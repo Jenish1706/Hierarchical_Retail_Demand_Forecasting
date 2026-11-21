@@ -18,13 +18,32 @@ def render() -> None:
         """
     )
 
+    # Every figure is read from significance_report.json (scripts/run_significance.py).
+    report = dl.load_significance_report()
+    friedman = report.get("friedman", {})
+    nemenyi = report.get("nemenyi", {})
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Friedman Test Statistic", "chi-sq = 2,461", "p < 1e-12 (Decisive)")
+        stat = friedman.get("statistic")
+        st.metric(
+            "Friedman Test Statistic",
+            f"chi-sq = {stat:,.2f}" if stat is not None else "Pending",
+            f"{report.get('n_models', 0)} models x {report.get('n_series_complete', 0):,} complete series",
+        )
     with col2:
-        st.metric("Separable Model Pairs", "35 of 45 Pairs", "Holm-Corrected Diebold-Mariano")
+        cd = nemenyi.get("critical_difference")
+        st.metric(
+            "Nemenyi Critical Difference",
+            f"{cd:.4f}" if cd is not None else "Pending",
+            "Average-rank gap needed for a real difference",
+        )
     with col3:
-        st.metric("Family-Wise Error Control", "Holm-Bonferroni", "Alpha = 0.05")
+        alpha = report.get("alpha")
+        st.metric(
+            "Significance Level",
+            f"Alpha = {alpha}" if alpha is not None else "Pending",
+            "Per-series Diebold-Mariano with Holm correction",
+        )
 
     st.markdown("---")
 
@@ -61,13 +80,29 @@ def render() -> None:
 
     with tab3:
         st.markdown("### 💡 Why Simple Intermittent Models Matched Global LightGBM")
+        zero_rate = dl.load_eda_findings().get("3.2_demand", {}).get("overall_zero_rate")
+        zero_txt = f"{zero_rate:.1%} of daily records across the full catalog are zero" if zero_rate else "Most daily records are zero"
+        routing = dl.read_table("reports/backtest_main/routing_vs_best_single")
+        route_txt = (
+            "Routing series by SBC demand pattern did not beat applying ADIDA to every series "
+            "(router versus best single model: README, section 6)."
+        )
+        if not routing.empty:
+            pooled = routing[(routing["origin"].astype(str) == "all") & (routing["pattern"] == "ALL")]
+            if len(pooled):
+                r = pooled.iloc[0]
+                route_txt = (
+                    f"Routing series by SBC demand pattern gives {float(r['wape_routed']):.2f}% WAPE against "
+                    f"{float(r['wape_adida']):.2f}% for ADIDA applied to every series "
+                    f"({float(r['routed_minus_adida']):+.2f} pp, positive meaning the router is worse), so it did not beat the best single model."
+                )
         st.markdown(
-            """
+            f"""
             1. **The Intermittent Zero-Inflation Reality**:
-               Over 57.5% of test window sales are zero (68.2% across the full catalog). In high-sparsity panels, complex global models risk overfitting to stochastic non-zero impulses.
+               {zero_txt}. In high-sparsity panels, complex global models risk overfitting to stochastic non-zero impulses.
             2. **Temporal Aggregation Shrinkage (ADIDA)**:
                ADIDA aggregates high-frequency zero-inflated demand into lower-frequency time buckets, filters noise via exponential smoothing, and disaggregates back, acting as an effective shrinkage estimator.
             3. **Segment-Conditioned Routing (SBC)**:
-               Dynamic routing achieves the best average Nemenyi rank (4.54) by steering intermittent/lumpy series to specialized statistical estimators while reserving LightGBM for regular, high-volume items.
+               {route_txt}
             """
         )

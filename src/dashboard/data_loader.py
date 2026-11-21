@@ -129,6 +129,19 @@ def load_significance_dm() -> pd.DataFrame:
 
 
 @cache_data
+def load_significance_report() -> dict[str, Any]:
+    """Load the statistical significance report (Friedman, Nemenyi, bootstrap, per-series tests)."""
+    path = get_project_root() / "reports/backtest_main/significance/significance_report.json"
+    if path.exists():
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+@cache_data
 def load_eda_findings() -> dict[str, Any]:
     """Load EDA findings JSON."""
     root = get_project_root()

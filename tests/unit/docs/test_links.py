@@ -15,6 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 README = ROOT / "README.md"
+OPTIONAL_PATHS = {"data"}  # raw M5 data is git-ignored
 
 
 def _markdown_files() -> list[Path]:
@@ -60,6 +61,8 @@ def test_readme_layout_paths_exist() -> None:
             token = token.rstrip("/")
             if token and "{" not in token and not token.startswith("(") and re.fullmatch(r"[\w.]+(/[\w.]+)*", token):
                 if token in {"unit", "integration"}:
+                    continue
+                if token in OPTIONAL_PATHS:  # git-ignored, so absent from a fresh clone
                     continue
                 if not (ROOT / token).exists():
                     missing.append(token)

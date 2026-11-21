@@ -51,22 +51,16 @@ def test_readme_layout_lists_every_top_level_entry() -> None:
 
 
 def test_readme_layout_paths_exist() -> None:
-    block = _layout_block()
     missing = []
-    # top-level entries are lines that start at column 0; the first token is the path
-    for line in block.splitlines():
+    # top-level entries are lines that start at column 0; only the leading token is a path
+    for line in _layout_block().splitlines():
         if not line or line.startswith(" "):
             continue
-        for token in line.split():
-            token = token.rstrip("/")
-            if token and "{" not in token and not token.startswith("(") and re.fullmatch(r"[\w.]+(/[\w.]+)*", token):
-                if token in {"unit", "integration"}:
-                    continue
-                if token in OPTIONAL_PATHS:  # git-ignored, so absent from a fresh clone
-                    continue
-                if not (ROOT / token).exists():
-                    missing.append(token)
-            break  # only the leading token of a top-level line is a path
+        token = line.split()[0].rstrip("/")
+        if "{" in token or token in OPTIONAL_PATHS or not re.fullmatch(r"[\w.]+(/[\w.]+)*", token):
+            continue
+        if not (ROOT / token).exists():
+            missing.append(token)
     assert not missing, missing
 
 

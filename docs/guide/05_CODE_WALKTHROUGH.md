@@ -43,9 +43,9 @@ This document provides a comprehensive, file-by-file walkthrough of the codebase
 - **Non-Obvious Lines / Gotchas**:
   - `PriceDataValidator` checks that `sell_price > 0.0`. However, in the M5 dataset, 1,507 series in California lack pricing rows during initial backtest origins because the price file was truncated at Excel's row limit (all 1,507 are CA_2 series). Validation must handle missing prices without dropping active sales records.
 
-### `scripts/extract_workbook.py`
+### `scripts/pipeline/extract_workbook.py`
 - **Purpose**: Command-line utility to unpack compressed Kaggle zip archives (`m5-forecasting-accuracy.zip`) and standardize raw file layouts.
-- **Execution**: `python scripts/extract_workbook.py --zip-path <path_to_zip> --target data/raw`
+- **Execution**: `python scripts/pipeline/extract_workbook.py --zip-path <path_to_zip> --target data/raw`
 
 ---
 
@@ -336,15 +336,15 @@ This document provides a comprehensive, file-by-file walkthrough of the codebase
 
 | Script | Purpose | Primary Output |
 | :--- | :--- | :--- |
-| `scripts/run_eda.py` | Full catalog exploration and zero profiling | `reports/eda/` |
-| `scripts/run_tier1.py` | Evaluates baseline models on 3,000 series | `reports/tier1/` |
-| `scripts/run_backtest.py` | Full walk-forward backtest (3k series $\times$ 3 origins $\times$ 10 models) | `reports/backtest_main/` |
-| `scripts/run_significance.py` | Friedman, Nemenyi, DM, and Paired Bootstrap | `reports/backtest_main/significance/significance_report.json` |
-| `scripts/run_inventory_analysis.py` | ABC/XYZ classification and safety stock analysis | `reports/inventory/` |
-| `scripts/render_readme_tables.py` | Dynamic Markdown table injector for README | `README.md` updates |
-| `scripts/tune_ml.py` | Optuna hyperparameter optimization for LightGBM | MLflow runs |
-| `scripts/tune_dl.py` | Preliminary neural network tuning | MLflow runs |
-| `scripts/rescore_tier1.py` | Recalculates tier1 RMSSE on canonical scales | `reports/tier1/tier1_overall.csv` |
+| `scripts/pipeline/run_eda.py` | Full catalog exploration and zero profiling | `reports/eda/` |
+| `scripts/pipeline/run_tier1.py` | Evaluates baseline models on 3,000 series | `reports/tier1/` |
+| `scripts/pipeline/run_backtest.py` | Full walk-forward backtest (3k series $\times$ 3 origins $\times$ 10 models) | `reports/backtest_main/` |
+| `scripts/pipeline/run_significance.py` | Friedman, Nemenyi, DM, and Paired Bootstrap | `reports/backtest_main/significance/significance_report.json` |
+| `scripts/pipeline/run_inventory_analysis.py` | ABC/XYZ classification and safety stock analysis | `reports/inventory/` |
+| `scripts/tools/render_readme_tables.py` | Dynamic Markdown table injector for README | `README.md` updates |
+| `scripts/experiments/tune_ml.py` | Optuna hyperparameter optimization for LightGBM | MLflow runs |
+| `scripts/experiments/tune_dl.py` | Preliminary neural network tuning | MLflow runs |
+| `scripts/experiments/rescore_tier1.py` | Recalculates tier1 RMSSE on canonical scales | `reports/tier1/tier1_overall.csv` |
 
 ---
 
@@ -359,13 +359,13 @@ This document provides a comprehensive, file-by-file walkthrough of the codebase
 
 ## 9. Test Suite Architecture
 
-- `tests/unit/test_m5_01_scale_semantics.py`: Verifies per-(series, origin) RMSSE aggregation and pre-launch zero trimming.
-- `tests/unit/test_m5_03_tier1_parity.py`: Enforces metric parity between `tier1` and `backtest_main`.
-- `tests/unit/test_m5_04_source_of_truth.py`: Ensures CSV-Parquet parity and canonical CSV-first loading.
-- `tests/unit/test_m5_06_statistical_defense.py`: Validates paired bootstrap CIs and per-series DM tests.
-- `tests/unit/test_metrics.py`: Unit tests for point and quantile loss functions.
-- `tests/unit/test_models_and_facts.py`: Asserts model parameter constraints and baseline invariants.
-- `tests/unit/test_polars_parity.py`: Verifies exact numerical equivalence between Polars and Pandas feature engines.
+- `tests/unit/evaluation/test_scale_semantics.py`: Verifies per-(series, origin) RMSSE aggregation and pre-launch zero trimming.
+- `tests/unit/evaluation/test_tier1_parity.py`: Enforces metric parity between `tier1` and `backtest_main`.
+- `tests/unit/reports/test_source_of_truth.py`: Ensures CSV-Parquet parity and canonical CSV-first loading.
+- `tests/unit/evaluation/test_statistical_defense.py`: Validates paired bootstrap CIs and per-series DM tests.
+- `tests/unit/evaluation/test_metrics.py`: Unit tests for point and quantile loss functions.
+- `tests/unit/models/test_models_and_facts.py`: Asserts model parameter constraints and baseline invariants.
+- `tests/unit/features/test_polars_parity.py`: Verifies exact numerical equivalence between Polars and Pandas feature engines.
 - `tests/integration/test_loader_features_model.py`: End-to-end integration test verifying data loading, feature generation, and LightGBM model fitting.
-- `tests/test_dashboard.py`: Guards against hardcoded metric literals in Streamlit dashboard views.
-- `tests/test_readme_tables.py`: CI test asserting README tables match backing artifact files with zero drift.
+- `tests/unit/dashboard/test_dashboard.py`: Guards against hardcoded metric literals in Streamlit dashboard views.
+- `tests/unit/docs/test_readme_tables.py`: CI test asserting README tables match backing artifact files with zero drift.

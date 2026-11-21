@@ -61,7 +61,7 @@ _structure = dl.load_eda_findings().get("3.1_structure", {})
 _data_line = (
     f"{_structure.get('long_format_rows', 0) / 1e6:.1f}M panel records / {_structure.get('n_series', 0):,} store-item series"
     if _structure
-    else "run scripts/run_eda.py to populate"
+    else "run scripts/pipeline/run_eda.py to populate"
 )
 st.sidebar.markdown(
     f"""

@@ -18,7 +18,7 @@ def render() -> None:
         """
     )
 
-    # Every figure is read from significance_report.json (scripts/run_significance.py).
+    # Every figure is read from significance_report.json (scripts/pipeline/run_significance.py).
     report = dl.load_significance_report()
     friedman = report.get("friedman", {})
     nemenyi = report.get("nemenyi", {})

@@ -52,7 +52,7 @@ from src.config.settings import M5, settings
 
 log = get_logger(__name__)
 
-# Output stems written by scripts/extract_workbook.py.
+# Output stems written by scripts/pipeline/extract_workbook.py.
 PARQUET_FILES = {
     "sales": "sales_train_validation.parquet",
     "calendar": "calendar.parquet",
@@ -84,7 +84,7 @@ class M5Loader:
         path = self.data_dir / PARQUET_FILES[key]
         if not path.exists():
             raise FileNotFoundError(
-                f"{path} not found. Run `python scripts/extract_workbook.py` "
+                f"{path} not found. Run `python scripts/pipeline/extract_workbook.py` "
                 f"to generate the Parquet files from the source workbook."
             )
         return path

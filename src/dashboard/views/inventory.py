@@ -97,7 +97,7 @@ def render() -> None:
         if not policy_df.empty:
             st.dataframe(policy_df, use_container_width=True)
         else:
-            st.info("Policy comparison not found. Run `python scripts/run_inventory_analysis.py`.")
+            st.info("Policy comparison not found. Run `python scripts/pipeline/run_inventory_analysis.py`.")
         sens_df = dl.read_table("reports/inventory/margin_sensitivity")
         be_df = dl.read_table("reports/inventory/margin_break_even")
         if not sens_df.empty:

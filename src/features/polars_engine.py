@@ -32,7 +32,7 @@ incomparable. Three details carry that:
   * All outputs are cast to float32, as the pandas path did, so downstream
     dtype-sensitive code sees no change.
 
-`tests/unit/test_polars_parity.py` asserts this equivalence on real data rather
+`tests/unit/features/test_polars_parity.py` asserts this equivalence on real data rather
 than trusting the claim.
 """
 

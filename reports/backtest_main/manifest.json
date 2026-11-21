@@ -41,5 +41,5 @@
   "champion_rmsse": 0.767789823476922,
   "predictions_file": "predictions.parquet",
   "predictions_sha256": "f974935ad084b64858767cbc9a8f9e0158b8adfd05aa73f18cd9a99342743ca0",
-  "regeneration_command": "python scripts/run_backtest.py --sample-series 3000 --n-origins 3 --history-days 900 --out-dir reports/backtest_main"
+  "regeneration_command": "python scripts/pipeline/run_backtest.py --sample-series 3000 --n-origins 3 --history-days 900 --out-dir reports/backtest_main"
 }

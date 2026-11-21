@@ -7,7 +7,7 @@
 [![Data Engine: Polars](https://img.shields.io/badge/engine-Polars%20lazy%20streaming-blueviolet.svg)](https://pola.rs)
 [![Documentation](https://img.shields.io/badge/docs-comprehensive%20guide-blue.svg)](docs/guide/00_START_HERE.md)
 
-An empirical demand-forecasting and inventory benchmark on the Walmart M5 retail data (store-item daily unit sales). It is organised as one chain of eight questions, each raised by the answer to the one before, from "what does the demand look like?" to "which service level should each segment get?". Result tables and the chain's own prose are rendered from committed artifacts (`python scripts/render_readme_tables.py --check` verifies that); the numbers quoted in the inventory sentences are tied to those artifacts by tests. The tests do not re-run the backtest, so a reproduction needs the quickstart commands below. Where a result is negative or limited, the limit is stated next to it.
+An empirical demand-forecasting and inventory benchmark on the Walmart M5 retail data (store-item daily unit sales). It is organised as one chain of eight questions, each raised by the answer to the one before, from "what does the demand look like?" to "which service level should each segment get?". Result tables and the chain's own prose are rendered from committed artifacts (`python scripts/tools/render_readme_tables.py --check` verifies that); the numbers quoted in the inventory sentences are tied to those artifacts by tests. The tests do not re-run the backtest, so a reproduction needs the quickstart commands below. Where a result is negative or limited, the limit is stated next to it.
 
 > **Deep Documentation Available**: For first-principles math, worked numerical examples, architecture diagrams, runbooks, and design decisions, see the [Comprehensive Guide](docs/guide/00_START_HERE.md).
 
@@ -278,12 +278,33 @@ pip install -e ".[dev]"
 pytest
 
 # 3. Regenerate backtest, significance, and inventory analysis
-python scripts/run_backtest.py --sample-series 3000 --n-origins 3 --history-days 900 --out-dir reports/backtest_main
-python scripts/run_significance.py --backtest-dir reports/backtest_main
-python scripts/run_inventory_analysis.py --stores CA_1 CA_2
+python scripts/pipeline/run_backtest.py --sample-series 3000 --n-origins 3 --history-days 900 --out-dir reports/backtest_main
+python scripts/pipeline/run_significance.py --backtest-dir reports/backtest_main
+python scripts/pipeline/run_inventory_analysis.py --stores CA_1 CA_2
 
 # 4. Verify documentation synchronisation
-python scripts/render_readme_tables.py --check
+python scripts/tools/render_readme_tables.py --check
+```
+
+---
+
+## Repository Layout
+
+```text
+src/               library code: the project's logic
+  config/ data/ features/ evaluation/ inventory/ mlops/ visualization/ dashboard/
+  models/          statistical/ classical_ml/ deep_learning/ probabilistic/ hierarchical/ ensembles/ optional/
+scripts/
+  pipeline/        the DVC stages: extract_workbook, run_eda, run_tier1, run_backtest, run_significance, run_inventory_analysis, run_figures
+  tools/           render_readme_tables (README sync check), optimize_reports (parquet companions)
+  experiments/     tuning and one-off studies; not part of the pipeline
+tests/             unit/{dashboard,docs,evaluation,features,inventory,models,reports}, integration/
+docs/guide/        the documentation guide, chapters 00 to 09 and the glossary
+reports/           committed artifacts by stage: backtest_main, eda, inventory, tier1, tier1_esbu, results, figures, metrics, tuning, data_quality
+configs/           model_config.yml
+data/              raw M5 data (git-ignored)
+streamlit_app.py   dashboard entry point
+dvc.yaml  pyproject.toml  .env.example  .github/  .dvc/
 ```
 
 ---

@@ -8,41 +8,46 @@ This document details the automated testing suite: what each test module covers,
 
 The repository maintains an automated test suite (`pytest`) that runs on CPU in about a minute. The suite is organized into unit, integration, and system-level checks. Test counts are not quoted here because they change with every item; the count and the fresh-clone result of the latest gate are recorded in the final report, and `pytest` prints the live figure.
 
+Layout: `tests/unit/` is grouped by area (`dashboard`, `docs`, `evaluation`, `features`, `inventory`, `models`, `reports`) and `tests/integration/` holds the tests that need the raw data. File names say what is tested, not which work item introduced them.
+
 ### Unit Tests (`tests/unit/`)
 
 | Test File | Modules Tested | Key Assertions & Properties Verified |
 | :--- | :--- | :--- |
-| `test_m5_01_scale_semantics.py` | `src.evaluation.point_metrics` | Multi-origin scale pooling; anchor scaling from first historical sale $d_1$; pre-launch zero trimming; zero-division edge cases ($s_i = 1.0$). |
-| `test_m5_03_tier1_parity.py` | `src.evaluation.point_metrics`, `reports/tier1/` | Cross-pipeline metric consistency; AutoETS Level-12 RMSSE parity harmonized at $0.7675$ between `tier1` and `backtest_main`. |
-| `test_m5_04_source_of_truth.py` | `src.dashboard.data_loader`, `reports/` | Lossless parity across all companion CSV-Parquet pairs; verifies `read_table()` treats CSV as canonical source of truth. |
-| `test_m5_06_statistical_defense.py` | `src.evaluation.significance` | Paired series bootstrap (2,000 resamples); preservation of within-series temporal autocorrelation; per-series win rates; Holm-Bonferroni correction across series within each model pair. |
-| `test_m5_09_zero_demand_classes.py` | `src.inventory.abc_xyz`, `src.inventory.safety_stock` | No-sales items are class N, never X; classes are decided on the window before the first test day; degenerate error estimates are missing, not zero risk; zero-demand and constant-demand series. |
-| `test_m5_10_cost_model.py` | `src.inventory.service_level`, `src.inventory.working_capital` | Normal loss function against hand values; shortage cost independent of the demand level; planning demand is the forecast; capital released never shown without its annual cost; README and guide numbers tied to the CSVs. |
-| `test_m5_11_global_model_handicaps.py` | README, guides | The three global-model handicaps and the price-feature caveat are stated. |
-| `test_m5_12_inventory_backtest_link.py` | `scripts/run_inventory_analysis.py` | The inventory layer reads the benchmarked backtest predictions; safety stock by model. |
-| `test_m5_12b_safety_stock_bias.py` | `src.inventory.safety_stock` | Safety stock sized on RMSE: a constant under-forecast raises the required stock. |
-| `test_m5_13_router_vs_best_single.py` | `src.evaluation.routing_comparison` | Router scored against every single model per origin and segment; committed comparison recomputed from `predictions.parquet`; assignments agree with the routed forecasts; no tracked text file uses the retired classification name. |
-| `test_m5_15_margin_sensitivity.py` | `src.inventory.margin_sensitivity` | Closed-form break-even margins against the pipeline's own analyzer; committed margin CSVs. |
-| `test_m5_15_readme_chain.py` | `README.md`, `docs/guide/00_START_HERE.md` | The eight-step order, working anchors, hand-over between steps, no typed numbers in the chain prose. |
-| `test_m5_15_guide_numbers.py` | `docs/guide/` | Headline results in guides 00, 04 and 09 derived from the significance report, bootstrap and accuracy CSVs. |
-| `test_g4b_dashboard_truth.py` | `src.dashboard.views`, `streamlit_app.py` | Views rendered against a stub Streamlit show artifact numbers; no typed result numbers in dashboard strings. |
-| `test_g4b_manifest_provenance.py` | `src.evaluation.backtest` | The manifest records the predictions' SHA-256 and regeneration command, and a rerun keeps writing them. |
-| `test_metrics.py` | `src.evaluation.point_metrics` | Analytical correctness of MAE, RMSE, WAPE, RMSSE, MASE, and quantile pinball losses across synthetic vectors with known ground truths. |
-| `test_models_and_facts.py` | `src.models.statistical.intermittent`, `src.models.statistical.naive` | Invariants of Croston SBA, TSB, ADIDA, Moving Average, and SES; demand quadrant classifications ($ADI$ and $CV^2$ thresholds). |
-| `test_polars_parity.py` | `src.features.polars_engine` | Bitwise/numerical parity between Polars expressions and equivalent Pandas implementations for lags, rolling means, and price ratios. |
-| `test_probabilistic_models.py` | `src.models.probabilistic` | Two-stage hurdle model fitting; empirical coverage calibration of conformalized quantile regression intervals ($1 - \alpha$). |
-| `test_deep_learning.py` | `src.models.deep_learning` | PyTorch Lightning and NeuralForecast adapter interfaces; tensor shape assertions; forward pass validation on minimal synthetic batches. |
-| `test_ensembles_and_mlops.py` | `src.mlops.registry`, `src.mlops.drift` | `PromotionGate` threshold validation (requires $\ge 1\%$ improvement); Kolmogorov-Smirnov drift alarms; Population Stability Index (PSI) thresholds. |
+| `evaluation/test_scale_semantics.py` | `src.evaluation.point_metrics` | Multi-origin scale pooling; anchor scaling from first historical sale $d_1$; pre-launch zero trimming; zero-division edge cases ($s_i = 1.0$). |
+| `evaluation/test_tier1_parity.py` | `src.evaluation.point_metrics`, `reports/tier1/` | Cross-pipeline metric consistency; AutoETS Level-12 RMSSE parity harmonized at $0.7675$ between `tier1` and `backtest_main`. |
+| `reports/test_source_of_truth.py` | `src.dashboard.data_loader`, `reports/` | Lossless parity across all companion CSV-Parquet pairs; verifies `read_table()` treats CSV as canonical source of truth. |
+| `evaluation/test_statistical_defense.py` | `src.evaluation.significance` | Paired series bootstrap (2,000 resamples); preservation of within-series temporal autocorrelation; per-series win rates; Holm-Bonferroni correction across series within each model pair. |
+| `inventory/test_zero_demand_classes.py` | `src.inventory.abc_xyz`, `src.inventory.safety_stock` | No-sales items are class N, never X; classes are decided on the window before the first test day; degenerate error estimates are missing, not zero risk; zero-demand and constant-demand series. |
+| `inventory/test_cost_model.py` | `src.inventory.service_level`, `src.inventory.working_capital` | Normal loss function against hand values; shortage cost independent of the demand level; planning demand is the forecast; capital released never shown without its annual cost; README and guide numbers tied to the CSVs. |
+| `docs/test_global_model_handicaps.py` | README, guides | The three global-model handicaps and the price-feature caveat are stated. |
+| `inventory/test_backtest_link.py` | `scripts/pipeline/run_inventory_analysis.py` | The inventory layer reads the benchmarked backtest predictions; safety stock by model. |
+| `inventory/test_safety_stock_bias.py` | `src.inventory.safety_stock` | Safety stock sized on RMSE: a constant under-forecast raises the required stock. |
+| `evaluation/test_router_vs_best_single.py` | `src.evaluation.routing_comparison` | Router scored against every single model per origin and segment; committed comparison recomputed from `predictions.parquet`; assignments agree with the routed forecasts; no tracked text file uses the retired classification name. |
+| `inventory/test_margin_sensitivity.py` | `src.inventory.margin_sensitivity` | Closed-form break-even margins against the pipeline's own analyzer; committed margin CSVs. |
+| `docs/test_readme_chain.py` | `README.md`, `docs/guide/00_START_HERE.md` | The eight-step order, working anchors, hand-over between steps, no typed numbers in the chain prose. |
+| `docs/test_guide_numbers.py` | `docs/guide/` | Headline results in guides 00, 04 and 09 derived from the significance report, bootstrap and accuracy CSVs. |
+| `dashboard/test_dashboard_artifact_numbers.py` | `src.dashboard.views`, `streamlit_app.py` | Views rendered against a stub Streamlit show artifact numbers; no typed result numbers in dashboard strings. |
+| `evaluation/test_manifest_provenance.py` | `src.evaluation.backtest` | The manifest records the predictions' SHA-256 and regeneration command, and a rerun keeps writing them. |
+| `evaluation/test_metrics.py` | `src.evaluation.point_metrics` | Analytical correctness of MAE, RMSE, WAPE, RMSSE, MASE, and quantile pinball losses across synthetic vectors with known ground truths. |
+| `models/test_models_and_facts.py` | `src.models.statistical.intermittent`, `src.models.statistical.naive` | Invariants of Croston SBA, TSB, ADIDA, Moving Average, and SES; demand quadrant classifications ($ADI$ and $CV^2$ thresholds). |
+| `features/test_polars_parity.py` | `src.features.polars_engine` | Bitwise/numerical parity between Polars expressions and equivalent Pandas implementations for lags, rolling means, and price ratios. |
+| `models/test_probabilistic_models.py` | `src.models.probabilistic` | Two-stage hurdle model fitting; empirical coverage calibration of conformalized quantile regression intervals ($1 - \alpha$). |
+| `models/test_deep_learning.py` | `src.models.deep_learning` | PyTorch Lightning and NeuralForecast adapter interfaces; tensor shape assertions; forward pass validation on minimal synthetic batches. |
+| `models/test_ensembles_and_mlops.py` | `src.mlops.registry`, `src.mlops.drift` | `PromotionGate` threshold validation (requires $\ge 1\%$ improvement); Kolmogorov-Smirnov drift alarms; Population Stability Index (PSI) thresholds. |
+| `dashboard/test_dashboard.py` | `src.dashboard.views` | Guards against hardcoded metric literals in dashboard views; every KPI card loads from artifact files. |
+| `inventory/test_inventory_engine.py` | `src.inventory` | ABC/XYZ classification boundary conditions; safety stock calculations; annualised stockout margin loss. |
+| `docs/test_readme_tables.py` | `README.md`, `reports/` | README tables match their backing CSV/JSON artifacts cell by cell. |
+| `docs/test_readme_and_guide_claims.py` | `README.md`, `docs/guide/` | Quickstart equals the DVC stage commands; windows, sample and coverage statements; prose numbers tied to their CSVs; guide signatures, anchors and facts. |
+| `evaluation/test_leakage_and_recompute.py` | `src.evaluation.backtest`, `src.evaluation.significance` | Changing sales inside the test window changes no forecast; critical-difference formula; leaderboard and Nemenyi ranks recomputed from `predictions.parquet`. |
+| `docs/test_links.py` | `README.md`, `docs/` | Every relative link and every repository-layout path resolves. |
 
 ### Integration & System Tests
 
 | Test File | Focus | Assertions Verified |
 | :--- | :--- | :--- |
 | `tests/integration/test_loader_features_model.py` | Data $\to$ Features $\to$ Model | End-to-end flow: loading sample sales, generating Polars features, fitting LightGBM, and asserting forecast output shapes. |
-| `tests/test_dashboard.py` | Dashboard Integrity | Verifies all Streamlit KPI cards load dynamically from artifact files; fails if hardcoded metric strings or numbers are detected. |
-| `tests/test_inventory.py` | Inventory Engine | ABC/XYZ classification boundary conditions; safety stock calculations; annualized stockout margin loss calculations. |
-| `tests/test_readme_tables.py` | Documentation Synchronization | Parses Markdown tables in `README.md` and validates exact cell-by-cell match against backing CSV/JSON report files. |
-| `tests/test_end_to_end.py` | Full Pipeline | Execution of complete analytical pipeline from raw input to output reports. |
+| `tests/integration/test_end_to_end.py` | Full Pipeline | Execution of complete analytical pipeline from raw input to output reports. |
 
 ---
 
@@ -93,7 +98,7 @@ In a fresh clone without raw data:
 When introducing new models, features, or metrics, follow these guidelines:
 
 ### Standard Unit Test Pattern
-Create a new test file in `tests/unit/test_<feature>.py`:
+Create a new test file in the matching area folder, `tests/unit/<area>/test_<feature>.py` (areas: dashboard, docs, evaluation, features, inventory, models, reports):
 
 ```python
 import numpy as np

@@ -42,7 +42,7 @@ flowchart TD
 
     subgraph PRESENTATION["6. Reporting & Verification Layer"]
         CAP_REPORT --> DASH["Interactive Streamlit Dashboard<br/>(Overview, Models, Inventory Views)"]
-        CAP_REPORT --> MD_GEN["Automated README & Guide Generator<br/>(scripts/render_readme_tables.py)"]
+        CAP_REPORT --> MD_GEN["Automated README & Guide Generator<br/>(scripts/tools/render_readme_tables.py)"]
     end
 ```
 
@@ -58,9 +58,9 @@ flowchart TD
 | **Tier 2: Global Gradient Boosters** | Pooled LightGBM models trained on panel features optimizing regression L2 and Tweedie compound Poisson objectives. | Shifted feature matrices across training windows | 28-day point forecasts | [`src/models/classical_ml/trainer.py`](../../src/models/classical_ml/trainer.py) |
 | **Tier 4: Routing & Baselines** | Classify series into SBC demand quadrants and route them (INTERMITTENT to ADIDA, no-demand series to a zero forecast, every other quadrant to the global GBDT). Benchmark against Naive and Seasonal Naive. | Panel history & SBC classifications | Routed ensemble forecasts & baseline predictions | [`src/models/router.py`](../../src/models/router.py)<br/>[`src/models/statistical/naive.py`](../../src/models/statistical/naive.py) |
 | **Backtesting & Evaluation Harness** | Execute walk-forward rolling-origin evaluation across 3 origins (84 days total), scoring each (series, origin) with its canonical in-sample scale. | Model point predictions & ground truth actuals | `accuracy_overall.csv`, `accuracy_by_origin.csv`, `predictions.parquet` | [`src/evaluation/backtest.py`](../../src/evaluation/backtest.py)<br/>[`src/evaluation/point_metrics.py`](../../src/evaluation/point_metrics.py) |
-| **Statistical Significance Engine** | Run Friedman omnibus test, Nemenyi critical difference, per-series head-to-head win rates, and 2,000-replicate paired series bootstrap intervals. | `predictions.parquet` | `significance_report.json`, `critical_difference.png`, `bootstrap_intervals.csv` | [`src/evaluation/significance.py`](../../src/evaluation/significance.py)<br/>[`scripts/run_significance.py`](../../scripts/run_significance.py) |
+| **Statistical Significance Engine** | Run Friedman omnibus test, Nemenyi critical difference, per-series head-to-head win rates, and 2,000-replicate paired series bootstrap intervals. | `predictions.parquet` | `significance_report.json`, `critical_difference.png`, `bootstrap_intervals.csv` | [`src/evaluation/significance.py`](../../src/evaluation/significance.py)<br/>[`scripts/pipeline/run_significance.py`](../../scripts/pipeline/run_significance.py) |
 | **Inventory Decision Layer** | Compute ABC/XYZ revenue Pareto and volatility matrices, calculate parametric safety stock, and optimize working capital trade-offs across service levels. | Forecast predictions, actual demand, and store sell prices | `portfolio_summary.csv`, `sku_policies.csv`, `service_level_tradeoff.png` | [`src/inventory/abc_xyz.py`](../../src/inventory/abc_xyz.py)<br/>[`src/inventory/safety_stock.py`](../../src/inventory/safety_stock.py)<br/>[`src/inventory/working_capital.py`](../../src/inventory/working_capital.py) |
-| **Dashboard & Rendering** | Interactive Streamlit visualization reading canonical CSV artifacts, and automated in-place markdown table synchronization. | Report artifacts in `reports/` | Interactive UI at `streamlit_app.py` & verified README tables | [`src/dashboard/data_loader.py`](../../src/dashboard/data_loader.py)<br/>[`scripts/render_readme_tables.py`](../../scripts/render_readme_tables.py) |
+| **Dashboard & Rendering** | Interactive Streamlit visualization reading canonical CSV artifacts, and automated in-place markdown table synchronization. | Report artifacts in `reports/` | Interactive UI at `streamlit_app.py` & verified README tables | [`src/dashboard/data_loader.py`](../../src/dashboard/data_loader.py)<br/>[`scripts/tools/render_readme_tables.py`](../../scripts/tools/render_readme_tables.py) |
 
 ---
 
@@ -74,7 +74,7 @@ To see how the platform functions in practice, follow one series through the for
 2. **SBC demand profiling**:
    - `classify_demand()` on the Origin 0 training window gives an average inter-demand interval $ADI = 8.81$ days and $CV^2 = 0.25$ (`routing_assignments.csv`). With $ADI \ge 1.32$ and $CV^2 < 0.49$ the series is **INTERMITTENT** and the router sends it to **ADIDA**.
 3. **Feature generation (global model only)**:
-   - Every lag and rolling feature is shifted by the full 28-day horizon, so a test row never sees an actual inside its own window. This is checked by perturbation tests (`tests/unit/test_g4b_review_fixes.py`: changing sales inside the test window changes no forecast) and a Polars/pandas parity test. `assert_no_temporal_leakage` (in `src/evaluation/splits.py`) only compares dates and is called by the Tier-1 runner, not the backtest.
+   - Every lag and rolling feature is shifted by the full 28-day horizon, so a test row never sees an actual inside its own window. This is checked by perturbation tests (`tests/unit/evaluation/test_leakage_and_recompute.py`: changing sales inside the test window changes no forecast) and a Polars/pandas parity test. `assert_no_temporal_leakage` (in `src/evaluation/splits.py`) only compares dates and is called by the Tier-1 runner, not the backtest.
 4. **Model forecasting** (mean forecast over the 28 test days at Origin 0, units per day; mean actual 0.357):
    - **Croston SBA**: 0.136. **ADIDA**: 0.157. **LightGBM (Tweedie)**: 0.183. **LightGBM**: 0.197.
    - **Router**: 0.157. It uses ADIDA fitted after trimming pre-launch zeros, so it can differ slightly from the standalone ADIDA forecast.

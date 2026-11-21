@@ -126,7 +126,7 @@ This document provides formal Architecture Decision Records for the primary tech
   - *Observation-pooled RMSSE*: Biased by high-volume series; breaks comparability with M5 benchmarks.
 - **Consequences**:
   - Full metric parity restored across all evaluation tiers (AutoETS Level-12 RMSSE harmonized at $0.7675$).
-  - Verified by unit tests `test_m5_01_scale_semantics.py` and `test_m5_03_tier1_parity.py`.
+  - Verified by unit tests `evaluation/test_scale_semantics.py` and `evaluation/test_tier1_parity.py`.
 
 ---
 
@@ -151,4 +151,4 @@ This document provides formal Architecture Decision Records for the primary tech
   - *Parquet-only storage*: Eliminates easy human diffing in git pull requests.
 - **Consequences**:
   - Git diffs clearly display metric changes in pull requests.
-  - Zero drift between CSV and Parquet companions across all 38 report tables, verified by `test_m5_04_source_of_truth.py`.
+  - Zero drift between CSV and Parquet companions across all 38 report tables, verified by `reports/test_source_of_truth.py`.

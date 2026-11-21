@@ -63,5 +63,5 @@
   "mlflow_logged": false,
   "predictions_file": "predictions.parquet",
   "predictions_sha256": "7f1bd314b9af9e8097337e48ec302ab6743a594ae7824e0c9d46cbc27ca59cb6",
-  "regeneration_command": "python scripts/run_tier1.py --sample-series 3000 --n-origins 3"
+  "regeneration_command": "python scripts/pipeline/run_tier1.py --sample-series 3000 --n-origins 3"
 }

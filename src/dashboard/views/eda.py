@@ -12,11 +12,11 @@ def render() -> None:
     """Render Demand Sparsity & EDA page."""
     st.markdown("## 🔍 Demand Sparsity & Intermittency Audit")
 
-    # Every figure below is read from reports/eda/ (scripts/run_eda.py), never typed here.
+    # Every figure below is read from reports/eda/ (scripts/pipeline/run_eda.py), never typed here.
     findings = dl.load_eda_findings()
     sbc = dl.read_table("reports/eda/table_sbc_classification")
     if not findings or sbc.empty:
-        st.info("EDA artifacts not found. Run `python scripts/run_eda.py`.")
+        st.info("EDA artifacts not found. Run `python scripts/pipeline/run_eda.py`.")
         return
     structure = findings.get("3.1_structure", {})
     demand = findings.get("3.2_demand", {})

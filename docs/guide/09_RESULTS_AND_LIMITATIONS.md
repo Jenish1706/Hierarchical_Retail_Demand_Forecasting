@@ -29,7 +29,7 @@ All quantitative rankings and statistical intervals are backed by committed arti
 ---
 
 ### Q3: Does DLinear match transformers on retail forecasting?
-- **Finding**: Preliminary tuning was performed (`scripts/tune_dl.py`), but full 3,000-series cross-tier evaluations under standardized M5 scaling protocols remain pending. DLinear serves as the formal null hypothesis for future transformer benchmarks.
+- **Finding**: Preliminary tuning was performed (`scripts/experiments/tune_dl.py`), but full 3,000-series cross-tier evaluations under standardized M5 scaling protocols remain pending. DLinear serves as the formal null hypothesis for future transformer benchmarks.
 
 ---
 
@@ -66,7 +66,7 @@ All quantitative rankings and statistical intervals are backed by committed arti
 ---
 
 ### Q9: Which features drive gradient boosting performance?
-- **Finding**: Not established. No committed artifact records the global model's feature importances, so no claim is made about which features drive it. What holds by construction is that every lag and rolling feature is horizon-shifted (at least 28 days), which the perturbation tests in `tests/unit/test_g4b_review_fixes.py` check.
+- **Finding**: Not established. No committed artifact records the global model's feature importances, so no claim is made about which features drive it. What holds by construction is that every lag and rolling feature is horizon-shifted (at least 28 days), which the perturbation tests in `tests/unit/evaluation/test_leakage_and_recompute.py` check.
 
 ---
 

@@ -26,9 +26,9 @@ stages:
   # human-supplied input to the pipeline, not a tracked intermediate.
   # -------------------------------------------------------------------------
   extract:
-    cmd: python scripts/extract_workbook.py
+    cmd: python scripts/pipeline/extract_workbook.py
     deps:
-      - scripts/extract_workbook.py
+      - scripts/pipeline/extract_workbook.py
       - src/config/settings.py
     outs:
       - data/raw/sales_train_validation.parquet
@@ -47,9 +47,9 @@ stages:
   # routing, and the distribution fitting decides the Tier 3 likelihood.
   # -------------------------------------------------------------------------
   eda:
-    cmd: python scripts/run_eda.py
+    cmd: python scripts/pipeline/run_eda.py
     deps:
-      - scripts/run_eda.py
+      - scripts/pipeline/run_eda.py
       - src/models/statistical/intermittent.py
       - data/raw/sales_train_validation.parquet
       - data/raw/calendar.parquet
@@ -69,9 +69,9 @@ stages:
   # 3. Tier 1 -- statistical models through the shared evaluation harness.
   # -------------------------------------------------------------------------
   tier1:
-    cmd: python scripts/run_tier1.py --sample-series 3000 --n-origins 3
+    cmd: python scripts/pipeline/run_tier1.py --sample-series 3000 --n-origins 3
     deps:
-      - scripts/run_tier1.py
+      - scripts/pipeline/run_tier1.py
       - src/models/statistical/statsforecast_models.py
       - src/evaluation/point_metrics.py
       - src/evaluation/splits.py
@@ -97,9 +97,9 @@ stages:
   # 4. Cross-tier backtest: baselines, intermittent methods, global ML.
   # -------------------------------------------------------------------------
   backtest:
-    cmd: python scripts/run_backtest.py --sample-series 3000 --n-origins 3 --history-days 900 --out-dir reports/backtest_main
+    cmd: python scripts/pipeline/run_backtest.py --sample-series 3000 --n-origins 3 --history-days 900 --out-dir reports/backtest_main
     deps:
-      - scripts/run_backtest.py
+      - scripts/pipeline/run_backtest.py
       - src/evaluation/backtest.py
       - src/evaluation/routing_comparison.py
       - src/features/base.py
@@ -132,9 +132,9 @@ stages:
   # significance verdict being quoted against fresh numbers.
   # -------------------------------------------------------------------------
   significance:
-    cmd: python scripts/run_significance.py --backtest-dir reports/backtest_main
+    cmd: python scripts/pipeline/run_significance.py --backtest-dir reports/backtest_main
     deps:
-      - scripts/run_significance.py
+      - scripts/pipeline/run_significance.py
       - src/evaluation/significance.py
       - reports/backtest_main/predictions.parquet
     params:
@@ -151,9 +151,9 @@ stages:
   # 6. Inventory optimisation: ABC/XYZ segmentation, safety stock, working capital.
   # -------------------------------------------------------------------------
   inventory:
-    cmd: python scripts/run_inventory_analysis.py --stores CA_1 CA_2
+    cmd: python scripts/pipeline/run_inventory_analysis.py --stores CA_1 CA_2
     deps:
-      - scripts/run_inventory_analysis.py
+      - scripts/pipeline/run_inventory_analysis.py
       - src/inventory/abc_xyz.py
       - src/inventory/margin_sensitivity.py
       - src/inventory/safety_stock.py

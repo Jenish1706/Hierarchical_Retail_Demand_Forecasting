@@ -85,7 +85,7 @@ python -m pip install -e .
 pytest -q
 
 # 4. Verify that public README tables match committed artifacts exactly
-python scripts/render_readme_tables.py --check
+python scripts/tools/render_readme_tables.py --check
 
 # 5. Launch interactive Streamlit dashboard
 streamlit run streamlit_app.py

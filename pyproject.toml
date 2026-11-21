@@ -159,7 +159,7 @@ exclude_lines = [
 [tool.ruff.lint.per-file-ignores]
 # scripts/ and the backtest engine insert the repo root on sys.path before
 # importing `src`, so their imports cannot be at the top of the file.
-"scripts/*.py" = ["E402"]
+"scripts/**/*.py" = ["E402"]
 "src/evaluation/backtest.py" = ["E402"]
 # Pandera's `@pa.check` validators receive the DataFrame as `cls`-style first
 # arg by design, and the trainer/reconciler defer heavy optional imports to the

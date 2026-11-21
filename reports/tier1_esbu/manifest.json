@@ -53,5 +53,5 @@
   "mlflow_logged": true,
   "predictions_file": "predictions.parquet",
   "predictions_sha256": "115b58186cbda957e1702dd4822cbf67bbe1849786226b39fb31fdce7c44e255",
-  "regeneration_command": "python scripts/run_tier1.py --sample-series 3000 --n-origins 3 --out-dir reports/tier1_esbu"
+  "regeneration_command": "python scripts/pipeline/run_tier1.py --sample-series 3000 --n-origins 3 --out-dir reports/tier1_esbu"
 }

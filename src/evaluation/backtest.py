@@ -414,7 +414,7 @@ def manifest_provenance(out_dir: Path, argv: list[str]) -> dict[str, str]:
     return {
         "predictions_file": predictions.name,
         "predictions_sha256": hashlib.sha256(predictions.read_bytes()).hexdigest(),
-        "regeneration_command": " ".join(["python", "scripts/run_backtest.py", *argv]),
+        "regeneration_command": " ".join(["python", "scripts/pipeline/run_backtest.py", *argv]),
     }
 
 

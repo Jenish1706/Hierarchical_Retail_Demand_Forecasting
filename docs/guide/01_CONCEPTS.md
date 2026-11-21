@@ -220,7 +220,7 @@ $$\text{Safe rolling mean: } \bar{y}_{t, w} = \frac{1}{w}\sum_{j=0}^{w-1} y_{t -
 At inference time for any day $t+1 \le \tau \le t+28$, all conditioning inputs are strictly historical observations ($t \le 0$).
 
 ### Code Link
-Implemented in [`src/features/polars_engine.py`](../../src/features/polars_engine.py) and [`src/features/base.py`](../../src/features/base.py) (`FeaturePipeline(horizon=...)`). The guarantee is tested by perturbation: changing sales inside the test window must not change any forecast (`tests/unit/test_g4b_review_fixes.py`).
+Implemented in [`src/features/polars_engine.py`](../../src/features/polars_engine.py) and [`src/features/base.py`](../../src/features/base.py) (`FeaturePipeline(horizon=...)`). The guarantee is tested by perturbation: changing sales inside the test window must not change any forecast (`tests/unit/evaluation/test_leakage_and_recompute.py`).
 
 ---
 

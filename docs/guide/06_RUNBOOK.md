@@ -49,13 +49,13 @@ To run the full research and evaluation pipeline from raw inputs to verified rep
 
 | Stage | Command | Expected Runtime | Key Outputs | Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| **0. Raw Extraction** | `python scripts/extract_workbook.py` | ~10s | `data/raw/` CSVs | *Requires raw Kaggle zip* |
-| **1. Catalog Profiling** | `python scripts/run_eda.py` | ~25s | `reports/eda/` | Full 30,490-series analysis |
-| **2. Baseline Tier 1** | `python scripts/run_tier1.py --sample-series 3000 --n-origins 3` | about an hour (AutoCES alone is about 45 minutes) | `reports/tier1/` | StatsForecast models on the same 3,000 series and origins; not rerun by the gates |
-| **3. Walk-Forward Backtest** | `python scripts/run_backtest.py --sample-series 3000 --n-origins 3 --history-days 900 --out-dir reports/backtest_main` | 8 to 11 minutes | `reports/backtest_main/` | The arguments matter: the defaults use a 730-day panel and write to `reports/backtest`, which is not what the committed results used |
-| **4. Hypothesis Battery** | `python scripts/run_significance.py` | ~20s | `reports/backtest_main/significance/` | Bootstrap CIs, DM, Nemenyi plot |
-| **5. Inventory Analysis** | `python scripts/run_inventory_analysis.py --stores CA_1 CA_2` | about a minute | `reports/inventory/` | ABC/XYZ classification, policy comparison (capital released next to annual cost), margin sensitivity |
-| **6. Sync Documentation** | `python scripts/render_readme_tables.py` | ~2s | `README.md` | Injects verified artifact tables |
+| **0. Raw Extraction** | `python scripts/pipeline/extract_workbook.py` | ~10s | `data/raw/` CSVs | *Requires raw Kaggle zip* |
+| **1. Catalog Profiling** | `python scripts/pipeline/run_eda.py` | ~25s | `reports/eda/` | Full 30,490-series analysis |
+| **2. Baseline Tier 1** | `python scripts/pipeline/run_tier1.py --sample-series 3000 --n-origins 3` | about an hour (AutoCES alone is about 45 minutes) | `reports/tier1/` | StatsForecast models on the same 3,000 series and origins; not rerun by the gates |
+| **3. Walk-Forward Backtest** | `python scripts/pipeline/run_backtest.py --sample-series 3000 --n-origins 3 --history-days 900 --out-dir reports/backtest_main` | 8 to 11 minutes | `reports/backtest_main/` | The arguments matter: the defaults use a 730-day panel and write to `reports/backtest`, which is not what the committed results used |
+| **4. Hypothesis Battery** | `python scripts/pipeline/run_significance.py` | ~20s | `reports/backtest_main/significance/` | Bootstrap CIs, DM, Nemenyi plot |
+| **5. Inventory Analysis** | `python scripts/pipeline/run_inventory_analysis.py --stores CA_1 CA_2` | about a minute | `reports/inventory/` | ABC/XYZ classification, policy comparison (capital released next to annual cost), margin sensitivity |
+| **6. Sync Documentation** | `python scripts/tools/render_readme_tables.py` | ~2s | `README.md` | Injects verified artifact tables |
 
 ---
 
@@ -64,19 +64,19 @@ To run the full research and evaluation pipeline from raw inputs to verified rep
 ### Complete Reproduction Workflow
 ```powershell
 # Step 1: Execute walk-forward backtest (generates accuracy_overall.csv & predictions.parquet)
-& .venv\Scripts\python.exe scripts/run_backtest.py --sample-series 3000 --n-origins 3 --history-days 900 --out-dir reports/backtest_main
+& .venv\Scripts\python.exe scripts/pipeline/run_backtest.py --sample-series 3000 --n-origins 3 --history-days 900 --out-dir reports/backtest_main
 
 # Step 2: Run significance tests (generates critical difference plot, paired bootstrap, per-series DM)
-& .venv\Scripts\python.exe scripts/run_significance.py --backtest-dir reports/backtest_main
+& .venv\Scripts\python.exe scripts/pipeline/run_significance.py --backtest-dir reports/backtest_main
 
 # Step 3: Run inventory analysis (generates portfolio_summary.csv & service level tradeoffs)
-& .venv\Scripts\python.exe scripts/run_inventory_analysis.py --stores CA_1 CA_2
+& .venv\Scripts\python.exe scripts/pipeline/run_inventory_analysis.py --stores CA_1 CA_2
 
 # Step 4: Render dynamic Markdown tables into README.md
-& .venv\Scripts\python.exe scripts/render_readme_tables.py
+& .venv\Scripts\python.exe scripts/tools/render_readme_tables.py
 
 # Step 5: Verify zero drift between README tables and committed artifacts
-& .venv\Scripts\python.exe scripts/render_readme_tables.py --check
+& .venv\Scripts\python.exe scripts/tools/render_readme_tables.py --check
 ```
 
 If `render_readme_tables.py --check` exits with status `0`, the README is perfectly synchronized with the backing artifacts.
@@ -97,10 +97,10 @@ If `render_readme_tables.py --check` exits with status `0`, the README is perfec
 & .venv\Scripts\pytest.exe tests/integration
 
 # Run specific audit regression test suites
-& .venv\Scripts\pytest.exe tests/unit/test_m5_01_scale_semantics.py
-& .venv\Scripts\pytest.exe tests/unit/test_m5_03_tier1_parity.py
-& .venv\Scripts\pytest.exe tests/unit/test_m5_04_source_of_truth.py
-& .venv\Scripts\pytest.exe tests/unit/test_m5_06_statistical_defense.py
+& .venv\Scripts\pytest.exe tests/unit/evaluation/test_scale_semantics.py
+& .venv\Scripts\pytest.exe tests/unit/evaluation/test_tier1_parity.py
+& .venv\Scripts\pytest.exe tests/unit/reports/test_source_of_truth.py
+& .venv\Scripts\pytest.exe tests/unit/evaluation/test_statistical_defense.py
 ```
 
 ### Static Analysis & Linter
@@ -149,7 +149,7 @@ print('All modules import cleanly!')
 ### Defect 4: PowerShell String Quoting and Semicolon Parsing Errors
 - **Symptom**: Running commands like `python -c "import a; import b"` in PowerShell fails with syntax errors or command block parsing failures.
 - **Root Cause**: PowerShell treats semicolons (`;`) as pipeline command separators outside string blocks and handles double quotes inside single quotes differently from Bash.
-- **Fix**: Place complex Python inspection scripts into temporary files in `.audit/repro/` and invoke them via `& .venv\Scripts\python.exe .audit/repro/<script>.py`.
+- **Fix**: Place complex Python inspection scripts into temporary files in a scratch folder outside the repository and invoke them via `& .venv\Scripts\python.exe <scratch-folder>/<script>.py`.
 
 ### Defect 5: File Lock Failures on Git Index (`.git/index.lock`)
 - **Symptom**: Git operations fail with `fatal: Unable to create '.git/index.lock': Permission denied` or `File exists`.

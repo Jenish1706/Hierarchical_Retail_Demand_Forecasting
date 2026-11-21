@@ -14,7 +14,7 @@ def render() -> None:
     st.markdown(
         """
         Measured over all **30,490 series × 1,913 days** under the
-        **Syntetos-Boylan-Teunter (SBT)** demand categorization framework.
+        **Syntetos-Boylan-Croston (SBC)** demand categorization framework.
         """
     )
 
@@ -25,15 +25,15 @@ def render() -> None:
     with col2:
         st.metric("Overall Zero Demand", "68.2%", "Daily Sales = 0")
     with col3:
-        st.metric("Sparse Series (SBT)", "95.2%", "Intermittent + Lumpy")
+        st.metric("Sparse Series (SBC)", "95.2%", "Intermittent + Lumpy")
     with col4:
         st.metric("Smooth Series", "3.2%", "Traditional Time-Series")
 
     st.markdown("---")
 
-    # Interactive SBT Breakdown Chart
-    st.markdown("### 📊 Syntetos-Boylan-Teunter Demand Classification")
-    sbt_data = {
+    # Interactive SBC Breakdown Chart
+    st.markdown("### 📊 Syntetos-Boylan-Croston Demand Classification")
+    sbc_data = {
         "Category": ["Intermittent", "Lumpy", "Smooth", "Erratic"],
         "Pct_Series": [75.6, 19.5, 3.2, 1.6],
         "Pct_Volume": [42.6, 27.7, 19.9, 9.9],
@@ -48,12 +48,12 @@ def render() -> None:
     tab1, tab2 = st.tabs(["Chart View", "Data Table"])
     with tab1:
         fig = px.bar(
-            sbt_data,
+            sbc_data,
             x="Category",
             y=["Pct_Series", "Pct_Volume"],
             barmode="group",
             labels={"value": "Percentage (%)", "Category": "Demand Category", "variable": "Metric"},
-            title="SBT Demand Patterns: % of Series vs % of Sales Volume",
+            title="SBC Demand Patterns: % of Series vs % of Sales Volume",
             color_discrete_sequence=["#1f77b4", "#ff7f0e"],
         )
         fig.update_layout(legend_title_text="")
@@ -61,7 +61,7 @@ def render() -> None:
 
     with tab2:
         import pandas as pd
-        st.dataframe(pd.DataFrame(sbt_data), use_container_width=True)
+        st.dataframe(pd.DataFrame(sbc_data), use_container_width=True)
 
     st.markdown("---")
     st.markdown("### 🖼️ Diagnostic Exploratory Figures")

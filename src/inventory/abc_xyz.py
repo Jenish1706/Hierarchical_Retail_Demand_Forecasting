@@ -36,13 +36,13 @@ opposite of what is known about it (M5-09).  Such items get their own class N
 and an undefined CV.  Zero sales can also be a stock-out (censored demand)
 rather than absent demand, so N means "review", not "discontinue".
 
-SBT cross-reference
+SBC cross-reference
 --------------------
-The existing SBT classification (intermittent.py) segments by *demand pattern*
+The existing SBC classification (intermittent.py) segments by *demand pattern*
 (inter-demand interval + size variability).  ABC/XYZ segments by *business
 value + predictability*.  The two axes are complementary.  This module reports
-the SBT distribution within each ABC/XYZ cell so the user can verify that
-AZ items (high-revenue, erratic) overlap with SBT LUMPY/INTERMITTENT as
+the SBC distribution within each ABC/XYZ cell so the user can verify that
+AZ items (high-revenue, erratic) overlap with SBC LUMPY/INTERMITTENT as
 expected.
 
 Data constraint
@@ -55,7 +55,7 @@ References
 ----------
 Silver, Pyke & Thomas (2017), "Inventory and Production Management in Supply
     Chains", 4th ed., CRC Press -- Chapter 3: ABC analysis.
-Syntetos, Boylan & Croston (2005), JORS 56(5):495-503 -- SBT quadrants.
+Syntetos, Boylan & Croston (2005), JORS 56(5):495-503 -- SBC quadrants.
 """
 
 from __future__ import annotations
@@ -362,30 +362,30 @@ class ABCXYZClassifier:
         return result
 
     # ------------------------------------------------------------------
-    # SBT cross-reference
+    # SBC cross-reference
     # ------------------------------------------------------------------
 
     @staticmethod
-    def cross_reference_sbt(
-        abc_xyz_df: pd.DataFrame, sbt_df: pd.DataFrame
+    def cross_reference_sbc(
+        abc_xyz_df: pd.DataFrame, sbc_df: pd.DataFrame
     ) -> pd.DataFrame:
-        """Merge ABC/XYZ with SBT demand-pattern labels for validation.
+        """Merge ABC/XYZ with SBC demand-pattern labels for validation.
 
         Parameters
         ----------
         abc_xyz_df : pd.DataFrame
             Output of :meth:`classify`.
-        sbt_df : pd.DataFrame
+        sbc_df : pd.DataFrame
             Must contain ``item_id``, ``store_id``, ``demand_pattern``.
 
         Returns
         -------
         pd.DataFrame
-            Contingency table: rows = ABC/XYZ class, columns = SBT pattern,
+            Contingency table: rows = ABC/XYZ class, columns = SBC pattern,
             values = SKU count.
         """
         merged = abc_xyz_df.merge(
-            sbt_df[["item_id", "store_id", "demand_pattern"]],
+            sbc_df[["item_id", "store_id", "demand_pattern"]],
             on=["item_id", "store_id"],
             how="inner",
         )
@@ -393,7 +393,7 @@ class ABCXYZClassifier:
             merged["abc_xyz_class"], merged["demand_pattern"], margins=True
         )
         log.info(
-            "sbt_cross_reference",
+            "sbc_cross_reference",
             matched=len(merged),
             unmatched=len(abc_xyz_df) - len(merged),
         )

@@ -67,7 +67,7 @@ def render() -> None:
                Over 57.5% of test window sales are zero (68.2% across the full catalog). In high-sparsity panels, complex global models risk overfitting to stochastic non-zero impulses.
             2. **Temporal Aggregation Shrinkage (ADIDA)**:
                ADIDA aggregates high-frequency zero-inflated demand into lower-frequency time buckets, filters noise via exponential smoothing, and disaggregates back, acting as an effective shrinkage estimator.
-            3. **Segment-Conditioned Routing (SBT)**:
+            3. **Segment-Conditioned Routing (SBC)**:
                Dynamic routing achieves the best average Nemenyi rank (4.54) by steering intermittent/lumpy series to specialized statistical estimators while reserving LightGBM for regular, high-volume items.
             """
         )

@@ -5,7 +5,7 @@ Produces `reports/eda/`: figures, CSV tables, and a JSON findings file that
 later phases consume. Two sections feed directly into modelling decisions and
 are therefore not optional colour:
 
-  * §3.3 intermittency -- the SBT classification decides which series the
+  * §3.3 intermittency -- the SBC classification decides which series the
     router sends to Croston/ADIDA rather than to a global learner.
   * §3.8 stationarity and distribution fitting -- decides the differencing
     orders for ARIMA and, more importantly, which likelihood Tier 3 should
@@ -235,13 +235,13 @@ def section_demand(wide: pd.DataFrame, out: Path) -> dict[str, Any]:
 
 
 # ===========================================================================
-# 3.3 Intermittency -- SBT classification
+# 3.3 Intermittency -- SBC classification
 # ===========================================================================
 
 
 def section_intermittency(wide: pd.DataFrame, out: Path) -> dict[str, Any]:
     """
-    Classify every series into the four SBT quadrants.
+    Classify every series into the four SBC quadrants.
 
     Feeds the routing strategy in Tier 5 and, together with §3.8, the
     likelihood choice in Tier 3.
@@ -286,11 +286,11 @@ def section_intermittency(wide: pd.DataFrame, out: Path) -> dict[str, Any]:
     summary["pct_of_series"] = 100 * summary["n_series"] / summary["n_series"].sum()
     summary["pct_of_volume"] = 100 * summary["total_units"] / summary["total_units"].sum()
     summary = summary.sort_values("n_series", ascending=False)
-    summary.to_csv(out / "table_sbt_classification.csv", index=False)
+    summary.to_csv(out / "table_sbc_classification.csv", index=False)
 
     fig, axes = plt.subplots(1, 3, figsize=(17, 5))
 
-    # Quadrant scatter with the SBT cut-offs drawn in.
+    # Quadrant scatter with the SBC cut-offs drawn in.
     finite = cls_df[np.isfinite(cls_df["adi"]) & np.isfinite(cls_df["cv2"])]
     sample = finite.sample(n=min(12000, len(finite)), random_state=0)
     for pattern, g in sample.groupby("pattern", observed=True):
@@ -309,7 +309,7 @@ def section_intermittency(wide: pd.DataFrame, out: Path) -> dict[str, Any]:
         yscale="log",
         xlabel="ADI (log)",
         ylabel="CV² (log)",
-        title=f"SBT quadrants (cut-offs {ADI_CUTOFF} / {CV2_CUTOFF})",
+        title=f"SBC quadrants (cut-offs {ADI_CUTOFF} / {CV2_CUTOFF})",
     )
     axes[0].legend(markerscale=3, fontsize=8, loc="upper left")
 
@@ -332,7 +332,7 @@ def section_intermittency(wide: pd.DataFrame, out: Path) -> dict[str, Any]:
     axes[2].set(xlabel="% of series", title="Pattern composition by category")
     axes[2].legend(fontsize=7, loc="lower right")
 
-    fig.suptitle("§3.3 Intermittency: Syntetos-Boylan-Teunter classification", y=1.02, fontsize=12)
+    fig.suptitle("§3.3 Intermittency: Syntetos-Boylan-Croston classification", y=1.02, fontsize=12)
     _save(fig, out, "fig_3_3_intermittency")
 
     return {
@@ -779,7 +779,7 @@ def main() -> int:
     print(f"  overdispersed series   : {s32['pct_series_overdispersed']:.1%}")
     print(f"  top volume decile      : {s32['top_decile_volume_share']:.1%} of all units")
     print()
-    print("  SBT classification:")
+    print("  SBC classification:")
     for pattern, pct in sorted(s33["pct_of_series"].items(), key=lambda kv: -kv[1]):
         vol = s33["pct_of_volume"].get(pattern, 0.0)
         print(f"    {pattern:<14} {pct:>5.1f}% of series  |  {vol:>5.1f}% of volume")

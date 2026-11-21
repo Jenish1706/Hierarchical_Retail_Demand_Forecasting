@@ -132,10 +132,10 @@ This glossary defines all domain-specific acronyms, mathematical terms, and soft
   $$SS = z \cdot \sigma_L = z \cdot \sigma_e \cdot \sqrt{L}$$
   Here $\sigma_e$ is the RMSE of the forecast errors (about zero, bias included), not their standard deviation.
 - **Seasonal Naive**: A baseline forecaster projecting historical actuals from the exact corresponding seasonal cycle period ($h=7$ for day-of-week seasonality, $h=28$ for 4-week retail cycle).
-- **Segment Router**: A modular dispatch engine that classifies time series into Syntetos-Boylan quadrants and directs each series to its specialized algorithm.
+- **Segment Router**: A modular dispatch engine that classifies time series into SBC quadrants and directs each series to its assigned algorithm. It did not beat applying ADIDA to every series (README router table).
 - **SES (Simple Exponential Smoothing)**: A classical univariate time-series model applying geometrically declining weights to past observations.
 - **SNAP (Supplemental Nutrition Assistance Program)**: The U.S. federal nutritional assistance program; retail demand in grocery categories displays predictable spikes on designated state SNAP distribution dates.
-- **Syntetos-Boylan Classification**: A 2D demand categorization taxonomy dividing time series into Smooth, Intermittent, Erratic, or Lumpy quadrants based on thresholds $ADI = 1.32$ and $CV^2 = 0.49$.
+- **SBC Classification (Syntetos-Boylan-Croston, 2005)**: A 2D demand categorization taxonomy dividing time series into Smooth, Intermittent, Erratic, or Lumpy quadrants based on thresholds $ADI = 1.32$ and $CV^2 = 0.49$. Not to be confused with TSB, which is a forecasting method, not a classification.
 
 ---
 

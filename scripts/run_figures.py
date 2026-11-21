@@ -147,7 +147,7 @@ def main() -> int:
         )
 
     # --- Group B/C: segment and temporal ---
-    # Fig 6 needs the SBT classification the EDA produced. Missing inputs skip
+    # Fig 6 needs the SBC classification the EDA produced. Missing inputs skip
     # with a logged reason rather than raising, so a fresh clone can generate
     # the figures it has data for instead of failing on the first gap.
     cls_path = settings.base_dir / "reports" / "eda" / "series_classification.parquet"

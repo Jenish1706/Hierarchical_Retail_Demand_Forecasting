@@ -45,12 +45,12 @@ All quantitative rankings and statistical intervals are backed by committed arti
 
 ---
 
-### Q6: Does segment routing beat a single global model?
-- **Finding**: **Yes.** Dynamically routing series based on Syntetos-Boylan demand classification (routing intermittent series to `adida` and continuous series to `lightgbm`) consistently improved forecast accuracy over a single global model across all three walk-forward origins:
-  - **Origin 2 (2016-02-01)**: 75.82% routed vs 77.87% global (+2.63% improvement)
-  - **Origin 1 (2016-02-29)**: 76.72% routed vs 78.81% global (+2.64% improvement)
-  - **Origin 0 (2016-03-28)**: 74.44% routed vs 75.51% global (+1.42% improvement)
-- **Artifact Backing**: `reports/backtest_main/routing_benefit.csv`.
+### Q6: Does segment routing beat the best single model?
+- **Finding**: **No.** Routing by SBC (Syntetos-Boylan-Croston) quadrant (INTERMITTENT to `adida`, no-demand series to a zero forecast, SMOOTH, ERRATIC and LUMPY to `lightgbm`) beats standalone LightGBM at every origin, but it does not beat applying `adida` to every series: the routed ensemble's WAPE is higher than ADIDA's at every origin and pooled, so the best single model is ADIDA at every origin.
+- **Where it loses**: in the segments handed to LightGBM. LightGBM, run without price features, is worse than ADIDA on ERRATIC and LUMPY and better on SMOOTH, so it was better on one of the three segments it was given, not on all. INTERMITTENT is ADIDA either way.
+- **Numbers**: every figure, per origin and per segment, is in the README table "Does Demand-Pattern Routing Help?", rendered from `routing_vs_best_single.csv`. This guide does not repeat them.
+- **Caveats**: the INTERMITTENT to ADIDA assignment was chosen on these same evaluation origins, so a clean test needs an earlier selection origin; and the best single model is picked per row after the scores are known, which favours the single model.
+- **Artifact Backing**: `reports/backtest_main/routing_vs_best_single.csv`, `reports/backtest_main/routing_benefit.csv` (per-origin comparison columns), `reports/backtest_main/routing_assignments.csv` (where the router sent each series at each origin).
 
 ---
 

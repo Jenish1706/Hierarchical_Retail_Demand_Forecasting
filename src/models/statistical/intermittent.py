@@ -1,5 +1,5 @@
 """
-Intermittent demand forecasting: SBT classification, Croston-SBA and ADIDA.
+Intermittent demand forecasting: SBC classification, Croston-SBA and ADIDA.
 
 The problem
 -----------
@@ -59,7 +59,7 @@ import numpy as np
 _EPS = 1e-12
 
 # ---------------------------------------------------------------------------
-# Syntetos-Boylan-Teunter (SBT) classification cut-offs
+# Syntetos-Boylan-Croston (SBC) classification cut-offs
 #
 # These two constants are not tuning knobs. They are the analytically derived
 # boundaries at which the expected mean-squared error of Croston's method
@@ -72,7 +72,7 @@ CV2_CUTOFF = 0.49  # squared coefficient of variation of non-zero sizes
 
 
 class DemandPattern(str, Enum):  # noqa: UP042
-    """The four SBT quadrants, plus a guard for series with no demand at all."""
+    """The four SBC quadrants, plus a guard for series with no demand at all."""
 
     SMOOTH = "SMOOTH"  # frequent, stable    -> global ML
     ERRATIC = "ERRATIC"  # frequent, variable  -> global ML
@@ -105,7 +105,7 @@ def classify_demand(
     first_sale_idx: int | None = None,
 ) -> DemandClassification:
     """
-    Assign a series to an SBT quadrant.
+    Assign a series to an SBC quadrant.
 
         ADI  = n_periods / n_nonzero          (mean gap between demands)
         CV^2 = (std(sizes) / mean(sizes))^2   (variability of demand size)

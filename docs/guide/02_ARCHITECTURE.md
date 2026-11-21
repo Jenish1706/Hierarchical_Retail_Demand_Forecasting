@@ -24,7 +24,7 @@ flowchart TD
     subgraph FORECASTING["3. Multi-Tier Model Zoo"]
         LEAK_CHECK --> T1["Tier 1: Statistical Intermittent<br/>(ADIDA, Croston SBA, SES, Moving Avg)"]
         LEAK_CHECK --> T2["Tier 2: Global Gradient Boosting<br/>(LightGBM L2, LightGBM Tweedie)"]
-        LEAK_CHECK --> T4["Tier 4: Routing & Baselines<br/>(SBT Router, Seasonal Naive, Naive)"]
+        LEAK_CHECK --> T4["Tier 4: Routing & Baselines<br/>(SBC Router, Seasonal Naive, Naive)"]
     end
 
     subgraph BACKTEST["4. Evaluation & Statistical Testing"]
@@ -56,7 +56,7 @@ flowchart TD
 | **Feature Engineering** | Generate direct multi-horizon features (lags, rolling means, seasonal calendar indicators) shifted by at least 28 days to prevent future leakage. | Melted panel data | Feature matrices with temporal assertions verified | [`src/features/polars_engine.py`](../../src/features/polars_engine.py)<br/>[`src/features/base.py`](../../src/features/base.py) |
 | **Tier 1: Statistical Models** | Fast series-by-series intermittent demand estimation (Croston SBA, ADIDA, SES, Moving Average). | Raw historical sales series and active first-sale index | 28-day rate forecasts | [`src/models/statistical/intermittent.py`](../../src/models/statistical/intermittent.py)<br/>[`src/models/statistical/naive.py`](../../src/models/statistical/naive.py) |
 | **Tier 2: Global Gradient Boosters** | Pooled LightGBM models trained on panel features optimizing regression L2 and Tweedie compound Poisson objectives. | Shifted feature matrices across training windows | 28-day point forecasts | [`src/models/classical_ml/trainer.py`](../../src/models/classical_ml/trainer.py) |
-| **Tier 4: Routing & Baselines** | Classify series into SBT demand quadrants and route to specialized estimators (ADIDA for sparse, Global GBDT for smooth). Benchmark against Naive and Seasonal Naive. | Panel history & SBT classifications | Routed ensemble forecasts & baseline predictions | [`src/models/router.py`](../../src/models/router.py)<br/>[`src/models/statistical/naive.py`](../../src/models/statistical/naive.py) |
+| **Tier 4: Routing & Baselines** | Classify series into SBC demand quadrants and route them (INTERMITTENT to ADIDA, no-demand series to a zero forecast, every other quadrant to the global GBDT). Benchmark against Naive and Seasonal Naive. | Panel history & SBC classifications | Routed ensemble forecasts & baseline predictions | [`src/models/router.py`](../../src/models/router.py)<br/>[`src/models/statistical/naive.py`](../../src/models/statistical/naive.py) |
 | **Backtesting & Evaluation Harness** | Execute walk-forward rolling-origin evaluation across 3 origins (84 days total), scoring each (series, origin) with its canonical in-sample scale. | Model point predictions & ground truth actuals | `accuracy_overall.csv`, `accuracy_by_origin.csv`, `predictions.parquet` | [`src/evaluation/backtest.py`](../../src/evaluation/backtest.py)<br/>[`src/evaluation/point_metrics.py`](../../src/evaluation/point_metrics.py) |
 | **Statistical Significance Engine** | Run Friedman omnibus test, Nemenyi critical difference, per-series head-to-head win rates, and 2,000-replicate paired series bootstrap intervals. | `predictions.parquet` | `significance_report.json`, `critical_difference.png`, `bootstrap_intervals.csv` | [`src/evaluation/significance.py`](../../src/evaluation/significance.py)<br/>[`scripts/run_significance.py`](../../scripts/run_significance.py) |
 | **Inventory Decision Layer** | Compute ABC/XYZ revenue Pareto and volatility matrices, calculate parametric safety stock, and optimize working capital trade-offs across service levels. | Forecast predictions, actual demand, and store sell prices | `portfolio_summary.csv`, `sku_policies.csv`, `service_level_tradeoff.png` | [`src/inventory/abc_xyz.py`](../../src/inventory/abc_xyz.py)<br/>[`src/inventory/safety_stock.py`](../../src/inventory/safety_stock.py)<br/>[`src/inventory/working_capital.py`](../../src/inventory/working_capital.py) |
@@ -71,7 +71,7 @@ To see how the platform functions in practice, consider the lifecycle of one sin
 1. **Catalog Ingestion & Lifecycle Trimming**:
    - `M5Loader.load_first_sale_dates()` scans the catalog history from Day 1 ($d_1$). It discovers `FOODS_1_001_CA_1` recorded its first non-zero sale on **Day 160**.
    - When loading the 900-day backtest training window (Days 986 to 1885), the loader notes that Day 160 predates Day 986, meaning the item is a mature product. All zeros inside the 900-day window are genuine low demand, and no in-window zeros are falsely trimmed.
-2. **SBT Demand Profiling**:
+2. **SBC Demand Profiling**:
    - `classify_demand()` evaluates the historical series. The item experiences an average inter-demand interval $ADI = 2.45$ days ($ADI \ge 1.32$) and a transaction variance $CV^2 = 0.31$ ($CV^2 < 0.49$).
    - The SKU is flagged as **INTERMITTENT**.
 3. **Feature Generation**:

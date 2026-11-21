@@ -11,7 +11,7 @@ This document explains every fundamental theoretical and operational concept use
 ## 1. Intermittent Demand Classification (ADI and $CV^2$)
 
 ### Intuition
-In retail, most products do not sell every day. Fast-moving goods sell constantly, whereas slow-moving spare parts or specialty groceries experience many days of zero demand punctuated by occasional non-zero sales spikes. The **Syntetos-Boylan-Teunter (SBT)** framework segments series across two orthogonal axes:
+In retail, most products do not sell every day. Fast-moving goods sell constantly, whereas slow-moving spare parts or specialty groceries experience many days of zero demand punctuated by occasional non-zero sales spikes. The **Syntetos-Boylan-Croston (SBC)** framework segments series across two orthogonal axes:
 - **Average Inter-Demand Interval ($ADI$)**: How often demand occurs (time sparsity).
 - **Squared Coefficient of Variation of Demand Sizes ($CV^2$)**: How volatile the non-zero transaction quantities are (magnitude volatility).
 

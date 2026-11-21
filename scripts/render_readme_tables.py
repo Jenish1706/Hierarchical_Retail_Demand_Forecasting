@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pandas as pd
@@ -36,6 +37,10 @@ POLICY_COMPARISON_START = "<!-- BEGIN_POLICY_COMPARISON_TABLE -->"
 POLICY_COMPARISON_END = "<!-- END_POLICY_COMPARISON_TABLE -->"
 DEMAND_BASIS_START = "<!-- BEGIN_DEMAND_BASIS_TABLE -->"
 DEMAND_BASIS_END = "<!-- END_DEMAND_BASIS_TABLE -->"
+ROUTING_COMPARISON_CSV = PROJECT_ROOT / "reports" / "backtest_main" / "routing_vs_best_single.csv"
+MANIFEST_JSON = PROJECT_ROOT / "reports" / "backtest_main" / "manifest.json"
+ROUTER_START = "<!-- BEGIN_ROUTER_COMPARISON -->"
+ROUTER_END = "<!-- END_ROUTER_COMPARISON -->"
 
 DEMAND_BASIS_LABELS = {
     "forecast": "ADIDA mean forecast on the scored days",
@@ -56,7 +61,7 @@ MODEL_INFO = {
     "historical_mean": {"name": "**Historical Mean (Baseline)**", "tier": "Simple Baseline"},
     "adida": {"name": "**ADIDA**", "tier": "Intermittent Statistical"},
     "moving_average": {"name": "**Moving Average (28d)**", "tier": "Simple Baseline"},
-    "routed_ensemble": {"name": "**Routed SBT Ensemble**", "tier": "Hybrid (ADIDA + Global)"},
+    "routed_ensemble": {"name": "**Routed SBC Ensemble**", "tier": "Hybrid (ADIDA + Global)"},
     "ses": {"name": "**SES**", "tier": "Exponential Smoothing"},
     "lightgbm": {"name": "**LightGBM**", "tier": "Global GBDT"},
     "lightgbm_tweedie": {"name": "**LightGBM (Tweedie)**", "tier": "Global GBDT"},
@@ -173,7 +178,7 @@ def render_leaderboard_table() -> str:
         f"($p < 10^{{-12}}$, {n_models} models $\\times$ {n_series:,} complete series). "
         f"Post-hoc Nemenyi critical difference $CD = {cd:.4f}$ ($\\alpha = 0.05$). "
         f"Top rank clique $\\{{croston\\_sba, adida, routed\\_ensemble\\}}$ is statistically indistinguishable in average rank. "
-        f"Paired series bootstrap (2,000 resamples) demonstrates that Routed SBT Ensemble is indistinguishable from ADIDA in pooled WAPE "
+        f"Paired series bootstrap (2,000 resamples) demonstrates that Routed SBC Ensemble is indistinguishable from ADIDA in pooled WAPE "
         f"($\\Delta\\text{{WAPE}} = +0.50\\%$, 95% CI [-0.01%, +1.04%]; assignment chosen on the evaluation origins; a clean test needs an earlier selection origin). "
         f"Global model caveat: LightGBM was evaluated under three handicaps compared to M5 competition conditions: "
         f"(1) no price features (`price_features_included: false` due to Excel row-limit truncation of the raw price workbook to ~15% coverage), "
@@ -359,6 +364,115 @@ def render_demand_basis_table() -> str:
     return "\n".join(lines)
 
 
+SEGMENT_ORDER = ["SMOOTH", "ERRATIC", "LUMPY", "INTERMITTENT", "NO_DEMAND"]
+ROUTE_LABELS = {"global": "LightGBM", "adida": "ADIDA", "zero": "zero forecast", "mixed": "mixed"}
+
+
+def _model_label(name: str) -> str:
+    """Display name of a model key, without the markdown bold used in the leaderboard."""
+    return MODEL_INFO.get(name, {}).get("name", name).strip("*")
+
+
+def _join_names(names: list[str]) -> str:
+    """'A', 'A and B', 'A, B and C'; 'none' for an empty list."""
+    if not names:
+        return "none"
+    if len(names) == 1:
+        return names[0]
+    return ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def render_router_comparison(path: Path | None = None) -> str:
+    """
+    Router versus the best single model: table plus a reading derived from it.
+
+    Every number and every direction word ("did not beat", "better", "lost")
+    is computed from ``routing_vs_best_single.csv``, so a rerun that changes
+    the result changes the sentence with it.
+    """
+    df = pd.read_csv(path or ROUTING_COMPARISON_CSV, dtype={"origin": str})
+    pooled = df[df["origin"] == "all"]
+    seg = pooled[pooled["pattern"] != "ALL"].copy()
+    seg["_order"] = seg["pattern"].map({p: i for i, p in enumerate(SEGMENT_ORDER)}).fillna(99)
+    seg = seg.sort_values(["_order", "pattern"])
+    total = pooled[pooled["pattern"] == "ALL"].iloc[0]
+    per_origin = df[(df["origin"] != "all") & (df["pattern"] == "ALL")].copy()
+
+    # Origin indices count back from the end of the data (index 0 is the latest
+    # test window), so label each origin with its test window and list them in
+    # time order.
+    windows: dict[str, str] = {}
+    if MANIFEST_JSON.exists():
+        for o in json.loads(MANIFEST_JSON.read_text(encoding="utf-8")).get("origins", []):
+            windows[str(o["index"])] = f"test {o['test_start']} to {o['test_end']}"
+    per_origin["_start"] = per_origin["origin"].map(lambda o: windows.get(o, o))
+    per_origin = per_origin.sort_values("_start")
+
+    def row(label: str, r: pd.Series) -> str:
+        best = f"{_model_label(r['best_single_model'])} ({float(r['wape_best_single']):.2f}%)"
+        return (
+            f"| {label} | {ROUTE_LABELS.get(r['routes_to'], r['routes_to'])} | {int(r['n_series_origins']):,} | "
+            f"{float(r['wape_routed']):.2f} | {float(r['wape_adida']):.2f} | {float(r['wape_lightgbm']):.2f} | "
+            f"{best} | {float(r['routed_minus_adida']):+.2f} |"
+        )
+
+    lines = [
+        "| Scope | Router sends to | Series-origins | Router WAPE (%) | ADIDA everywhere (%) | LightGBM everywhere (%) | Best single model (WAPE) | Router - ADIDA (pp) |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    lines += [row(f"**{r['pattern']}**", r) for _, r in seg.iterrows()]
+    lines.append(row("**All series, pooled over origins**", total))
+    lines += [
+        row(
+            f"All series, origin {r['origin']}" + (f" ({windows[r['origin']]})" if r["origin"] in windows else ""),
+            r,
+        )
+        for _, r in per_origin.iterrows()
+    ]
+
+    # --- the reading, derived from the table -------------------------------
+    delta = float(total["routed_minus_adida"])
+    deltas = [float(x) for x in per_origin["routed_minus_adida"]]
+    n_worse = sum(d > 0 for d in deltas)
+    if n_worse == len(deltas):
+        where = "at every origin (" + ", ".join(f"{d:+.2f}" for d in deltas) + " pp)"
+    elif n_worse == 0:
+        where = "at no origin (" + ", ".join(f"{d:+.2f}" for d in deltas) + " pp)"
+    else:
+        where = f"at {n_worse} of {len(deltas)} origins (" + ", ".join(f"{d:+.2f}" for d in deltas) + " pp)"
+    verdict = "did not beat" if delta > 0 else "beat"
+    best_models = sorted({_model_label(m) for m in per_origin["best_single_model"]})
+
+    to_adida = seg.loc[seg["routes_to"] == "adida", "pattern"].tolist()
+    to_zero = seg.loc[seg["routes_to"] == "zero", "pattern"].tolist()
+    to_global = seg[seg["routes_to"] == "global"]
+    better = to_global.loc[to_global["wape_lightgbm"] < to_global["wape_adida"], "pattern"].tolist()
+    worse = to_global.loc[to_global["wape_lightgbm"] >= to_global["wape_adida"], "pattern"].tolist()
+    detail = "; ".join(
+        f"{r['pattern']} {float(r['wape_lightgbm']):.2f}% vs {float(r['wape_adida']):.2f}%"
+        for _, r in to_global.iterrows()
+    )
+
+    reading = [
+        f"- **Result**: classification-based routing {verdict} applying ADIDA everywhere. Pooled over the "
+        f"origins the router's WAPE is {float(total['wape_routed']):.2f}% against "
+        f"{float(total['wape_adida']):.2f}% for ADIDA ({delta:+.2f} pp, positive meaning the router is worse), "
+        f"and it is worse {where}. The best single model at each origin is "
+        f"{_join_names(best_models)}.",
+        f"- **Where the difference comes from**: {_join_names(to_adida)} series go to ADIDA (the same method as "
+        f"ADIDA everywhere; the router fits it after trimming pre-launch zeros, so a few forecasts differ slightly "
+        f"from the standalone model's), {_join_names(to_zero)} series get a zero forecast, and {_join_names(to_global['pattern'].tolist())} "
+        f"series go to LightGBM, which here has no price features. On those segments LightGBM beat ADIDA on "
+        f"{_join_names(better)} and lost to it on {_join_names(worse)} (LightGBM vs ADIDA WAPE: {detail}). "
+        f"The global model was not better on every segment it was given, which is why routing on demand pattern did not pay.",
+        "- **Reading it**: the best single model is the lowest-WAPE single model within each row, chosen after the "
+        "scores are known, which favours the single model. The INTERMITTENT to ADIDA assignment was chosen on these "
+        "same evaluation origins, so the router is scored on the data that selected its rule; a clean test needs an "
+        "earlier selection origin. LightGBM ran with the handicaps listed under Limitation 1.",
+    ]
+    return "\n".join(lines + [""] + reading)
+
+
 def render_statistics_section(sig: dict | None = None) -> str:
     """Generate Markdown statistics summary from significance report."""
     if sig is None:
@@ -415,7 +529,7 @@ def render_statistics_section(sig: dict | None = None) -> str:
     adida_wape_ci = [adida_boot.get("wape", {}).get("ci_lower", 72.16), adida_boot.get("wape", {}).get("ci_upper", 78.23)]
 
     re_dw = boot.get("routed_ensemble", {}).get("delta_wape_vs_best", {})
-    re_name = MODEL_INFO.get("routed_ensemble", {}).get("name", "**Routed SBT Ensemble**")
+    re_name = MODEL_INFO.get("routed_ensemble", {}).get("name", "**Routed SBC Ensemble**")
     re_dw_ci = [re_dw.get("ci_lower", -0.01), re_dw.get("ci_upper", 1.04)]
 
     ma_dr = boot.get("moving_average", {}).get("delta_rmsse_vs_best", {})
@@ -455,6 +569,13 @@ def render_statistics_section(sig: dict | None = None) -> str:
     return "\n".join([line1, line2, line3, line4])
 
 
+#: Blocks added after M5-10 share one mechanism: (label, start marker, end marker, renderer).
+#: Add a block here and in the README; check and update pick it up.
+EXTRA_BLOCKS: list[tuple[str, str, str, Callable[[], str]]] = [
+    ("Router comparison", ROUTER_START, ROUTER_END, render_router_comparison),
+]
+
+
 def check_readme_tables(readme_path: Path = README_PATH) -> tuple[bool, str]:
     """Check if README.md tables match artifacts. Returns (is_synced, diff_message)."""
     if not readme_path.exists():
@@ -474,6 +595,9 @@ def check_readme_tables(readme_path: Path = README_PATH) -> tuple[bool, str]:
         return False, f"Policy comparison markers missing in {readme_path}"
     if DEMAND_BASIS_START not in content or DEMAND_BASIS_END not in content:
         return False, f"Demand basis markers missing in {readme_path}"
+    for label, start, end, _ in EXTRA_BLOCKS:
+        if start not in content or end not in content:
+            return False, f"{label} markers missing in {readme_path}"
 
     leaderboard_expected = render_leaderboard_table().strip()
     inventory_expected = render_inventory_table().strip()
@@ -503,6 +627,9 @@ def check_readme_tables(readme_path: Path = README_PATH) -> tuple[bool, str]:
         diffs.append("Statistics section in README does not match artifact outputs.")
     if ss_model_part != ss_model_expected:
         diffs.append("Safety stock by model table in README does not match artifact outputs.")
+    for label, start, end, render in EXTRA_BLOCKS:
+        if content.split(start)[1].split(end)[0].strip() != render().strip():
+            diffs.append(f"{label} in README does not match artifact outputs.")
 
     if diffs:
         return False, "\n".join(diffs)
@@ -520,10 +647,11 @@ def update_readme_tables(readme_path: Path = README_PATH) -> None:
     policy_str = render_policy_comparison_table().strip()
     basis_str = render_demand_basis_table().strip()
 
-    # Replace policy comparison and demand basis
+    # Replace policy comparison, demand basis and every block in EXTRA_BLOCKS
     for start, end, body, name in (
         (POLICY_COMPARISON_START, POLICY_COMPARISON_END, policy_str, "policy comparison"),
         (DEMAND_BASIS_START, DEMAND_BASIS_END, basis_str, "demand basis"),
+        *((s, e, render().strip(), label.lower()) for label, s, e, render in EXTRA_BLOCKS),
     ):
         if start in content and end in content:
             before = content.split(start)[0]

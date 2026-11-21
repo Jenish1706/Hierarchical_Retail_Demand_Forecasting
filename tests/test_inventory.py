@@ -6,7 +6,7 @@ Covers:
 - Safety stock increases monotonically with service level
 - Reorder point >= safety stock for all SKUs
 - Working capital released is non-negative for policy downgrades
-- Cross-reference with SBT demand pattern classification
+- Cross-reference with SBC demand pattern classification
 """
 
 from __future__ import annotations
@@ -126,20 +126,20 @@ class TestABCXYZClassifier:
         assert lookup["I_Y"] == "Y"
         assert lookup["I_Z"] == "Z"
 
-    def test_cross_reference_sbt(self, synthetic_panel_and_prices):
+    def test_cross_reference_sbc(self, synthetic_panel_and_prices):
         panel, prices = synthetic_panel_and_prices
         clf = ABCXYZClassifier()
         abc_xyz_df = clf.classify(panel, prices=prices)
 
-        # Build mock SBT classifications
-        sbt_rows = [
+        # Build mock SBC classifications
+        sbc_rows = [
             {"item_id": "ITEM_A_X", "store_id": "CA_1", "demand_pattern": DemandPattern.SMOOTH.value},
             {"item_id": "ITEM_B_Y", "store_id": "CA_1", "demand_pattern": DemandPattern.ERRATIC.value},
             {"item_id": "ITEM_C_Z1", "store_id": "CA_1", "demand_pattern": DemandPattern.INTERMITTENT.value},
             {"item_id": "ITEM_C_Z2", "store_id": "CA_1", "demand_pattern": DemandPattern.LUMPY.value},
         ]
-        sbt_df = pd.DataFrame(sbt_rows)
-        contingency = ABCXYZClassifier.cross_reference_sbt(abc_xyz_df, sbt_df)
+        sbc_df = pd.DataFrame(sbc_rows)
+        contingency = ABCXYZClassifier.cross_reference_sbc(abc_xyz_df, sbc_df)
 
         assert isinstance(contingency, pd.DataFrame)
         assert not contingency.empty

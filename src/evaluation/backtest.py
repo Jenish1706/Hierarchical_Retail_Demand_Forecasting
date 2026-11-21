@@ -59,6 +59,11 @@ from src.evaluation.point_metrics import (  # noqa: E402
     metrics_by_group,
     naive_scale,
 )
+from src.evaluation.routing_comparison import (  # noqa: E402
+    ROUTED_MODEL,
+    compare_router,
+    per_origin_columns,
+)
 from src.features.base import FeaturePipeline  # noqa: E402
 from src.models.router import SegmentRouter  # noqa: E402
 from src.models.statistical.intermittent import (  # noqa: E402
@@ -481,6 +486,7 @@ def main() -> int:
     all_preds: list[pd.DataFrame] = []
     routing_reports: list[pd.DataFrame] = []
     routing_benefits: list[dict[str, Any]] = []
+    routing_assignments: list[pd.DataFrame] = []
 
     for origin in origins:
         log.info("running_origin", **{"detail": origin.describe()})
@@ -489,6 +495,13 @@ def main() -> int:
             panel, origin, args.horizon, first_sale_dates=first_sale_dates
         )
         all_preds.append(series_preds)
+        # Where the router sent every series at this origin (M5-13): the
+        # router-vs-best-single comparison is scored per demand segment.
+        routing_assignments.append(
+            router.routing_table()[["series_id", "pattern", "method", "adi", "cv2"]].assign(
+                origin=origin.index
+            )[["origin", "series_id", "pattern", "method", "adi", "cv2"]]
+        )
 
         for gm in ("lightgbm", "lightgbm_tweedie"):
             gp = run_global_model(features, feature_cols, origin, scales, model_name=gm)
@@ -556,6 +569,18 @@ def main() -> int:
     )
     benefit_df = pd.DataFrame(routing_benefits)
 
+    # Router versus the best single model (M5-13), scored on the same
+    # predictions as the leaderboard. routing_benefit.csv keeps its
+    # router-vs-LightGBM columns and gains the per-origin comparison.
+    assignments_df = pd.concat(routing_assignments, ignore_index=True)
+    comparison_df = pd.DataFrame()
+    if (preds["model"] == ROUTED_MODEL).any():
+        comparison_df = compare_router(preds, assignments_df)
+        if not benefit_df.empty:
+            benefit_df = benefit_df.merge(
+                per_origin_columns(comparison_df), left_on="origin", right_index=True, how="left"
+            )
+
     # --- persist ---
     artefacts: dict[str, pd.DataFrame] = {
         "accuracy_overall": overall,
@@ -565,6 +590,8 @@ def main() -> int:
         "accuracy_by_hierarchy_level": by_level,
         "routing_by_segment": routing_df,
         "routing_benefit": benefit_df,
+        "routing_assignments": assignments_df,
+        "routing_vs_best_single": comparison_df,
     }
     for name, frame in artefacts.items():
         if not frame.empty:

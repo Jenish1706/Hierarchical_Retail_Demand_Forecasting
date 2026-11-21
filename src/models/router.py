@@ -3,7 +3,7 @@ Segment routing: send each series to the method suited to its demand pattern.
 
 Evidence-led routing
 --------------------
-The Syntetos-Boylan-Teunter (SBT) quadrant chart is a useful *description* of
+The Syntetos-Boylan-Croston (SBC) quadrant chart is a useful *description* of
 intermittency, but it is not a validated universal model-selection rule.  Its
 cutoffs were derived for Croston, SBA, and SES; they did not test later
 temporal-aggregation methods such as ADIDA.
@@ -270,7 +270,7 @@ class SegmentRouter:
     # -- reporting -----------------------------------------------------------
 
     def segment_counts(self) -> pd.DataFrame:
-        """Series count and share of total demand per SBT quadrant."""
+        """Series count and share of total demand per SBC quadrant."""
         rows = [
             {
                 "pattern": d.pattern.value,

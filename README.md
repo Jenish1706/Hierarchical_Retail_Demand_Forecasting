@@ -36,7 +36,7 @@ Evaluated across 3,000 sampled series over 3 rolling 28-day origins (84 test day
 |---|---|---|---|---|---|---|---|---|
 | **1** | **Croston SBA** | Intermittent Statistical | **4.55** | **Yes** | 77.80% [74.63%, 81.09%] | 0.789 [0.777, 0.810] | +2.64% [+2.06%, +3.30%] | **Rank Leader** |
 | **2** | **ADIDA** | Intermittent Statistical | 4.77 | **Yes** | **75.16% [72.16%, 78.23%]** | **0.768 [0.756, 0.788]** | **+0.00% [+0.00%, +0.00%]** | **WAPE Leader** (within CD of rank leader) |
-| **3** | **Routed SBT Ensemble** | Hybrid (ADIDA + Global) | 4.79 | **Yes** | 75.66% [72.40%, 78.87%] | 0.769 [0.757, 0.789] | +0.50% [-0.01%, +1.04%] | **Indistinguishable from Best** (rank & WAPE) |
+| **3** | **Routed SBC Ensemble** | Hybrid (ADIDA + Global) | 4.79 | **Yes** | 75.66% [72.40%, 78.87%] | 0.769 [0.757, 0.789] | +0.50% [-0.01%, +1.04%] | **Indistinguishable from Best** (rank & WAPE) |
 | **4** | **SES** | Exponential Smoothing | 4.91 | No | 76.99% [74.20%, 79.72%] | 0.772 [0.760, 0.792] | +1.83% [+1.13%, +2.62%] | Significantly worse than best rank |
 | **5** | **Moving Average (28d)** | Simple Baseline | 4.94 | No | 75.47% [72.39%, 78.54%] | 0.769 [0.757, 0.789] | +0.31% [+0.05%, +0.59%] | Significantly worse than best rank |
 | **6** | **LightGBM (Tweedie)** | Global GBDT | 5.38 | No | 77.26% [74.10%, 80.34%] | 0.783 [0.771, 0.803] | +2.10% [+1.40%, +2.84%] | Significantly worse than best rank |
@@ -45,16 +45,38 @@ Evaluated across 3,000 sampled series over 3 rolling 28-day origins (84 test day
 | **9** | **Seasonal Naive (Weekly)** | Baseline | 6.74 | No | 88.08% [84.37%, 91.79%] | 1.000 [0.985, 1.025] | +12.92% [+11.99%, +13.77%] | Baseline |
 | **10** | **Seasonal Naive (28d)** | Baseline | 7.20 | No | 98.92% [95.11%, 102.55%] | 1.084 [1.070, 1.106] | +23.76% [+22.14%, +25.41%] | Baseline |
 
-*Statistical significance: Omnibus Friedman test $\chi^2 = 2429.30$ ($p < 10^{-12}$, 10 models $\times$ 2,950 complete series). Post-hoc Nemenyi critical difference $CD = 0.2494$ ($\alpha = 0.05$). Top rank clique $\{croston\_sba, adida, routed\_ensemble\}$ is statistically indistinguishable in average rank. Paired series bootstrap (2,000 resamples) demonstrates that Routed SBT Ensemble is indistinguishable from ADIDA in pooled WAPE ($\Delta\text{WAPE} = +0.50\%$, 95% CI [-0.01%, +1.04%]; assignment chosen on the evaluation origins; a clean test needs an earlier selection origin). Global model caveat: LightGBM was evaluated under three handicaps compared to M5 competition conditions: (1) no price features (`price_features_included: false` due to Excel row-limit truncation of the raw price workbook to ~15% coverage), (2) a 3,000-series sample rather than the full 30,490 catalog, and (3) a 900-day window rather than the full 1,913-day history.*
+*Statistical significance: Omnibus Friedman test $\chi^2 = 2429.30$ ($p < 10^{-12}$, 10 models $\times$ 2,950 complete series). Post-hoc Nemenyi critical difference $CD = 0.2494$ ($\alpha = 0.05$). Top rank clique $\{croston\_sba, adida, routed\_ensemble\}$ is statistically indistinguishable in average rank. Paired series bootstrap (2,000 resamples) demonstrates that Routed SBC Ensemble is indistinguishable from ADIDA in pooled WAPE ($\Delta\text{WAPE} = +0.50\%$, 95% CI [-0.01%, +1.04%]; assignment chosen on the evaluation origins; a clean test needs an earlier selection origin). Global model caveat: LightGBM was evaluated under three handicaps compared to M5 competition conditions: (1) no price features (`price_features_included: false` due to Excel row-limit truncation of the raw price workbook to ~15% coverage), (2) a 3,000-series sample rather than the full 30,490 catalog, and (3) a 900-day window rather than the full 1,913-day history.*
 <!-- END_LEADERBOARD_TABLE -->
 
 ### Statistical Significance & Error Analysis
 <!-- BEGIN_STATISTICS_SECTION -->
 - **Non-Parametric Omnibus Test (Friedman)**: Evaluated across 10 models over 2,950 complete series (84 evaluation days per series). The omnibus Friedman test decisively rejects the null hypothesis of equal model performance ($\chi^2 = 2429.30$, $p < 10^{-12}$), justifying post-hoc ranking comparisons.
-- **Post-Hoc Critical Difference (Nemenyi)**: Critical difference $CD = 0.2494$ at $\alpha = 0.05$. **Croston SBA** achieved the best average rank (4.55), forming a top statistically indistinguishable clique with **ADIDA**, **Routed SBT Ensemble**. Standard global models (**LightGBM (Tweedie)** at 5.38, **LightGBM** at 5.56) scored significantly worse in average rank across the panel.
-- **Paired Series Bootstrap (95% CI)**: Resampling whole series over 2,000 replicates (preserving within-series autocorrelation) reveals that **ADIDA** leads pooled volume-weighted accuracy at 75.16% WAPE [72.16%, 78.23%]. Relative to ADIDA, **Routed SBT Ensemble** is statistically indistinguishable in WAPE ($\Delta\text{WAPE} = +0.50\%$, 95% CI [-0.01%, +1.04%]; routing assignment chosen on the evaluation origins; a clean test needs an earlier selection origin), while **Moving Average (28d)** is indistinguishable in RMSSE ($\Delta\text{RMSSE} = +0.0011$, 95% CI [-0.0001, +0.0023]).
+- **Post-Hoc Critical Difference (Nemenyi)**: Critical difference $CD = 0.2494$ at $\alpha = 0.05$. **Croston SBA** achieved the best average rank (4.55), forming a top statistically indistinguishable clique with **ADIDA**, **Routed SBC Ensemble**. Standard global models (**LightGBM (Tweedie)** at 5.38, **LightGBM** at 5.56) scored significantly worse in average rank across the panel.
+- **Paired Series Bootstrap (95% CI)**: Resampling whole series over 2,000 replicates (preserving within-series autocorrelation) reveals that **ADIDA** leads pooled volume-weighted accuracy at 75.16% WAPE [72.16%, 78.23%]. Relative to ADIDA, **Routed SBC Ensemble** is statistically indistinguishable in WAPE ($\Delta\text{WAPE} = +0.50\%$, 95% CI [-0.01%, +1.04%]; routing assignment chosen on the evaluation origins; a clean test needs an earlier selection origin), while **Moving Average (28d)** is indistinguishable in RMSSE ($\Delta\text{RMSSE} = +0.0011$, 95% CI [-0.0001, +0.0023]).
 - **Per-Series Pairwise Win Rates**: Comparing models series-by-series resolves the apparent divergence between rank tests and volume metrics: **Croston SBA** beats **ADIDA** on 57.0% of individual series (favoring rank metrics on sparse items), whereas **ADIDA** achieves lower aggregate error on higher-volume items. On 93.8% of series, the two models are statistically indistinguishable under Holm-corrected per-series Diebold-Mariano testing.
 <!-- END_STATISTICS_SECTION -->
+
+### Does Demand-Pattern Routing Help? (Router vs the Best Single Model)
+
+The router classifies each series into an SBC (Syntetos-Boylan-Croston, 2005) quadrant from its training window and sends it to a per-segment method. The right yardstick is the best single method applied everywhere, which here is ADIDA, not LightGBM. WAPE is the same pooled definition as the leaderboard.
+
+<!-- BEGIN_ROUTER_COMPARISON -->
+| Scope | Router sends to | Series-origins | Router WAPE (%) | ADIDA everywhere (%) | LightGBM everywhere (%) | Best single model (WAPE) | Router - ADIDA (pp) |
+|---|---|---|---|---|---|---|---|
+| **SMOOTH** | LightGBM | 610 | 45.94 | 47.21 | 45.94 | LightGBM (45.94%) | -1.26 |
+| **ERRATIC** | LightGBM | 215 | 71.73 | 70.23 | 71.73 | Moving Average (28d) (69.83%) | +1.50 |
+| **LUMPY** | LightGBM | 1,428 | 91.29 | 87.74 | 91.29 | ADIDA (87.74%) | +3.55 |
+| **INTERMITTENT** | ADIDA | 6,736 | 88.10 | 88.10 | 92.06 | ADIDA (88.10%) | +0.00 |
+| **NO_DEMAND** | zero forecast | 11 | 100.00 | 100.00 | 137.09 | ADIDA (100.00%) | +0.00 |
+| **All series, pooled over origins** | mixed | 9,000 | 75.66 | 75.16 | 77.39 | ADIDA (75.16%) | +0.50 |
+| All series, origin 2 (test 2016-02-01 to 2016-02-28) | mixed | 3,000 | 75.82 | 75.37 | 77.87 | ADIDA (75.37%) | +0.45 |
+| All series, origin 1 (test 2016-02-29 to 2016-03-27) | mixed | 3,000 | 76.72 | 75.95 | 78.81 | ADIDA (75.95%) | +0.77 |
+| All series, origin 0 (test 2016-03-28 to 2016-04-24) | mixed | 3,000 | 74.44 | 74.17 | 75.51 | ADIDA (74.17%) | +0.27 |
+
+- **Result**: classification-based routing did not beat applying ADIDA everywhere. Pooled over the origins the router's WAPE is 75.66% against 75.16% for ADIDA (+0.50 pp, positive meaning the router is worse), and it is worse at every origin (+0.45, +0.77, +0.27 pp). The best single model at each origin is ADIDA.
+- **Where the difference comes from**: INTERMITTENT series go to ADIDA (the same method as ADIDA everywhere; the router fits it after trimming pre-launch zeros, so a few forecasts differ slightly from the standalone model's), NO_DEMAND series get a zero forecast, and SMOOTH, ERRATIC and LUMPY series go to LightGBM, which here has no price features. On those segments LightGBM beat ADIDA on SMOOTH and lost to it on ERRATIC and LUMPY (LightGBM vs ADIDA WAPE: SMOOTH 45.94% vs 47.21%; ERRATIC 71.73% vs 70.23%; LUMPY 91.29% vs 87.74%). The global model was not better on every segment it was given, which is why routing on demand pattern did not pay.
+- **Reading it**: the best single model is the lowest-WAPE single model within each row, chosen after the scores are known, which favours the single model. The INTERMITTENT to ADIDA assignment was chosen on these same evaluation origins, so the router is scored on the data that selected its rule; a clean test needs an earlier selection origin. LightGBM ran with the handicaps listed under Limitation 1.
+<!-- END_ROUTER_COMPARISON -->
 
 ---
 

@@ -69,7 +69,7 @@ The benchmark systematically compares 10 models spanning statistical baselines, 
 | `adida` | ADIDA | Intermittent Statistical | Temporal aggregation into multi-day buckets, SES forecast, and uniform disaggregation. |
 | `lightgbm` | LightGBM (L2) | Global Machine Learning | Global gradient-boosted decision trees optimizing Mean Squared Error. |
 | `lightgbm_tweedie` | LightGBM (Tweedie) | Global Machine Learning | Global GBDT optimizing Tweedie compound Poisson deviance ($\rho = 1.1$). |
-| `routed_ensemble` | Routed SBT Ensemble | Hybrid Segment Router | Categorizes series via SBT; routes sparse series to ADIDA and smooth to LightGBM. |
+| `routed_ensemble` | Routed SBC Ensemble | Hybrid Segment Router | Classifies each series into an SBC quadrant from the training window at every origin; INTERMITTENT goes to ADIDA, NO_DEMAND gets a zero forecast, SMOOTH, ERRATIC and LUMPY go to LightGBM. Scored against ADIDA everywhere and the best single model in the README router table. |
 
 ---
 

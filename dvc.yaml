@@ -43,7 +43,7 @@ stages:
   # 2. Pillar 1 EDA. Runs over all 30,490 series in ~20s.
   #
   # A pipeline stage rather than a notebook because two of its outputs are
-  # inputs to modelling decisions: the SBT classification drives segment
+  # inputs to modelling decisions: the SBC classification drives segment
   # routing, and the distribution fitting decides the Tier 3 likelihood.
   # -------------------------------------------------------------------------
   eda:
@@ -101,6 +101,7 @@ stages:
     deps:
       - scripts/run_backtest.py
       - src/evaluation/backtest.py
+      - src/evaluation/routing_comparison.py
       - src/features/base.py
       - src/models/router.py
       - src/models/statistical/naive.py
@@ -115,6 +116,9 @@ stages:
       - reports/backtest_main/predictions.parquet
       - reports/backtest_main/accuracy_overall.csv
       - reports/backtest_main/accuracy_by_hierarchy_level.csv
+      - reports/backtest_main/routing_benefit.csv
+      - reports/backtest_main/routing_assignments.csv
+      - reports/backtest_main/routing_vs_best_single.csv
     metrics:
       - reports/backtest_main/manifest.json:
           cache: false

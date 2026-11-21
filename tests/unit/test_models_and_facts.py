@@ -178,7 +178,7 @@ class TestIntermittentClassification:
         assert classify_demand(np.zeros(100)).pattern == DemandPattern.NO_DEMAND
 
     def test_cv2_uses_non_zero_observations_only(self):
-        # Including zeros would conflate the two SBT axes: every sparse series
+        # Including zeros would conflate the two SBC axes: every sparse series
         # would look size-variable and the quadrants would collapse.
         y = np.zeros(200)
         y[::10] = 5.0                              # constant size, sparse

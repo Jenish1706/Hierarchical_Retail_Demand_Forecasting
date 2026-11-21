@@ -28,7 +28,7 @@ from src.visualization.style import apply_style, color_for, save_figure
 log = get_logger(__name__)
 
 # Ordered sparsest-last so the heatmap reads left-to-right as increasing
-# intermittency, matching how the SBT quadrants are usually discussed.
+# intermittency, matching how the SBC quadrants are usually discussed.
 DEMAND_CLASS_ORDER = ("SMOOTH", "ERRATIC", "INTERMITTENT", "LUMPY")
 
 
@@ -112,7 +112,7 @@ def plot_model_by_demand_class(
     name: str = "fig06_model_by_demand_class",
 ) -> Path:
     """
-    WAPE for every model within each SBT demand class.
+    WAPE for every model within each SBC demand class.
 
     Args:
         predictions: long frame with model, series_id, y_true, y_pred.
@@ -122,7 +122,7 @@ def plot_model_by_demand_class(
 
     df = predictions.merge(classification[["series_id", "pattern"]], on="series_id", how="inner")
     if df.empty:
-        raise ValueError("no overlap between predictions and the SBT classification")
+        raise ValueError("no overlap between predictions and the SBC classification")
 
     rows = [
         {"model": str(model), "pattern": str(pattern), "wape": _wape(g)}
@@ -148,13 +148,15 @@ def plot_model_by_demand_class(
     ax.set_title("Fig 6 — Model accuracy by demand class (WAPE)")
     ax.set_xlabel("")
 
-    # Which model actually wins each sparse quadrant -- the routing test.
-    winners = {c: str(matrix[c].idxmin()) for c in present if matrix[c].notna().any()}
+    # Which single model wins each sparse quadrant. The routed ensemble is built from the
+    # others, so it is shown in the heatmap but never named as a winner.
+    singles = matrix.drop(index="routed_ensemble", errors="ignore")
+    winners = {c: str(singles[c].idxmin()) for c in present if singles[c].notna().any()}
     sparse = [c for c in ("INTERMITTENT", "LUMPY") if c in winners]
     routing_note = ""
     if sparse:
         routing_note = (
-            " Winners in the sparse quadrants: "
+            " Best single model in the sparse quadrants: "
             + ", ".join(f"{c} -> {winners[c]}" for c in sparse)
             + "."
         )
@@ -164,15 +166,15 @@ def plot_model_by_demand_class(
         out_dir,
         name,
         caption=(
-            f"WAPE per model within each Syntetos-Boylan-Teunter demand class. "
+            f"WAPE per model within each Syntetos-Boylan-Croston demand class. "
             f"Colour is normalised WITHIN each column, because absolute WAPE "
             f"differs by roughly an order of magnitude between dense and sparse "
             f"segments; a globally-scaled heatmap would only restate which "
             f"segment is hard. Boxed cells are the best model in that class."
-            f"{routing_note} This figure is the direct test of the routing rule: "
-            f"the router sends INTERMITTENT to Croston and LUMPY to ADIDA on the "
-            f"strength of a literature convention, and if a global learner wins "
-            f"those columns instead, the rule does not hold on M5."
+            f"{routing_note} Classes here are the full-history EDA classification, "
+            f"so a series can sit in a different class than the router gave it at "
+            f"an origin; the router's own per-segment score against the best "
+            f"single model is `routing_vs_best_single.csv` (README router table)."
         ),
     )
 
